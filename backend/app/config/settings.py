@@ -55,6 +55,16 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = (
         "http://localhost:3000,http://localhost:5173,http://localhost:8080"
     )
+    
+    # ── LLM 配置 ──────────────────────────────────────
+    OPENAI_API_KEY: str = "sk-your-api-key-here"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+
+    # 通义千问（推荐，国内访问快）
+    QWEN_API_KEY: str = "sk-ws-H.EDDLDYP.rro7.MEUCIDsY8jq-R0stR9XVv7zST3eXILW2h-x9SRoCxhtaKqkbAiEA-yZqLlo0sc0PoVec9f5qvoXHjGc2iEw76_mQ8SdaQfQ"
+    QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    QWEN_MODEL: str = "qwen-plus"
 
     @property
     def cors_origins_list(self) -> list:
