@@ -1,0 +1,51 @@
+@use './reset.scss';
+
+// ── 页面容器 ────────────────────────────────────────
+.page-container {
+  padding: $spacing-lg;
+  min-height: calc(100vh - $header-height);
+}
+
+// ── 卡片容器 ────────────────────────────────────────
+.card-container {
+  background: #fff;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-sm;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+}
+
+// ── Flex 布局辅助 ───────────────────────────────────
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+// ── 文本截断 ────────────────────────────────────────
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ── 滚动条美化 ──────────────────────────────────────
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c0c4cc;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

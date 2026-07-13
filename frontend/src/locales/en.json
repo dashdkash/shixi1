@@ -1,0 +1,128 @@
+{
+  "app": {
+    "title": "Weed Detection Agent",
+    "description": "Weed detection agent platform based on YOLOv11"
+  },
+  "login": {
+    "title": "Login",
+    "username": "Enter username",
+    "password": "Enter password",
+    "loginBtn": "Login",
+    "noAccount": "Don't have an account?",
+    "register": "Register now",
+    "success": "Login successful"
+  },
+  "register": {
+    "title": "Create Account",
+    "description": "Register to use the weed detection agent platform",
+    "username": "Enter username",
+    "email": "Enter email",
+    "password": "Enter password (at least 6 characters)",
+    "confirmPassword": "Confirm password",
+    "registerBtn": "Register",
+    "hasAccount": "Already have an account?",
+    "login": "Login now",
+    "success": "Registration successful, please login"
+  },
+  "sidebar": {
+    "chat": "Chat",
+    "detection": "Detection",
+    "training": "Training",
+    "history": "History",
+    "dashboard": "Dashboard"
+  },
+  "page": {
+    "chat": {
+      "title": "Chat",
+      "description": "Day 11: Implement LangGraph Multi-Agent Conversation"
+    },
+    "detection": {
+      "title": "Detection",
+      "description": "Day 8: Implement Single/Batch/Video/Camera Detection"
+    },
+    "training": {
+      "title": "Training",
+      "description": "Day 6: Implement YOLOv11 Training and Monitoring"
+    },
+    "history": {
+      "title": "History",
+      "description": "Day 10: Implement Detection History and Statistics"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "description": "Day 10: Implement ECharts Data Visualization"
+    }
+  },
+  "lang": {
+    "zh": "中文",
+    "en": "English"
+  },
+  "chat": {
+    "inputPlaceholder": "Enter message...",
+    "error": "Send failed"
+  },
+  "header": {
+    "profile": "Profile",
+    "logout": "Logout",
+    "confirmLogout": "Are you sure you want to logout?"
+  },
+  "common": {
+    "username": "Username",
+    "password": "Password",
+    "email": "Email",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "warning": "Warning"
+  },
+  "validation": {
+    "required": "Please enter {field}",
+    "minLength": "{field} must be at least {min} characters",
+    "maxLength": "{field} must be at most {max} characters",
+    "email": "Please enter a valid email address",
+    "passwordMatch": "Passwords do not match",
+    "usernameLength": "Username must be 3-50 characters"
+  },
+  "history": {
+    "id": "ID",
+    "empty": "No records",
+    "viewDetail": "View Details",
+    "totalImages": "Total Images",
+    "totalObjects": "Total Objects",
+    "inferenceTime": "Inference Time",
+    "images": "Images",
+    "image": "Image",
+    "messages": "messages",
+    "detection": {
+      "title": "Detection Records",
+      "detail": "Detection Detail"
+    },
+    "chat": {
+      "title": "Chat History",
+      "detail": "Chat Detail"
+    }
+  },
+  "detection": {
+    "uploadTitle": "Upload Images for Detection",
+    "uploadHint": "Click to select files, or drag images here",
+    "uploadTip": "Supports JPG, PNG, BMP, WebP formats. Batch upload supported.",
+    "pendingTitle": "Pending Images",
+    "startDetection": "Start Detection",
+    "clearAll": "Clear All",
+    "resultsTitle": "Detection Results",
+    "totalImages": "Total Images",
+    "successCount": "Success",
+    "failedCount": "Failed",
+    "totalObjects": "Total Objects",
+    "totalTime": "Total Time",
+    "success": "Success",
+    "failed": "Failed",
+    "imageSize": "Image Size",
+    "inferenceTime": "Inference Time",
+    "objectsFound": "Objects Found",
+    "imagesPasted": "images pasted",
+    "filesAdded": "files added",
+    "invalidFiles": "invalid files ignored",
+    "detectionComplete": "Detection completed",
+    "detectionFailed": "Detection failed"
+  }
+}

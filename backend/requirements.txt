@@ -1,0 +1,52 @@
+# ═══════════════════════════════════════════════════════
+# 基于 YOLOv11 的目标检测智能体平台 — Python 依赖
+# ═══════════════════════════════════════════════════════
+
+# ── Web 框架 ──────────────────────────────────────────
+fastapi==0.110.0  # Web应用核心框架，提供异步API路由、请求验证等
+uvicorn[standard]==0.24.0.post1 # ASGI服务器，用于运行FastAPI应用
+python-multipart==0.0.9  # 文件上传支持，FastAPI处理multipart/form-data必需
+
+# ── 智能体框架（LangChain + LangGraph）────────────────
+langchain==0.3.0 # Agent 基础能力、Prompt 管理
+langchain-openai==0.2.0 # OpenAI 模型接入
+langchain-community==0.3.0 # 社区集成（Redis 对话历史等）
+langgraph==0.3.0 # 多Agent工作流编排、图形化管理
+openai==1.50.0  # OpenAI API SDK
+
+# ── 本地 LLM 备选 ────────────────────────────────────
+ollama==0.3.0  #本地 LLM 模型备选
+
+# ── 目标检测（YOLOv11）────────────────────────────────
+ultralytics==8.3.0   # Ultralytics YOLO框架（包含PyTorch）
+opencv-python==4.8.0.76 # OpenCV图像处理库
+Pillow==10.0.0   # Pillow图像处理库
+
+# ── 数据库（PostgreSQL + ORM）─────────────────────────
+sqlalchemy==2.0.0  # SQLAlchemy ORM框架
+psycopg2-binary==2.9.9  # Post greSQL数据库驱动
+pgvector==0.3.0   #PostgreSQL 向量存储扩展（RAG 用）
+
+alembic==1.13.0  # Alembic 数据库迁移框架
+
+# ── 缓存（Redis）─────────────────────────────────────
+redis==5.0.0
+
+# ── 对象存储（MinIO）─────────────────────────────────
+minio==7.2.0 # 图片/模型文件存储
+
+# ── 认证安全 ─────────────────────────────────────────
+python-jose[cryptography]==3.3.0 #JWT 用户认证
+passlib[bcrypt]==1.7.4 #密码哈希加密
+
+# ── 数据验证与配置 ────────────────────────────────────
+pydantic==2.8.0  # 请求/响应数据验证
+pydantic-settings==2.4.0  # 配置管理
+
+# ── 工具库 ───────────────────────────────────────────
+httpx==0.27.0  # 异步 HTTP 客户端
+python-dotenv==1.0.0 # 环境变量管理
+
+pytest==8.0.0
+pytest-asyncio==0.23.0
+httpx==0.27.0

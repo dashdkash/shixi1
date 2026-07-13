@@ -1,0 +1,155 @@
+# ═══════════════════════════════════════════════════════
+# 基于 YOLOv11 的目标检测智能体平台 — Git 忽略规则
+# ═══════════════════════════════════════════════════════
+
+# ── Python ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ── 虚拟环境 ───────────────────────────────────────
+.venv/
+venv/
+ENV/
+env/
+.env.local
+
+# ── 环境变量（敏感信息）──────────────────────────────
+.env
+*.env.local
+!.env.example
+
+# ── IDE 配置 ────────────────────────────────────────
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ── 模型文件（体积较大）──────────────────────────────
+*.pt
+*.pth
+*.onnx
+*.engine
+*.weights
+models/
+weights/
+checkpoints/
+
+# YOLOv11 特定
+runs/
+ultralytics/
+
+# ── 日志文件 ───────────────────────────────────────
+*.log
+logs/
+*.log.*
+
+# ── 数据文件 ────────────────────────────────────────
+backend/datasets/
+*.csv
+*.xlsx
+*.parquet
+
+# 图片/视频（根据项目需要调整）
+images/
+videos/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.mp4
+*.avi
+*.mov
+
+# ── Docker ──────────────────────────────────────────
+.docker/
+docker-compose.override.yml
+
+# ── Node.js / 前端 ───────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn
+package-lock.json
+yarn.lock
+
+# 前端构建产物
+dist/
+build/
+.cache/
+.output/
+.nuxt/
+
+# ── 数据库文件 ───────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── 测试覆盖率 ───────────────────────────────────────
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.hypothesis/
+
+# ── Jupyter Notebook ────────────────────────────────
+.ipynb_checkpoints/
+
+# ── 操作系统 ────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+
+# ── 其他 ────────────────────────────────────────────
+*.bak
+*.tmp
+*.temp
+*.secret
+*.private
+.mypy_cache/
+.dmypy.json
+dmypy.json
