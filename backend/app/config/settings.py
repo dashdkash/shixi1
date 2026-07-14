@@ -46,11 +46,12 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "rsod-agent-images"
+    MINIO_AVATAR_BUCKET: str = "rsod-agent-avatars"
     MINIO_SECURE: bool = False
 
     JWT_SECRET_KEY: str = "your-super-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24小时
 
     ALLOWED_ORIGINS: str = (
         "http://localhost:3000,http://localhost:5173,http://localhost:8080"

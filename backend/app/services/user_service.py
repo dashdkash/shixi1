@@ -85,6 +85,10 @@ class UserService:
         if not verify_password(password, user.hashed_password):  # type: ignore
             raise HTTPException(status_code=401, detail="用户名或密码错误")
 
+        # 更新最后登录时间
+        user.last_login_at = datetime.now()
+        db.commit()
+
         return user
 
     @staticmethod

@@ -1,18 +1,22 @@
 """
 认证相关 API 路由
-- POST /api/auth/register         用户注册
-- POST /api/auth/login            用户登录
-- POST /api/auth/forgot-password  忘记密码
-- POST /api/auth/reset-password   重置密码
-- GET  /api/auth/profile          获取个人信息（含检测统计）
-- PUT  /api/auth/profile          修改个人信息
-- PUT  /api/auth/password         修改密码
-- POST /api/auth/avatar           上传头像
+- POST /api/auth/register          用户注册
+- POST /api/auth/login             用户登录
+- GET  /api/auth/me                获取当前用户信息
+- POST /api/auth/forgot-password   忘记密码
+- POST /api/auth/reset-password    重置密码
+- GET  /api/auth/profile           获取个人信息（含检测统计）
+- PUT  /api/auth/profile           修改个人信息
+- PUT  /api/auth/password          修改密码
+- POST /api/auth/avatar            上传头像
 """
 
+import os
 import uuid
 from typing import Optional
 
+from app.api.auth import get_current_user
+from app.config.settings import settings
 from app.core.security import decode_access_token
 from app.database.session import get_db
 from app.entity.schemas import (
@@ -89,7 +93,7 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
     """
     用户登录
 
-    - 返回 JWT access_token
+    - 返回 JWT access_token（24小时有效）
     - 后续请求在 Header 中携带：Authorization: Bearer <token>
     """
     user = user_service.login(
@@ -112,6 +116,27 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
             "is_superuser": user.is_superuser,
             "roles": roles,
         },
+    }
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取当前登录用户信息（需要 Token 认证）"""
+    roles = user_service.get_user_roles(db, current_user)
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "phone": current_user.phone,
+        "avatar": current_user.avatar,
+        "is_active": current_user.is_active,
+        "is_superuser": current_user.is_superuser,
+        "roles": roles,
+        "last_login_at": current_user.last_login_at,
+        "created_at": current_user.created_at,
     }
 
 
@@ -156,7 +181,7 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
 
 
 @router.get("/profile", response_model=UserResponseWithStats)
-async def get_current_user_info(
+async def get_profile(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -273,7 +298,7 @@ async def upload_avatar(
 
     # 上传到 MinIO
     try:
-        minio_client = MinIOClient()
+        minio_client = MinIOClient(bucket_name=settings.MINIO_AVATAR_BUCKET)
         avatar_url = minio_client.upload_bytes(
             object_name=object_name,
             data=content,
