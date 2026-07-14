@@ -40,7 +40,8 @@ export const useAgentStore = defineStore("agent", {
     updateLastAssistantMessage(content) {
       const lastMsg = this.messages[this.messages.length - 1];
       if (lastMsg && lastMsg.role === "assistant") {
-        lastMsg.content = content;
+        const index = this.messages.length - 1;
+        this.messages[index] = { ...lastMsg, content };
       }
     },
 

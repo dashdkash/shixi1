@@ -1,181 +1,109 @@
 """
-智能对话 API 路由
-- POST /api/chat/stream  流式对话接口
+对话相关 API 路由
+
+接口列表：
+  - POST /api/chat/upload    上传图片文件，返回服务端路径
+  - POST /api/chat/stream    SSE 流式对话（核心接口）
 """
 
 import json
-import time
-from typing import Dict, Generator
+import os
+import tempfile
 
-from app.core.security import decode_access_token
-from app.database.session import get_db
-from fastapi import APIRouter, Depends, Header, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+from app.agent.detection_agent import detection_agent
+from app.api.auth import get_current_user
+from app.core.logger import get_logger
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from jose import JWTError
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["智能对话"])
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "rsod_uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
+@router.post("/upload", summary="上传图片文件")
+async def upload_image(
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
 ):
-    """从 JWT Token 中解析当前用户"""
-    credentials_exception = HTTPException(
-        status_code=401,
-        detail="无效的认证凭据",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = decode_access_token(token)
-        user_id_str = payload.get("sub")
-        if user_id_str is None:
-            raise credentials_exception
-    except (JWTError, ValueError):
-        raise credentials_exception
-    return {"id": int(user_id_str)}
-
-
-class ChatRequest(BaseModel):
-    """聊天请求模型"""
-    message: str
-    stream: bool = True
-
-
-def generate_chat_response(message: str, lang: str) -> Generator[str, None, None]:
     """
-    生成流式聊天响应
-    根据语言参数返回对应语言的内容
-    
-    Args:
-        message: 用户消息
-        lang: 语言标识 (zh/en)
+    上传图片文件到服务端临时目录
+
+    Returns:
+        { "image_path": "/tmp/rsod_uploads/xxx.jpg" }
     """
-    welcome_responses = {
-        "zh": [
-            "你好！我是杂草识别智能体。",
-            "我可以帮助你识别杂草、分析检测结果。",
-            "请问你有什么需要帮助的吗？",
-        ],
-        "en": [
-            "Hello! I am the Weed Detection Agent.",
-            "I can help you identify weeds and analyze detection results.",
-            "How can I assist you today?",
-        ],
-    }
+    suffix = os.path.splitext(file.filename)[1] or ".jpg"
+    filename = f"{os.getpid()}_{file.filename}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
 
-    other_responses = {
-        "zh": [
-            "收到你的消息。",
-            "我来帮你分析一下。",
-            "请稍等...",
-        ],
-        "en": [
-            "Received your message.",
-            "Let me analyze that for you.",
-            "Please wait...",
-        ],
-    }
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
 
-    if message.lower() in ["hello", "hi", "你好", "嗨", ""]:
-        selected_responses = welcome_responses.get(lang, welcome_responses["zh"])
-    else:
-        selected_responses = other_responses.get(lang, other_responses["zh"])
-    
-    for response in selected_responses:
-        for char in response:
-            yield json.dumps({"content": char}) + "\n"
-            time.sleep(0.05)
-        yield json.dumps({"content": " "}) + "\n"
-        time.sleep(0.1)
-    
-    yield "[DONE]\n"
-
-
-async def get_current_user_optional(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-):
-    """可选的用户认证，允许未认证访问"""
-    try:
-        payload = decode_access_token(token)
-        user_id_str = payload.get("sub")
-        if user_id_str is not None:
-            return {"id": int(user_id_str)}
-    except (JWTError, ValueError):
-        pass
-    return None
+    logger.info("图片上传成功: %s → %s", file.filename, file_path)
+    return {"image_path": file_path}
 
 
 @router.post("/stream")
 async def chat_stream(
-    request: ChatRequest,
-    accept_language: str = Header(None),
-    current_user=Depends(get_current_user_optional),
+    request: Request,
+    current_user=Depends(get_current_user),
 ):
     """
-    流式对话接口
-    
-    - 根据 Accept-Language 请求头决定响应语言
-    - 返回 SSE 格式的流式响应
-    - 支持未认证访问（用于欢迎消息）
-    
-    Args:
-        request: 聊天请求
-        accept_language: 语言偏好 (zh-CN, zh, en-US, en)
+    SSE 流式对话接口
+
+    请求体：
+    {
+        "message": "检测这张图片",
+        "image_path": "/tmp/uploads/xxx.jpg",  // 可选，快捷按钮传入
+        "session_id": 123                        // 可选，会话 ID
+    }
+
+    响应：SSE 流式事件
     """
-    lang = "zh"
-    if accept_language:
-        if "en" in accept_language.lower():
-            lang = "en"
-        elif "zh" in accept_language.lower():
-            lang = "zh"
-    
-    def stream():
-        for chunk in generate_chat_response(request.message, lang):
-            yield f"data: {chunk}"
-    
+    body = await request.json()
+    message = body.get("message", "")
+    image_path = body.get("image_path")
+    session_id = body.get("session_id")
+
+    if not message:
+        raise HTTPException(status_code=400, detail="消息内容不能为空")
+
+    logger.info(
+        "用户 %s 发起对话: message=%s, image=%s",
+        current_user.username,
+        message[:50],
+        "有" if image_path else "无",
+    )
+
+    async def event_generator():
+        try:
+            async for event in detection_agent.chat_stream(
+                message=message,
+                image_path=image_path,
+            ):
+                event_data = json.dumps(event, ensure_ascii=False)
+                yield f"data: {event_data}\n\n"
+
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            logger.error("SSE 流异常: %s", str(e), exc_info=True)
+            error_data = json.dumps(
+                {"type": "error", "content": str(e)},
+                ensure_ascii=False,
+            )
+            yield f"data: {error_data}\n\n"
+
     return StreamingResponse(
-        stream(),
+        event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
         },
     )
-
-
-@router.post("/")
-async def chat(
-    request: ChatRequest,
-    accept_language: str = Header(None),
-    current_user=Depends(get_current_user),
-):
-    """
-    非流式对话接口
-    
-    Args:
-        request: 聊天请求
-        accept_language: 语言偏好
-    """
-    lang = "zh"
-    if accept_language:
-        if "en" in accept_language.lower():
-            lang = "en"
-        elif "zh" in accept_language.lower():
-            lang = "zh"
-    
-    responses = {
-        "zh": "你好！我是杂草识别智能体。我可以帮助你识别杂草、分析检测结果。请问你有什么需要帮助的吗？",
-        "en": "Hello! I am the Weed Detection Agent. I can help you identify weeds and analyze detection results. How can I assist you today?",
-    }
-    
-    return {
-        "content": responses.get(lang, responses["zh"]),
-        "language": lang,
-    }

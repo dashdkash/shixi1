@@ -1,6 +1,5 @@
 <template>
   <div class="detection-container">
-    <!-- 上传区域 -->
     <div
       class="upload-area"
       :class="{ 'is-dragover': isDragover }"
@@ -14,7 +13,7 @@
         ref="fileInput"
         type="file"
         multiple
-        accept="image/*"
+        accept="image/*,.zip"
         class="file-input"
         @change="handleFileSelect"
       />
@@ -29,7 +28,6 @@
       </div>
     </div>
 
-    <!-- 待检测图片列表 -->
     <div v-if="pendingFiles.length > 0" class="pending-list">
       <h3>{{ $t("detection.pendingTitle") }} ({{ pendingFiles.length }})</h3>
       <div class="file-grid">
@@ -65,7 +63,6 @@
       </div>
     </div>
 
-    <!-- 检测结果 -->
     <div v-if="detectionResults.length > 0" class="results-section">
       <h3>{{ $t("detection.resultsTitle") }}</h3>
 
@@ -111,6 +108,22 @@
           </div>
 
           <div v-if="result.success" class="result-content">
+            <div
+              class="result-image-container"
+              v-if="result.annotated_image_base64"
+            >
+              <img
+                :src="`data:image/jpeg;base64,${result.annotated_image_base64}`"
+                :alt="result.filename"
+                class="result-image"
+                @click="
+                  previewImage(
+                    `data:image/jpeg;base64,${result.annotated_image_base64}`,
+                  )
+                "
+              />
+            </div>
+
             <div class="result-stats">
               <span
                 >{{ $t("detection.imageSize") }}: {{ result.width }} ×
@@ -132,7 +145,9 @@
                 :key="objIndex"
                 class="object-item"
               >
-                <span class="object-class">{{ obj.class_name_cn }}</span>
+                <span class="object-class">{{
+                  obj.class_name_cn || obj.class_name
+                }}</span>
                 <span class="object-conf"
                   >{{ (obj.confidence * 100).toFixed(1) }}%</span
                 >
@@ -146,6 +161,15 @@
         </div>
       </div>
     </div>
+
+    <el-dialog v-model="showFullImage" title="检测标注图" width="80%">
+      <img
+        v-if="previewSrc"
+        :src="previewSrc"
+        style="width: 100%"
+        alt="检测标注图"
+      />
+    </el-dialog>
   </div>
 </template>
 
@@ -160,6 +184,8 @@ const isDragover = ref(false);
 const isProcessing = ref(false);
 const pendingFiles = ref([]);
 const detectionResults = ref([]);
+const showFullImage = ref(false);
+const previewSrc = ref(null);
 
 const summary = computed(() => {
   const total = detectionResults.value.length;
@@ -228,7 +254,9 @@ const handlePaste = async (event) => {
 };
 
 const addFiles = (files) => {
-  const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+  const imageFiles = files.filter(
+    (f) => f.type.startsWith("image/") || f.name.endsWith(".zip"),
+  );
 
   imageFiles.forEach((file) => {
     const reader = new FileReader();
@@ -238,16 +266,29 @@ const addFiles = (files) => {
         size: file.size,
         file: file,
         preview: e.target?.result,
+        isZip: file.name.endsWith(".zip"),
       });
     };
-    reader.readAsDataURL(file);
+    if (file.name.endsWith(".zip")) {
+      pendingFiles.value.push({
+        name: file.name,
+        size: file.size,
+        file: file,
+        preview: null,
+        isZip: true,
+      });
+    } else {
+      reader.readAsDataURL(file);
+    }
   });
 
   if (imageFiles.length > 0) {
     ElMessage.success(`${imageFiles.length} ${$t("detection.filesAdded")}`);
   }
 
-  const nonImageFiles = files.filter((f) => !f.type.startsWith("image/"));
+  const nonImageFiles = files.filter(
+    (f) => !f.type.startsWith("image/") && !f.name.endsWith(".zip"),
+  );
   if (nonImageFiles.length > 0) {
     ElMessage.warning(
       `${nonImageFiles.length} ${$t("detection.invalidFiles")}`,
@@ -263,6 +304,11 @@ const clearAllFiles = () => {
   pendingFiles.value = [];
 };
 
+const previewImage = (src) => {
+  previewSrc.value = src;
+  showFullImage.value = true;
+};
+
 const startDetection = async () => {
   if (pendingFiles.value.length === 0) return;
 
@@ -270,19 +316,49 @@ const startDetection = async () => {
 
   try {
     const formData = new FormData();
-    pendingFiles.value.forEach((item) => {
-      formData.append("files", item.file);
-    });
+    const hasZip = pendingFiles.value.some((f) => f.isZip);
 
-    const response = await request.post("/api/detection/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    if (hasZip && pendingFiles.value.length === 1) {
+      formData.append("file", pendingFiles.value[0].file);
+      const response = await request.post("/api/detection/zip", formData, {
+        timeout: 180000,
+      });
+      if (response.annotated_images) {
+        detectionResults.value = response.annotated_images.map((img) => ({
+          filename: img.image_path,
+          success: true,
+          annotated_image_base64: img.annotated_image_base64,
+          objects: [],
+          inference_time: 0,
+          width: 0,
+          height: 0,
+        }));
+      } else {
+        detectionResults.value = [
+          {
+            filename: pendingFiles.value[0].name,
+            success: true,
+            annotated_image_base64: response.annotated_image_base64,
+            objects: [],
+            inference_time: response.inference_time || 0,
+            width: 0,
+            height: 0,
+          },
+        ];
+      }
+    } else {
+      pendingFiles.value.forEach((item) => {
+        formData.append("files", item.file);
+      });
+      const response = await request.post("/api/detection/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      detectionResults.value = response.results;
+    }
 
-    detectionResults.value = response.results;
     pendingFiles.value = [];
-
     ElMessage.success($t("detection.detectionComplete"));
   } catch (error) {
     ElMessage.error($t("detection.detectionFailed"));
@@ -299,22 +375,22 @@ const startDetection = async () => {
 }
 
 .upload-area {
-  border: 2px dashed #d9d9d9;
+  border: 2px dashed #dcdfe6;
   border-radius: 12px;
   padding: 60px 40px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  background: #fafafa;
+  background: #f5f7fa;
 
   &:hover {
     border-color: #409eff;
-    background: #f0f5ff;
+    background: rgba(64, 158, 255, 0.08);
   }
 
   &.is-dragover {
     border-color: #409eff;
-    background: #e6f7ff;
+    background: rgba(64, 158, 255, 0.12);
     transform: scale(1.02);
   }
 }
@@ -339,13 +415,13 @@ const startDetection = async () => {
 
   p {
     font-size: 14px;
-    color: #606266;
+    color: #909399;
     margin: 0;
   }
 
   .upload-tip {
     font-size: 12px;
-    color: #909399;
+    color: #c0c4cc;
     margin-top: 8px;
   }
 }
@@ -370,7 +446,7 @@ const startDetection = async () => {
 
 .file-item {
   position: relative;
-  border: 1px solid #e4e7ed;
+  border: 1px solid #dcdfe6;
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
@@ -379,6 +455,14 @@ const startDetection = async () => {
     width: 100%;
     height: 120px;
     object-fit: cover;
+  }
+
+  &.zip-file .file-thumb {
+    background: #f5f7fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
   }
 
   .file-info {
@@ -395,7 +479,7 @@ const startDetection = async () => {
 
     .file-size {
       font-size: 11px;
-      color: #909399;
+      color: #c0c4cc;
     }
   }
 
@@ -438,7 +522,7 @@ const startDetection = async () => {
   gap: 24px;
   margin-bottom: 20px;
   padding: 16px;
-  background: #fafafa;
+  background: #f5f7fa;
   border-radius: 8px;
   flex-wrap: wrap;
 }
@@ -449,7 +533,7 @@ const startDetection = async () => {
 
   .summary-label {
     font-size: 12px;
-    color: #909399;
+    color: #c0c4cc;
   }
 
   .summary-value {
@@ -474,10 +558,11 @@ const startDetection = async () => {
 }
 
 .result-card {
-  border: 1px solid #e4e7ed;
+  border: 1px solid #dcdfe6;
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 
   &.success {
     border-left: 4px solid #67c23a;
@@ -493,8 +578,8 @@ const startDetection = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #fafafa;
-  border-bottom: 1px solid #e4e7ed;
+  background: #f5f7fa;
+  border-bottom: 1px solid #dcdfe6;
 
   .result-filename {
     font-size: 13px;
@@ -510,6 +595,24 @@ const startDetection = async () => {
 .result-content {
   padding: 12px;
 
+  .result-image-container {
+    margin-bottom: 12px;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+
+    .result-image {
+      width: 100%;
+      max-height: 200px;
+      object-fit: contain;
+      transition: opacity 0.2s;
+
+      &:hover {
+        opacity: 0.8;
+      }
+    }
+  }
+
   .result-stats {
     display: flex;
     flex-wrap: wrap;
@@ -518,7 +621,7 @@ const startDetection = async () => {
 
     span {
       font-size: 12px;
-      color: #606266;
+      color: #909399;
       background: #f5f7fa;
       padding: 4px 8px;
       border-radius: 4px;
@@ -537,7 +640,7 @@ const startDetection = async () => {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: #f0f5ff;
+  background: rgba(64, 158, 255, 0.1);
   border-radius: 4px;
 
   .object-class {
@@ -548,7 +651,7 @@ const startDetection = async () => {
 
   .object-conf {
     font-size: 11px;
-    color: #606266;
+    color: #909399;
   }
 }
 

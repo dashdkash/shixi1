@@ -71,6 +71,16 @@ const routes = [
         },
       },
       {
+        path: "profile",
+        name: "Profile",
+        component: () => import("@/views/ProfilePage.vue"),
+        meta: {
+          titleKey: "page.profile.title",
+          icon: "User",
+          requiresAdmin: false,
+        },
+      },
+      {
         path: "dashboard",
         name: "Dashboard",
         component: () => import("@/views/DashboardPage.vue"),
