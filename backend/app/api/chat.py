@@ -1,7 +1,10 @@
 """
 智能对话 API 路由
-- POST /api/chat/stream  流式对话接口
-- POST /api/chat/upload  图片上传接口（对话附件用）
+- POST /api/chat/sessions    创建新对话
+- GET  /api/chat/sessions    获取对话列表
+- DELETE /api/chat/sessions/{id}  删除对话
+- POST /api/chat/stream      流式对话接口
+- POST /api/chat/upload      图片上传接口（对话附件用）
 """
 
 import json
@@ -56,6 +59,141 @@ class ChatRequest(BaseModel):
     stream: bool = True
     image_path: Optional[str] = None
     session_id: Optional[int] = None  # 会话 ID，为空则自动创建新会话
+
+
+class CreateSessionRequest(BaseModel):
+    """创建新对话请求"""
+    title: Optional[str] = None
+
+
+# ══════════════════════════════════════════════════════════════
+# 会话管理接口
+# ══════════════════════════════════════════════════════════════
+
+
+@router.post("/sessions", status_code=201)
+async def create_session(
+    request: CreateSessionRequest,
+    current_user=Depends(get_current_user),
+):
+    """
+    创建新对话会话
+
+    前端点击“新对话”按钮时调用，返回新建会话的 ID 和基本信息。
+    后续发消息时带上 session_id 即可在该会话中对话。
+    """
+    db = SessionLocal()
+    try:
+        session = ChatSession(
+            user_id=current_user["id"],
+            session_uuid=str(uuid.uuid4()),
+            title=request.title or "新对话",
+            status="active",
+            message_count=0,
+        )
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+
+        logger.info("创建新对话: session_id=%d, user_id=%d", session.id, current_user["id"])
+
+        return {
+            "id": session.id,
+            "session_uuid": session.session_uuid,
+            "title": session.title,
+            "status": session.status,
+            "message_count": session.message_count,
+            "created_at": session.created_at.isoformat(),
+        }
+    except Exception as e:
+        logger.error("创建对话失败: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="创建对话失败")
+    finally:
+        db.close()
+
+
+@router.get("/sessions")
+async def list_sessions(
+    page: int = 1,
+    page_size: int = 20,
+    current_user=Depends(get_current_user),
+):
+    """
+    获取当前用户的对话列表
+    """
+    from sqlalchemy import desc
+
+    db = SessionLocal()
+    try:
+        query = db.query(ChatSession).filter(
+            ChatSession.user_id == current_user["id"],
+        ).order_by(
+            desc(ChatSession.last_message_at).nulls_last(),
+            desc(ChatSession.created_at),
+        )
+
+        total = query.count()
+        sessions = query.offset((page - 1) * page_size).limit(page_size).all()
+
+        return {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "data": [
+                {
+                    "id": s.id,
+                    "session_uuid": s.session_uuid,
+                    "title": s.title or "未命名对话",
+                    "status": s.status,
+                    "message_count": s.message_count,
+                    "last_message_at": s.last_message_at.isoformat() if s.last_message_at else None,
+                    "created_at": s.created_at.isoformat(),
+                }
+                for s in sessions
+            ],
+        }
+    finally:
+        db.close()
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: int,
+    current_user=Depends(get_current_user),
+):
+    """
+    删除对话会话及其所有消息
+    """
+    db = SessionLocal()
+    try:
+        session = db.query(ChatSession).filter(
+            ChatSession.id == session_id,
+            ChatSession.user_id == current_user["id"],
+        ).first()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="对话不存在")
+
+        # 删除该会话下的所有消息
+        db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete()
+        db.delete(session)
+        db.commit()
+
+        logger.info("删除对话: session_id=%d, user_id=%d", session_id, current_user["id"])
+
+        return {"message": "对话已删除"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("删除对话失败: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="删除对话失败")
+    finally:
+        db.close()
+
+
+# ══════════════════════════════════════════════════════════════
+# 对话消息接口
+# ══════════════════════════════════════════════════════════════
 
 
 async def get_current_user_optional(
