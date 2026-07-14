@@ -1,17 +1,35 @@
 """
 认证相关 API 路由
-- POST /api/auth/register  用户注册
-- POST /api/auth/login     用户登录
-- GET  /api/auth/me        获取当前用户信息
+- POST /api/auth/register         用户注册
+- POST /api/auth/login            用户登录
+- POST /api/auth/forgot-password  忘记密码
+- POST /api/auth/reset-password   重置密码
+- GET  /api/auth/profile          获取个人信息（含检测统计）
+- PUT  /api/auth/profile          修改个人信息
+- PUT  /api/auth/password         修改密码
+- POST /api/auth/avatar           上传头像
 """
 
+import uuid
 from typing import Optional
 
 from app.core.security import decode_access_token
 from app.database.session import get_db
-from app.entity.schemas import TokenResponse, UserLogin, UserRegister, UserResponse
+from app.entity.schemas import (
+    AvatarResponse,
+    ChangePassword,
+    ForgotPasswordRequest,
+    ProfileUpdate,
+    ResetPasswordRequest,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
+    UserResponse,
+    UserResponseWithStats,
+)
 from app.services.user_service import user_service
-from fastapi import APIRouter, Depends, HTTPException
+from app.storage.minio_client import MinIOClient
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
@@ -97,13 +115,55 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/me", response_model=UserResponse)
+@router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    忘记密码
+
+    - 生成一次性重置令牌（1h 有效）
+    - 返回重置链接（实际生产环境应发送邮件）
+    """
+    token = user_service.generate_reset_token(db, request.email)
+
+    # 无论邮箱是否存在都返回成功，防止邮箱枚举攻击
+    if token:
+        # 开发环境：直接返回令牌；生产环境应发送邮件
+        return {
+            "message": "重置令牌已生成",
+            "reset_url": f"/reset-password?token={token}",
+            "token": token,  # 仅开发环境返回，生产环境应删除此行
+        }
+    else:
+        return {
+            "message": "如果该邮箱已注册，重置链接将发送至您的邮箱"
+        }
+
+
+@router.post("/reset-password")
+async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    重置密码
+
+    - 验证令牌并更新密码
+    - 令牌使用后自动失效
+    """
+    success = user_service.reset_password(db, request.token, request.new_password)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="重置令牌无效或已过期")
+
+    return {"message": "密码重置成功"}
+
+
+@router.get("/profile", response_model=UserResponseWithStats)
 async def get_current_user_info(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """获取当前登录用户信息（需要 Token 认证）"""
+    """获取当前登录用户信息（含检测统计数据）"""
     roles = user_service.get_user_roles(db, current_user)
+    stats = user_service.get_user_detection_stats(db, current_user.id)
+
     return {
         "id": current_user.id,
         "username": current_user.username,
@@ -115,4 +175,117 @@ async def get_current_user_info(
         "roles": roles,
         "last_login_at": current_user.last_login_at,
         "created_at": current_user.created_at,
+        **stats,
     }
+
+
+@router.put("/profile", response_model=UserResponse)
+async def update_profile(
+    request: ProfileUpdate,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    修改个人信息
+
+    - 修改邮箱（唯一性校验）
+    - 修改手机号
+    """
+    user = user_service.update_profile(
+        db=db,
+        user=current_user,
+        email=request.email,
+        phone=request.phone,
+    )
+    roles = user_service.get_user_roles(db, user)
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "phone": user.phone,
+        "avatar": user.avatar,
+        "is_active": user.is_active,
+        "is_superuser": user.is_superuser,
+        "roles": roles,
+        "last_login_at": user.last_login_at,
+        "created_at": user.created_at,
+    }
+
+
+@router.put("/password")
+async def change_password(
+    request: ChangePassword,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    修改密码
+
+    - 验证旧密码后更新
+    """
+    success = user_service.change_password(
+        db=db,
+        user=current_user,
+        old_password=request.old_password,
+        new_password=request.new_password,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail="旧密码错误")
+
+    return {"message": "密码修改成功"}
+
+
+@router.post("/avatar", response_model=AvatarResponse)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    上传头像
+
+    - 上传至 MinIO avatars bucket
+    - 支持 JPG/PNG 格式
+    - 文件大小限制 5MB
+    """
+    # 验证文件类型
+    allowed_types = ["image/jpeg", "image/png", "image/jpg"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail="仅支持 JPG/PNG 格式的图片"
+        )
+
+    # 验证文件大小（5MB）
+    content = await file.read()
+    file_size = len(content)
+    if file_size > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="文件大小不能超过 5MB"
+        )
+
+    # 生成唯一文件名
+    file_extension = file.filename.split(".")[-1] if file.filename else "jpg"
+    object_name = f"avatars/{current_user.id}_{uuid.uuid4()}.{file_extension}"
+
+    # 上传到 MinIO
+    try:
+        minio_client = MinIOClient()
+        avatar_url = minio_client.upload_bytes(
+            object_name=object_name,
+            data=content,
+            content_type=file.content_type,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"头像上传失败: {str(e)}"
+        )
+
+    # 更新用户头像 URL
+    user_service.update_avatar(db, current_user, avatar_url)
+
+    return {"avatar_url": avatar_url}

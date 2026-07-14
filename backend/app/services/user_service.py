@@ -3,9 +3,13 @@
 处理用户注册、登录、鉴权等业务逻辑
 """
 
+import secrets
+from datetime import datetime, timedelta
+
 from app.core.security import create_access_token, hash_password, verify_password
-from app.entity.db_models import Role, User, UserRole
+from app.entity.db_models import DetectionTask, Role, User, UserRole
 from fastapi import HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 
@@ -100,6 +104,158 @@ class UserService:
         if not user:
             raise HTTPException(status_code=404, detail="用户不存在")
         return user
+
+    @staticmethod
+    def get_user_by_email(db: Session, email: str) -> User | None:
+        """根据邮箱获取用户"""
+        return db.query(User).filter(User.email == email).first()
+
+    @staticmethod
+    def generate_reset_token(db: Session, email: str) -> str | None:
+        """
+        生成密码重置令牌
+
+        Args:
+            db: 数据库会话
+            email: 用户邮箱
+
+        Returns:
+            重置令牌，如果用户不存在返回 None
+        """
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return None
+
+        # 生成 32 位随机令牌
+        token = secrets.token_urlsafe(32)
+        user.reset_token = token
+        user.reset_token_expires_at = datetime.now() + timedelta(hours=1)
+        db.commit()
+
+        return token
+
+    @staticmethod
+    def reset_password(db: Session, token: str, new_password: str) -> bool:
+        """
+        使用令牌重置密码
+
+        Args:
+            db: 数据库会话
+            token: 重置令牌
+            new_password: 新密码
+
+        Returns:
+            是否重置成功
+        """
+        user = db.query(User).filter(User.reset_token == token).first()
+        if not user:
+            return False
+
+        # 检查令牌是否过期
+        if user.reset_token_expires_at and user.reset_token_expires_at < datetime.now():
+            return False
+
+        # 更新密码
+        user.hashed_password = hash_password(new_password)
+        user.reset_token = None
+        user.reset_token_expires_at = None
+        db.commit()
+
+        return True
+
+    @staticmethod
+    def update_profile(db: Session, user: User, email: str | None = None, phone: str | None = None) -> User:
+        """
+        更新用户个人信息
+
+        Args:
+            db: 数据库会话
+            user: 当前用户
+            email: 新邮箱
+            phone: 新手机号
+
+        Returns:
+            更新后的用户对象
+        """
+        if email and email != user.email:
+            # 检查邮箱是否已被其他用户使用
+            existing_user = db.query(User).filter(User.email == email, User.id != user.id).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="邮箱已被其他用户使用")
+            user.email = email
+
+        if phone is not None:
+            user.phone = phone
+
+        db.commit()
+        db.refresh(user)
+        return user
+
+    @staticmethod
+    def change_password(db: Session, user: User, old_password: str, new_password: str) -> bool:
+        """
+        修改密码
+
+        Args:
+            db: 数据库会话
+            user: 当前用户
+            old_password: 旧密码
+            new_password: 新密码
+
+        Returns:
+            是否修改成功
+        """
+        if not verify_password(old_password, user.hashed_password):  # type: ignore
+            return False
+
+        user.hashed_password = hash_password(new_password)
+        db.commit()
+        return True
+
+    @staticmethod
+    def update_avatar(db: Session, user: User, avatar_url: str) -> User:
+        """
+        更新用户头像
+
+        Args:
+            db: 数据库会话
+            user: 当前用户
+            avatar_url: 头像 URL
+
+        Returns:
+            更新后的用户对象
+        """
+        user.avatar = avatar_url
+        db.commit()
+        db.refresh(user)
+        return user
+
+    @staticmethod
+    def get_user_detection_stats(db: Session, user_id: int) -> dict:
+        """
+        获取用户检测统计数据
+
+        Args:
+            db: 数据库会话
+            user_id: 用户 ID
+
+        Returns:
+            统计数据字典
+        """
+        # 总检测任务数
+        total_detections = db.query(DetectionTask).filter(DetectionTask.user_id == user_id).count()
+
+        # 总处理图像数和检测目标数
+        stats = db.query(
+            func.coalesce(func.sum(DetectionTask.total_images), 0),
+            func.coalesce(func.sum(DetectionTask.total_objects), 0)
+        ).filter(DetectionTask.user_id == user_id).first()
+
+        return {
+            "total_detections": total_detections,
+            "total_images_detected": stats[0] if stats else 0,
+            "total_objects_found": stats[1] if stats else 0,
+        }
 
 
 # 全局单例
