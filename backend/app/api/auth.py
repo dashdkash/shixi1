@@ -32,6 +32,7 @@ from app.entity.schemas import (
 )
 from app.services.user_service import user_service
 from app.storage.minio_client import MinIOClient
+from app.core.email import send_password_reset_email
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
@@ -145,22 +146,27 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     忘记密码
 
     - 生成一次性重置令牌（1h 有效）
-    - 返回重置链接（实际生产环境应发送邮件）
+    - 发送重置邮件到用户邮箱
     """
     token = user_service.generate_reset_token(db, request.email)
 
-    # 无论邮箱是否存在都返回成功，防止邮箱枚举攻击
+    # 如果用户存在，发送邮件
     if token:
-        # 开发环境：直接返回令牌；生产环境应发送邮件
-        return {
-            "message": "重置令牌已生成",
-            "reset_url": f"/reset-password?token={token}",
-            "token": token,  # 仅开发环境返回，生产环境应删除此行
-        }
-    else:
-        return {
-            "message": "如果该邮箱已注册，重置链接将发送至您的邮箱"
-        }
+        # 生产环境发送邮件
+        email_sent = send_password_reset_email(request.email, token)
+        
+        # 开发环境下如果发送失败，返回 token 便于测试
+        if not email_sent and settings.DEBUG:
+            return {
+                "message": "重置令牌已生成（邮件发送失败，开发环境直接返回）",
+                "reset_url": f"/reset-password?token={token}",
+                "token": token,
+            }
+
+    # 无论邮箱是否存在都返回成功，防止邮箱枚举攻击
+    return {
+        "message": "如果该邮箱已注册，重置链接将发送至您的邮箱"
+    }
 
 
 @router.post("/reset-password")

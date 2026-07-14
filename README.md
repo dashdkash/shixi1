@@ -77,3 +77,53 @@ POST /api/auth/reset-password
 ## 结论
 
 **可以正常忘记和修改密码**，后端逻辑完整。只需要前端实现对应的页面，并且生产环境需要确定 token 的传递方式（邮件、短信或其他）。
+
+
+### 邮箱修改
+
+## 修改内容
+### 1. 配置文件 settings.py
+添加了邮件相关配置项：
+
+- SMTP_HOST : SMTP 服务器地址
+- SMTP_PORT : SMTP 端口（默认 587）
+- SMTP_USER : 发件人邮箱
+- SMTP_PASSWORD : 邮箱授权码/密码
+- SMTP_FROM_NAME : 发件人显示名称
+- SMTP_USE_TLS : 是否使用 TLS 加密
+- FRONTEND_URL : 前端地址（用于生成重置链接）
+### 2. 邮件服务 core/email.py
+创建了 send_password_reset_email() 函数：
+
+- 使用 Python 标准库 smtplib 发送邮件
+- 支持 HTML 格式的邮件内容
+- 包含重置按钮和链接
+- 自动处理 TLS 加密连接
+- 返回发送成功/失败状态
+### 3. 认证接口 auth.py
+修改了 /forgot-password 接口：
+
+- 生成 token 后调用邮件发送功能
+- 生产环境：发送邮件给用户
+- 开发环境（DEBUG=true）：如果邮件发送失败，返回 token 便于测试
+- 防止邮箱枚举攻击：无论邮箱是否存在都返回相同提示
+### 4. 环境变量示例 .env.example
+添加了邮件配置示例，方便部署时参考。
+
+## 使用方式
+在 .env 文件中配置实际的邮件服务信息：
+
+```
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=587
+SMTP_USER=your-email@qq.com
+SMTP_PASSWORD=your-auth-code
+SMTP_FROM_NAME=RSOD Agent Platform
+SMTP_USE_TLS=true
+FRONTEND_URL=http://localhost:5173
+```
+常用邮箱 SMTP 配置：
+
+- QQ 邮箱： smtp.qq.com ，使用授权码
+- 163 邮箱： smtp.163.com ，使用授权码
+- Gmail： smtp.gmail.com ，使用应用专用密码

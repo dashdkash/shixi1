@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_MODEL: str = "qwen-plus"
 
+    # ── 邮件配置 ──────────────────────────────────────
+    SMTP_HOST: str = "smtp.example.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = "noreply@example.com"
+    SMTP_PASSWORD: str = "your-smtp-password"
+    SMTP_FROM_NAME: str = "RSOD Agent Platform"
+    SMTP_USE_TLS: bool = True
+    
+    # 前端地址（用于生成重置链接）
+    FRONTEND_URL: str = "http://localhost:5173"
+
     @property
     def cors_origins_list(self) -> list:
         """将 CORS 配置字符串转为列表"""
