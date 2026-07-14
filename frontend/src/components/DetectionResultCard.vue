@@ -2,9 +2,9 @@
   <div class="detection-result-card">
     <div class="card-header">
       <el-icon><DataAnalysis /></el-icon>
-      <span>检测结果</span>
+      <span>{{ t("detection.resultCard.title") }}</span>
       <el-tag size="small" type="success">
-        {{ result.total_objects ?? 0 }} 个目标
+        {{ result.total_objects ?? 0 }} {{ t("detection.resultCard.objects") }}
       </el-tag>
     </div>
 
@@ -34,16 +34,32 @@
       <!-- 统计信息 -->
       <div class="result-stats">
         <div class="stat-item">
-          <span class="stat-label">推理耗时</span>
-          <span class="stat-value">{{ result.inference_time || result.total_inference_time || 0 }}ms</span>
+          <span class="stat-label">{{
+            t("detection.resultCard.inferenceTime")
+          }}</span>
+          <span class="stat-value"
+            >{{
+              result.inference_time || result.total_inference_time || 0
+            }}ms</span
+          >
         </div>
         <div class="stat-item">
-          <span class="stat-label">检测目标</span>
-          <span class="stat-value">{{ result.total_objects ?? 0 }} 个</span>
+          <span class="stat-label">{{
+            t("detection.resultCard.detectedObjects")
+          }}</span>
+          <span class="stat-value"
+            >{{ result.total_objects ?? 0 }}
+            {{ t("detection.resultCard.count") }}</span
+          >
         </div>
         <div class="stat-item" v-if="isBatch">
-          <span class="stat-label">图片数量</span>
-          <span class="stat-value">{{ result.total_images ?? batchImages.length }} 张</span>
+          <span class="stat-label">{{
+            t("detection.resultCard.imageCount")
+          }}</span>
+          <span class="stat-value"
+            >{{ result.total_images ?? batchImages.length }}
+            {{ t("detection.resultCard.count") }}</span
+          >
         </div>
 
         <!-- 类别统计表格 -->
@@ -53,14 +69,25 @@
           size="small"
           style="margin-top: 12px"
         >
-          <el-table-column prop="className" label="类别" />
-          <el-table-column prop="count" label="数量" width="80" />
+          <el-table-column
+            prop="className"
+            :label="t('detection.resultCard.className')"
+          />
+          <el-table-column
+            prop="count"
+            :label="t('detection.resultCard.count')"
+            width="80"
+          />
         </el-table>
       </div>
     </div>
 
     <!-- 全屏图片预览 -->
-    <el-dialog v-model="showFullImage" title="检测标注图" width="80%">
+    <el-dialog
+      v-model="showFullImage"
+      :title="t('detection.resultCard.previewTitle')"
+      width="80%"
+    >
       <img
         v-if="previewSrc"
         :src="previewSrc"
@@ -81,7 +108,10 @@
  *   - 各类别数量统计表格
  */
 import { DataAnalysis } from "@element-plus/icons-vue";
-import { computed, ref } from "vue";
+import { computed, getCurrentInstance, ref } from "vue";
+
+const { proxy } = getCurrentInstance();
+const t = proxy.$t.bind(proxy);
 
 const props = defineProps({
   result: {
@@ -95,7 +125,10 @@ const previewSrc = ref(null);
 
 /** 判断是否为批量检测结果 */
 const isBatch = computed(() => {
-  return Array.isArray(props.result.annotated_images) && props.result.annotated_images.length > 0;
+  return (
+    Array.isArray(props.result.annotated_images) &&
+    props.result.annotated_images.length > 0
+  );
 });
 
 /** 单图模式：标注图 URL（优先使用 MinIO URL，否则用 base64） */

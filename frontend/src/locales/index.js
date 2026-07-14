@@ -1,6 +1,6 @@
 import { createI18n } from "vue-i18n";
-import zh from "./zh.json";
 import en from "./en.json";
+import zh from "./zh.json";
 
 const STORAGE_KEY = "rsod_lang";
 
@@ -30,6 +30,7 @@ export function setLanguage(lang) {
   if (["zh", "en"].includes(lang)) {
     i18n.global.locale.value = lang;
     localStorage.setItem(STORAGE_KEY, lang);
+    window.location.reload();
   }
 }
 

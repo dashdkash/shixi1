@@ -62,9 +62,22 @@
     "en": "English"
   },
   "chat": {
-    "inputPlaceholder": "请输入消息...",
+    "inputPlaceholder": "输入消息，或拖拽图片/ZIP 到这里...",
     "error": "发送失败",
-    "attachedImage": "已添加图片"
+    "attachedImage": "已添加图片",
+    "send": "发送",
+    "stop": "停止",
+    "quickActions": {
+      "single": "📷 单图检测",
+      "batch": "📁 批量/ZIP",
+      "video": "🎬 视频",
+      "camera": "📹 摄像头"
+    },
+    "welcome": "🌿 你好！我是杂草识别智能助手。\n\n我可以帮你：\n- 📷 识别图片中的杂草种类和数量\n- 📊 提供杂草分布统计分析\n- 💡 给出专业的除草建议\n\n上传一张农田或草坪的照片，我来帮你分析！",
+    "toolCall": "🔧 调用工具: {tool}",
+    "batchDetecting": "正在批量检测中...",
+    "batchComplete": "批量检测完成！共 {count} 个目标。",
+    "batchFailed": "批量检测失败：{error}"
   },
   "header": {
     "profile": "个人中心",
@@ -107,6 +120,16 @@
     }
   },
   "detection": {
+    "resultCard": {
+      "title": "检测结果",
+      "objects": "个目标",
+      "inferenceTime": "推理耗时",
+      "detectedObjects": "检测目标",
+      "imageCount": "图片数量",
+      "className": "类别",
+      "count": "数量",
+      "previewTitle": "检测标注图"
+    },
     "uploadTitle": "上传图片进行检测",
     "uploadHint": "点击选择文件，或拖拽图片到此处",
     "uploadTip": "支持 JPG、PNG、BMP、WebP 格式，可批量上传",
@@ -128,7 +151,28 @@
     "filesAdded": "个文件已添加",
     "invalidFiles": "个无效文件被忽略",
     "detectionComplete": "检测完成",
-    "detectionFailed": "检测失败"
+    "detectionFailed": "检测失败",
+    "fileTab": "文件检测",
+    "cameraTab": "摄像头检测"
+  },
+  "camera": {
+    "noCamera": "未检测到摄像头",
+    "ready": "摄像头已就绪，点击开始检测",
+    "connecting": "正在初始化检测模型，请稍候...",
+    "start": "开始检测",
+    "stop": "停止检测",
+    "fps": "帧率",
+    "objects": "目标数",
+    "inference": "推理耗时",
+    "frame": "帧数",
+    "config": "检测配置",
+    "mode": "运行模式",
+    "confidence": "置信度阈值",
+    "iou": "IoU阈值",
+    "detections": "检测结果",
+    "connectionError": "连接失败，请检查网络",
+    "cameraError": "无法访问摄像头，请检查权限",
+    "stopped": "检测已停止"
   },
   "profile": {
     "userInfo": "个人信息",

@@ -38,9 +38,11 @@
           v-else-if="msg.role === 'assistant'"
           class="message-content-wrapper"
         >
-          <el-avatar :size="36" class="message-avatar assistant-avatar">
-            <span></span>
-          </el-avatar>
+          <el-avatar
+            :size="36"
+            class="message-avatar assistant-avatar"
+            src="/logo.svg"
+          ></el-avatar>
           <div class="message-bubble assistant-bubble">
             <div
               class="message-content markdown-body"
@@ -60,7 +62,7 @@
         <!-- 工具调用提示 -->
         <div v-if="msg.toolCall" class="tool-call-info">
           <el-tag size="small" type="info">
-            🔧 调用工具: {{ msg.toolCall.tool }}
+            {{ t("chat.toolCall", { tool: msg.toolCall.tool }) }}
           </el-tag>
         </div>
       </div>
@@ -72,16 +74,26 @@
         @click="handleQuickDetect('single')"
         :disabled="agentStore.isLoading"
       >
-        📷 单图检测
+        {{ t("chat.quickActions.single") }}
       </el-button>
       <el-button
         @click="handleQuickDetect('batch')"
         :disabled="agentStore.isLoading"
       >
-         批量/ZIP
+        {{ t("chat.quickActions.batch") }}
       </el-button>
-      <el-button disabled>🎬 视频</el-button>
-      <el-button disabled> 摄像头</el-button>
+      <el-button
+        @click="handleQuickDetect('video')"
+        :disabled="agentStore.isLoading"
+      >
+        {{ t("chat.quickActions.video") }}
+      </el-button>
+      <el-button
+        @click="handleQuickDetect('camera')"
+        :disabled="agentStore.isLoading"
+      >
+        {{ t("chat.quickActions.camera") }}
+      </el-button>
     </div>
 
     <!-- ── 输入区域 ── -->
@@ -106,7 +118,7 @@
       <!-- 文本输入框 -->
       <el-input
         v-model="inputText"
-        placeholder="输入消息，或拖拽图片/ZIP 到这里..."
+        :placeholder="t('chat.inputPlaceholder')"
         @keyup.enter="sendMessage"
         :disabled="agentStore.isLoading"
       />
@@ -118,9 +130,11 @@
         @click="sendMessage"
         :disabled="!inputText.trim() && !selectedFile"
       >
-        发送
+        {{ t("chat.send") }}
       </el-button>
-      <el-button v-else type="danger" @click="handleStop"> 停止 </el-button>
+      <el-button v-else type="danger" @click="handleStop">{{
+        t("chat.stop")
+      }}</el-button>
     </div>
   </div>
 </template>
@@ -145,11 +159,17 @@ import { renderMarkdown } from "@/utils/markdown";
 import request from "@/utils/request";
 import { streamChat } from "@/utils/stream";
 import { ElMessage } from "element-plus";
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, getCurrentInstance, nextTick, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 
 // ── Store ──
 const agentStore = useAgentStore();
 const userStore = useUserStore();
+const router = useRouter();
+
+// ── i18n ──
+const { proxy } = getCurrentInstance();
+const t = proxy.$t.bind(proxy);
 
 // ── 响应式状态 ──
 const inputText = ref("");
@@ -219,7 +239,9 @@ async function sendMessage() {
     message,
     ...(serverImagePath ? { image_path: serverImagePath } : {}),
     // 传递当前会话 ID，为空则后端自动创建新会话
-    ...(agentStore.currentSessionId ? { session_id: agentStore.currentSessionId } : {}),
+    ...(agentStore.currentSessionId
+      ? { session_id: agentStore.currentSessionId }
+      : {}),
   };
 
   let fullContent = "";
@@ -227,7 +249,11 @@ async function sendMessage() {
   const stop = streamChat("/api/chat/stream", requestBody, {
     onMessage: (data) => {
       // 调试日志：查看收到的所有 SSE 事件
-      console.log("[SSE事件]", data.type, data.type === "tool_result" ? data : "");
+      console.log(
+        "[SSE事件]",
+        data.type,
+        data.type === "tool_result" ? data : "",
+      );
 
       if (data.type === "session_id") {
         // 后端返回当前会话 ID，保存到 store
@@ -244,10 +270,21 @@ async function sendMessage() {
       } else if (data.type === "tool_result") {
         // 工具调用返回结果
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-        console.log("[工具结果] tool:", data.tool, "result长度:", data.result?.length);
+        console.log(
+          "[工具结果] tool:",
+          data.tool,
+          "result长度:",
+          data.result?.length,
+        );
         try {
           const result = JSON.parse(data.result);
-          console.log("[工具结果解析]", "total_objects:", result.total_objects, "detections:", result.detections?.length);
+          console.log(
+            "[工具结果解析]",
+            "total_objects:",
+            result.total_objects,
+            "detections:",
+            result.detections?.length,
+          );
           if (result.detections) {
             // 有检测结果，设置到消息中
             lastMsg.detectionResult = result;
@@ -255,7 +292,12 @@ async function sendMessage() {
             console.log("[检测结果卡片已设置]", lastMsg.detectionResult);
           }
         } catch (e) {
-          console.warn("[工具结果解析失败]", e.message, "原始数据:", data.result?.substring(0, 200));
+          console.warn(
+            "[工具结果解析失败]",
+            e.message,
+            "原始数据:",
+            data.result?.substring(0, 200),
+          );
           // 非检测结果 JSON，作为普通文本
           lastMsg.content += `\n[工具结果: ${data.result?.substring(0, 100)}...]`;
         }
@@ -405,7 +447,7 @@ async function handleQuickDetect(type) {
 
       agentStore.addMessage({
         role: "assistant",
-        content: "正在批量检测中...",
+        content: t("chat.batchDetecting"),
         loading: true,
       });
 
@@ -416,38 +458,94 @@ async function handleQuickDetect(type) {
 
         // 检查是否有错误
         if (result.error) {
-          lastMsg.content = `批量检测失败：${result.error}`;
+          lastMsg.content = t("chat.batchFailed", { error: result.error });
           lastMsg.loading = false;
           lastMsg.error = true;
           return;
         }
 
         const totalObjects = result.total_objects ?? 0;
-        lastMsg.content = `批量检测完成！共 ${totalObjects} 个目标。`;
+        lastMsg.content = t("chat.batchComplete", { count: totalObjects });
         lastMsg.loading = false;
         lastMsg.detectionResult = result;
         console.log("[批量检测结果]", result);
       } catch (err) {
         console.error("[批量检测异常]", err);
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-        lastMsg.content = `批量检测失败：${err.message || err}`;
+        lastMsg.content = t("chat.batchFailed", { error: err.message || err });
         lastMsg.loading = false;
         lastMsg.error = true;
       }
     };
     input.click();
+  } else if (type === "video") {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/*";
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      agentStore.addMessage({
+        role: "user",
+        content: `[视频检测] ${file.name}`,
+      });
+
+      agentStore.addMessage({
+        role: "assistant",
+        content: "正在上传视频并处理...",
+        loading: true,
+      });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const result = await request.post("/api/detection/video", formData, {
+          timeout: 180000,
+        });
+
+        if (result.task_id) {
+          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+          lastMsg.content = `视频已上传，任务 ID: ${result.task_id}，正在后台处理中...\n\n${result.message}`;
+          lastMsg.loading = false;
+        } else {
+          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+          lastMsg.content = result.message || "视频检测完成";
+          lastMsg.loading = false;
+          if (result.detectionResult) {
+            lastMsg.detectionResult = result.detectionResult;
+          }
+        }
+      } catch (err) {
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        lastMsg.content = `视频检测失败：${err.response?.data?.error || err.message || err}`;
+        lastMsg.loading = false;
+        lastMsg.error = true;
+      }
+    };
+    input.click();
+  } else if (type === "camera") {
+    router.push("/detection?tab=camera");
+  }
+}
+
+function updateWelcomeMessage() {
+  if (agentStore.messages.length === 0) {
+    agentStore.addMessage({
+      role: "assistant",
+      content: t("chat.welcome"),
+    });
+  } else if (
+    agentStore.messages[0].role === "assistant" &&
+    !agentStore.messages[0].loading
+  ) {
+    agentStore.messages[0].content = t("chat.welcome");
   }
 }
 
 onMounted(() => {
-  // 页面加载时显示欢迎消息
-  if (agentStore.messages.length === 0) {
-    agentStore.addMessage({
-      role: "assistant",
-      content:
-        "🌿 你好！我是杂草识别智能助手。\n\n我可以帮你：\n- 📷 识别图片中的杂草种类和数量\n- 📊 提供杂草分布统计分析\n- 💡 给出专业的除草建议\n\n上传一张农田或草坪的照片，我来帮你分析！",
-    });
-  }
+  updateWelcomeMessage();
 });
 </script>
 
@@ -510,7 +608,7 @@ onMounted(() => {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 
   &.assistant-avatar {
-    background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+    background: #fff;
     border-color: #67c23a;
   }
 }

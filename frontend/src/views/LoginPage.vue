@@ -11,7 +11,7 @@
           <el-option :label="$t('lang.zh')" value="zh" />
           <el-option :label="$t('lang.en')" value="en" />
         </el-select>
-        <img src="/favicon.svg" alt="logo" class="login-logo" />
+        <img src="/logo.svg" alt="logo" class="login-logo" />
         <h2>{{ $t("app.title") }}</h2>
         <p>{{ $t("app.description") }}</p>
       </div>
