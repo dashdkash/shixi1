@@ -537,6 +537,377 @@ class DetectionService:
 
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def detect_video(
+        self,
+        video_path: str,
+        conf: float = 0.25,
+        iou: float = 0.45,
+        frame_sample_rate: int = 5,
+        max_frames: int = 50,
+        scene_id: int = None,
+        user_id: int = None,
+        task_id: int = None,
+    ) -> dict:
+        """
+        视频检测 — 逐帧采样 + YOLO 推理
 
+        处理流程：
+        1. OpenCV 打开视频，获取总帧数和 fps
+        2. 按 frame_sample_rate 采样关键帧
+        3. 对每帧执行 YOLO 推理
+        4. 生成标注帧图像（Base64）
+        5. 汇总统计结果
+
+        Args:
+            video_path: 视频文件路径
+            conf: 置信度阈值
+            iou: NMS IoU 阈值
+            frame_sample_rate: 帧采样间隔（每 N 帧取 1 帧）
+            max_frames: 最多处理的关键帧数量（防止视频过长）
+            scene_id: 检测场景 ID
+            user_id: 操作用户 ID
+            task_id: 已创建的检测任务 ID（用于更新进度）
+
+        Returns:
+            视频检测结果字典：
+            {
+                "task_id": int,
+                "total_frames": int,          # 视频总帧数
+                "processed_frames": int,       # 处理的关键帧数
+                "fps": float,                  # 视频原始 fps
+                "duration_seconds": float,     # 视频时长（秒）
+                "total_objects": int,          # 检测到目标总数
+                "class_counts": {...},         # 各类别统计
+                "key_frames": [...],           # 关键帧结果列表
+                "total_inference_time": float, # 总推理耗时（ms）
+            }
+        """
+        db = SessionLocal()
+        try:
+            # ── 加载模型 ──
+            model = get_model(scene_id)
+
+            # ── 打开视频 ──
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                return {"error": f"无法打开视频文件: {video_path}"}
+
+            # 获取视频基本信息
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            duration_seconds = total_frames / fps if fps > 0 else 0
+
+            logger.info(
+                "视频信息: %d×%d, %.1ffps, %d 帧, %.1f 秒",
+                width,
+                height,
+                fps,
+                total_frames,
+                duration_seconds,
+            )
+
+            # ── 如果没有传入 task_id，创建检测任务 ──
+            if not task_id:
+                task = DetectionTask(
+                    user_id=user_id or 0,
+                    scene_id=scene_id or 1,
+                    task_type="video",
+                    status="processing",
+                    total_images=0,  # 后续更新
+                    conf_threshold=conf,
+                    iou_threshold=iou,
+                )
+                db.add(task)
+                db.flush()
+                task_id = task.id
+            else:
+                task = (
+                    db.query(DetectionTask).filter(DetectionTask.id == task_id).first()
+                )
+
+            # ── 计算需要采样的帧索引 ──
+            # 根据视频总帧数和 max_frames 动态计算采样间隔，
+            # 确保帧均匀分布在整个视频时长内，避免密集采样导致重复帧
+            effective_interval = max(frame_sample_rate, total_frames // max_frames)
+            sample_indices = list(range(0, total_frames, effective_interval))
+            if len(sample_indices) > max_frames:
+                sample_indices = sample_indices[:max_frames]
+
+            # 更新任务的总图像数
+            if task:
+                task.total_images = len(sample_indices)
+                db.commit()
+
+            # ── 逐帧处理：场景变化检测 + 目标跟踪 + 合成标注视频 ──
+            sample_set = set(sample_indices)
+            key_frames = []
+            total_objects = 0
+            total_inference_time = 0
+            class_counts = {}
+            sampled_count = 0
+            last_detections = []
+            last_frame = None
+            current_scene_seen_track_ids = set()
+            class_colors = {
+                "person": (0, 255, 0),
+                "car": (255, 0, 0),
+                "truck": (0, 0, 255),
+                "bus": (255, 255, 0),
+                "bicycle": (255, 0, 255),
+                "motorcycle": (0, 255, 255),
+            }
+
+            def get_color(cls_name):
+                return class_colors.get(cls_name, (255, 128, 0))
+
+            def draw_detections_on_frame(frame, detections):
+                annotated = frame.copy()
+                for det in detections:
+                    x1, y1, x2, y2 = det["bbox"]
+                    color = get_color(det["class_name"])
+                    cv2.rectangle(annotated, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+                    label = f"{det['class_name']} {det['confidence']:.2f}"
+                    cv2.putText(
+                        annotated,
+                        label,
+                        (int(x1), int(y1) - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        color,
+                        2,
+                    )
+                return annotated
+
+            # 创建临时文件用于输出标注视频
+            output_tmp = tempfile.NamedTemporaryFile(
+                suffix=".mp4", delete=False
+            )
+            output_video_path = output_tmp.name
+            output_tmp.close()
+
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            video_writer = cv2.VideoWriter(
+                output_video_path, fourcc, fps, (width, height)
+            )
+
+            frame_idx = 0
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # 场景变化检测：比较当前帧与上一帧的差异
+                current_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                current_frame_gray = cv2.resize(current_frame_gray, (100, 100))
+
+                scene_changed = False
+                if last_frame is not None:
+                    frame_diff = cv2.absdiff(last_frame, current_frame_gray)
+                    diff_score = frame_diff.mean()
+                    if diff_score > 10:
+                        scene_changed = True
+                else:
+                    scene_changed = True
+
+                last_frame = current_frame_gray.copy()
+
+                # 场景变化时才执行检测和计数
+                if scene_changed:
+                    results = model.predict(
+                        source=frame,
+                        conf=conf,
+                        iou=iou,
+                        imgsz=640,
+                        device="cpu",
+                        save=False,
+                        verbose=False,
+                    )
+                    result = results[0]
+
+                    frame_detections = []
+                    if result.boxes is not None and len(result.boxes) > 0:
+                        for box in result.boxes:
+                            cls_id = int(box.cls[0])
+                            cls_name = model.names.get(cls_id, f"class_{cls_id}")
+                            confidence = float(box.conf[0])
+                            x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+                            det = {
+                                "class_name": cls_name,
+                                "class_id": cls_id,
+                                "confidence": round(confidence, 4),
+                                "bbox": [
+                                    round(x1, 1),
+                                    round(y1, 1),
+                                    round(x2, 1),
+                                    round(y2, 1),
+                                ],
+                            }
+                            frame_detections.append(det)
+                            total_objects += 1
+                            class_counts[cls_name] = (
+                                class_counts.get(cls_name, 0) + 1
+                            )
+
+                    last_detections = frame_detections
+                    sampled_count += 1
+                    inference_time = float(result.speed.get("inference", 0))
+                    total_inference_time += inference_time
+
+                    annotated_img = draw_detections_on_frame(frame, frame_detections)
+                    video_writer.write(annotated_img)
+
+                    # 生成 base64 缩略图（仅保留少量关键帧用于统计展示）
+                    annotated_base64 = None
+                    if len(key_frames) < 6:
+                        _, buffer = cv2.imencode(
+                            ".jpg", annotated_img, [cv2.IMWRITE_JPEG_QUALITY, 70]
+                        )
+                        annotated_base64 = base64.b64encode(buffer).decode("utf-8")
+
+                    # 保存关键帧信息
+                    key_frames.append(
+                        {
+                            "frame_index": frame_idx,
+                            "timestamp": round(frame_idx / fps, 2),
+                            "annotated_image_base64": annotated_base64,
+                            "object_count": len(frame_detections),
+                            "detections": frame_detections,
+                            "inference_time": round(inference_time, 2),
+                        }
+                    )
+
+                    # 保存检测结果到数据库
+                    for det in frame_detections:
+                        db_result = DetectionResult(
+                            task_id=task_id,
+                            image_path=f"frame_{frame_idx}.jpg",
+                            class_name=det["class_name"],
+                            class_id=det["class_id"],
+                            confidence=det["confidence"],
+                            bbox=det["bbox"],
+                            inference_time=inference_time,
+                        )
+                        db.add(db_result)
+
+                    # 更新任务进度
+                    if task:
+                        task.total_objects = total_objects
+                        db.commit()
+
+                    logger.debug(
+                        "视频检测进度: %d 场景, 帧号 %d, 检测到 %d 个目标",
+                        sampled_count,
+                        frame_idx,
+                        len(frame_detections),
+                    )
+                else:
+                    # 场景未变化：使用上一帧的检测结果绘制
+                    if last_detections:
+                        annotated_frame = draw_detections_on_frame(frame, last_detections)
+                        video_writer.write(annotated_frame)
+                    else:
+                        video_writer.write(frame)
+
+                frame_idx += 1
+
+            # ── 释放资源 ──
+            cap.release()
+            video_writer.release()
+
+            # ── 使用 ffmpeg 转码为浏览器可播放的 H.264 ──
+            h264_video_path = output_video_path.replace(".mp4", "_h264.mp4")
+            try:
+                subprocess.run(
+                    [
+                        shutil.which("ffmpeg") or "ffmpeg",
+                        "-y",
+                        "-i", output_video_path,
+                        "-c:v", "libx264",
+                        "-preset", "fast",
+                        "-crf", "23",
+                        "-pix_fmt", "yuv420p",
+                        "-movflags", "+faststart",
+                        h264_video_path,
+                    ],
+                    capture_output=True,
+                    timeout=300,
+                    check=True,
+                )
+                # 替换原文件
+                os.replace(h264_video_path, output_video_path)
+                logger.info("视频已转码为 H.264 格式")
+            except Exception as e:
+                logger.warning("ffmpeg 转码失败，使用原始 mp4v 视频: %s", str(e))
+                try:
+                    os.unlink(h264_video_path)
+                except Exception:
+                    pass
+
+            # ── 上传标注视频到 MinIO ──
+            annotated_video_url = None
+            try:
+                minio_client = MinIOClient()
+                object_name = f"detections/{task_id}/annotated_video.mp4"
+                annotated_video_url = minio_client.upload_file(
+                    object_name, output_video_path
+                )
+                logger.info("标注视频已上传: %s", object_name)
+            except Exception as e:
+                logger.warning("标注视频上传 MinIO 失败: %s", str(e))
+
+            # 清理临时视频文件
+            try:
+                os.unlink(output_video_path)
+            except Exception:
+                pass
+
+            # ── 更新任务状态为完成 ──
+            if task:
+                task.status = "completed"
+                task.total_objects = total_objects
+                task.total_inference_time = total_inference_time
+                task.completed_at = datetime.now()
+                db.commit()
+
+            logger.info(
+                "视频检测完成: %d 帧处理, %d 关键帧采样, 共 %d 个目标, 总耗时 %.2fms",
+                frame_idx,
+                len(key_frames),
+                total_objects,
+                total_inference_time,
+            )
+
+            return {
+                "task_id": task_id,
+                "total_frames": total_frames,
+                "processed_frames": len(key_frames),
+                "frame_sample_rate": frame_sample_rate,
+                "fps": round(fps, 2),
+                "duration_seconds": round(duration_seconds, 2),
+                "video_resolution": {"width": width, "height": height},
+                "total_objects": total_objects,
+                "class_counts": class_counts,
+                "key_frames": key_frames,
+                "annotated_video_url": annotated_video_url,
+                "total_inference_time": round(total_inference_time, 2),
+            }
+
+        except Exception as e:
+            logger.error("视频检测异常: %s", str(e), exc_info=True)
+            # 更新任务状态为失败
+            if task_id:
+                task = (
+                    db.query(DetectionTask).filter(DetectionTask.id == task_id).first()
+                )
+                if task:
+                    task.status = "failed"
+                    task.error_message = str(e)
+                    db.commit()
+            return {"error": f"视频检测失败: {str(e)}"}
+        finally:
+            db.close()
 # 创建全局单例
 detection_service = DetectionService()
