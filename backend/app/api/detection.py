@@ -8,7 +8,7 @@
   - POST /api/detection/zip        ZIP 文件检测
   - GET  /api/detection/status/:id 查询任务状态
 """
-
+import base64
 import os
 import tempfile
 import threading

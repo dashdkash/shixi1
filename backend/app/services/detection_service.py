@@ -23,6 +23,8 @@
 
 import base64
 import os
+import shutil
+import subprocess
 import tempfile
 import zipfile
 from datetime import datetime
@@ -585,7 +587,7 @@ class DetectionService:
         db = SessionLocal()
         try:
             # ── 加载模型 ──
-            model = get_model(scene_id)
+            model = self._get_model(scene_id)
 
             # ── 打开视频 ──
             cap = cv2.VideoCapture(video_path)
