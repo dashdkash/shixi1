@@ -27,6 +27,7 @@ from langchain_openai import ChatOpenAI
 from app.config.settings import settings
 from app.core.logger import get_logger
 from app.services.detection_service import detection_service
+from app.agent.knowledge_tool import search_knowledge_base
 
 logger = get_logger(__name__)
 
@@ -86,7 +87,13 @@ def detect_zip_images_file(zip_path: str, conf: float = 0.25) -> str:
 
 
 # 工具列表（绑定到 Agent）
-DETECTION_TOOLS = [detect_single_image, detect_batch_images, detect_zip_images_file]
+DETECTION_TOOLS = [
+    detect_single_image,
+    detect_batch_images,
+    detect_zip_images_file,
+    detect_video_file,
+    search_knowledge_base,
+]
 
 
 # ══════════════════════════════════════════════════════════════
@@ -136,24 +143,27 @@ class DetectionAgent:
         """初始化 Agent，创建 LLM 和 AgentExecutor"""
         self.llm = create_llm()
 
-        system_prompt = """你是一个专业的目标检测助手。你可以帮用户检测图片中的目标物体。
+        system_prompt = """你是一个专业的目标检测助手。你可以帮用户检测图片中的目标物体，也可以回答目标检测相关的知识问题。
 
 重要规则：
 - 当用户消息中包含 [附件图片路径: xxx] 时，xxx 就是图片的服务器路径，你应直接使用它调用检测工具
 - 不要要求用户再次提供路径，直接使用附件中给出的路径
 - 对于单张图片，调用 detect_single_image 工具
 - 对于多张图片或 ZIP 文件，调用 detect_batch_images 或 detect_zip_images_file 工具
+- 对于视频文件，调用 detect_video_file 工具
+- 当用户询问目标检测相关知识（如 YOLO 使用方法、NMS/IoU/mAP 概念、模型训练技巧等），
+  调用 search_knowledge_base 工具检索知识库，基于检索结果回答；若知识库无相关内容则如实告知
 
 工作流程：
 1. 理解用户意图
-2. 如果有附件图片路径，直接调用检测工具
-3. 调用工具获取检测结果
-4. 用自然语言总结检测结果
+2. 如果是检测任务且有附件路径，直接调用对应检测工具
+3. 如果是知识性问题，调用 search_knowledge_base 检索相关知识
+4. 用自然语言总结结果
 
 回复格式要求：
-- 先报告检测到的目标总数
-- 列出各类别的数量统计
-- 如果有标注图，告知用户可以在结果卡片中查看
+- 检测结果：先报告目标总数，列出各类别数量统计
+- 对于视频检测，还要报告视频时长和处理的帧数
+- 知识回答：基于检索内容回答，标注信息来源
 - 简洁专业，不要过度解释"""
 
         prompt = ChatPromptTemplate.from_messages(
