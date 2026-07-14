@@ -1,27 +1,11 @@
 """
-<<<<<<< HEAD
-对话相关 API 路由
-
-接口列表：
-  - POST /api/chat/upload    上传图片文件，返回服务端路径
-  - POST /api/chat/stream    SSE 流式对话（核心接口）
-=======
 智能对话 API 路由
 - POST /api/chat/stream  流式对话接口
 - POST /api/chat/upload  图片上传接口（对话附件用）
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 """
 
 import json
 import os
-<<<<<<< HEAD
-import tempfile
-
-from app.agent.detection_agent import detection_agent
-from app.api.auth import get_current_user
-from app.core.logger import get_logger
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-=======
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -31,11 +15,11 @@ from app.core.security import decode_access_token
 from app.database.session import SessionLocal, get_db
 from app.entity.db_models import ChatMessage, ChatSession
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
-from fastapi.security import OAuth2PasswordBearer
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 from fastapi.responses import StreamingResponse
-
-logger = get_logger(__name__)
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.core.logger import get_logger
 
@@ -43,33 +27,13 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["智能对话"])
 
-UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "rsod_uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
-@router.post("/upload", summary="上传图片文件")
-async def upload_image(
-    file: UploadFile = File(...),
-    current_user=Depends(get_current_user),
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
 ):
-<<<<<<< HEAD
-    """
-    上传图片文件到服务端临时目录
-
-    Returns:
-        { "image_path": "/tmp/rsod_uploads/xxx.jpg" }
-    """
-    suffix = os.path.splitext(file.filename)[1] or ".jpg"
-    filename = f"{os.getpid()}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, filename)
-
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
-
-    logger.info("图片上传成功: %s → %s", file.filename, file_path)
-    return {"image_path": file_path}
-=======
     """从 JWT Token 中解析当前用户"""
     credentials_exception = HTTPException(
         status_code=401,
@@ -107,64 +71,15 @@ async def get_current_user_optional(
     except (JWTError, ValueError):
         pass
     return None
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 
 
 @router.post("/stream")
 async def chat_stream(
-    request: Request,
-    current_user=Depends(get_current_user),
+    request: ChatRequest,
+    accept_language: str = Header(None),
+    current_user=Depends(get_current_user_optional),
 ):
     """
-<<<<<<< HEAD
-    SSE 流式对话接口
-
-    请求体：
-    {
-        "message": "检测这张图片",
-        "image_path": "/tmp/uploads/xxx.jpg",  // 可选，快捷按钮传入
-        "session_id": 123                        // 可选，会话 ID
-    }
-
-    响应：SSE 流式事件
-    """
-    body = await request.json()
-    message = body.get("message", "")
-    image_path = body.get("image_path")
-    session_id = body.get("session_id")
-
-    if not message:
-        raise HTTPException(status_code=400, detail="消息内容不能为空")
-
-    logger.info(
-        "用户 %s 发起对话: message=%s, image=%s",
-        current_user.username,
-        message[:50],
-        "有" if image_path else "无",
-    )
-
-    async def event_generator():
-        try:
-            async for event in detection_agent.chat_stream(
-                message=message,
-                image_path=image_path,
-            ):
-                event_data = json.dumps(event, ensure_ascii=False)
-                yield f"data: {event_data}\n\n"
-
-            yield "data: [DONE]\n\n"
-
-        except Exception as e:
-            logger.error("SSE 流异常: %s", str(e), exc_info=True)
-            error_data = json.dumps(
-                {"type": "error", "content": str(e)},
-                ensure_ascii=False,
-            )
-            yield f"data: {error_data}\n\n"
-
-    return StreamingResponse(
-        event_generator(),
-=======
     流式对话接口 — 调用真实的 DetectionAgent
 
     通过 SSE 返回 Agent 的思考过程、工具调用和最终结果
@@ -246,7 +161,6 @@ async def chat_stream(
 
     return StreamingResponse(
         event_stream(),
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -254,8 +168,6 @@ async def chat_stream(
             "X-Accel-Buffering": "no",
         },
     )
-<<<<<<< HEAD
-=======
 
 
 @router.post("/")
@@ -300,4 +212,3 @@ async def upload_chat_image(
         f.write(content)
 
     return {"image_path": save_path, "filename": filename}
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14

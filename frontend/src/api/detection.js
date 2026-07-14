@@ -11,10 +11,7 @@ import request from "@/utils/request";
  * @returns {Promise} - 检测结果（标注图 + 目标统计）
  */
 export function detectSingle(formData) {
-<<<<<<< HEAD
-=======
   // 不设置 Content-Type，让 axios 自动添加 multipart/form-data + boundary
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
   return request.post("/detection/single", formData, {
     timeout: 60000,
   });

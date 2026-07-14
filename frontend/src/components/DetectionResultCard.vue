@@ -9,10 +9,7 @@
     </div>
 
     <div class="card-body">
-<<<<<<< HEAD
-=======
       <!-- 单图模式：标注图 -->
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
       <div class="result-image" v-if="annotatedImageSrc && !isBatch">
         <img
           :src="annotatedImageSrc"
@@ -21,10 +18,7 @@
         />
       </div>
 
-<<<<<<< HEAD
-=======
       <!-- 批量模式：多图展示 -->
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
       <div class="result-images-grid" v-if="isBatch && batchImages.length > 0">
         <div
           v-for="(img, index) in batchImages"
@@ -37,22 +31,11 @@
         </div>
       </div>
 
-<<<<<<< HEAD
-      <div class="result-stats">
-        <div class="stat-item">
-          <span class="stat-label">推理耗时</span>
-          <span class="stat-value"
-            >{{
-              result.inference_time || result.total_inference_time || 0
-            }}ms</span
-          >
-=======
       <!-- 统计信息 -->
       <div class="result-stats">
         <div class="stat-item">
           <span class="stat-label">推理耗时</span>
           <span class="stat-value">{{ result.inference_time || result.total_inference_time || 0 }}ms</span>
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
         </div>
         <div class="stat-item">
           <span class="stat-label">检测目标</span>
@@ -60,18 +43,10 @@
         </div>
         <div class="stat-item" v-if="isBatch">
           <span class="stat-label">图片数量</span>
-<<<<<<< HEAD
-          <span class="stat-value"
-            >{{ result.total_images ?? batchImages.length }} 张</span
-          >
-        </div>
-
-=======
           <span class="stat-value">{{ result.total_images ?? batchImages.length }} 张</span>
         </div>
 
         <!-- 类别统计表格 -->
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
         <el-table
           v-if="classCountsArray.length > 0"
           :data="classCountsArray"
@@ -84,10 +59,7 @@
       </div>
     </div>
 
-<<<<<<< HEAD
-=======
     <!-- 全屏图片预览 -->
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
     <el-dialog v-model="showFullImage" title="检测标注图" width="80%">
       <img
         v-if="previewSrc"
@@ -100,8 +72,6 @@
 </template>
 
 <script setup>
-<<<<<<< HEAD
-=======
 /**
  * DetectionResultCard — 检测结果卡片组件
  *
@@ -110,7 +80,6 @@
  *   - 目标总数和推理耗时
  *   - 各类别数量统计表格
  */
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 import { DataAnalysis } from "@element-plus/icons-vue";
 import { computed, ref } from "vue";
 
@@ -124,22 +93,12 @@ const props = defineProps({
 const showFullImage = ref(false);
 const previewSrc = ref(null);
 
-<<<<<<< HEAD
-const isBatch = computed(() => {
-  return (
-    Array.isArray(props.result.annotated_images) &&
-    props.result.annotated_images.length > 0
-  );
-});
-
-=======
 /** 判断是否为批量检测结果 */
 const isBatch = computed(() => {
   return Array.isArray(props.result.annotated_images) && props.result.annotated_images.length > 0;
 });
 
 /** 单图模式：标注图 URL（优先使用 MinIO URL，否则用 base64） */
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 const annotatedImageSrc = computed(() => {
   if (props.result.annotated_image_url) {
     return props.result.annotated_image_url;
@@ -150,10 +109,7 @@ const annotatedImageSrc = computed(() => {
   return null;
 });
 
-<<<<<<< HEAD
-=======
 /** 批量模式：标注图列表 */
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 const batchImages = computed(() => {
   if (!isBatch.value) return [];
   return props.result.annotated_images.map((img) => ({
@@ -162,19 +118,13 @@ const batchImages = computed(() => {
   }));
 });
 
-<<<<<<< HEAD
-=======
 /** 点击预览图片 */
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 function previewImage(img) {
   previewSrc.value = img.src;
   showFullImage.value = true;
 }
 
-<<<<<<< HEAD
-=======
 /** 类别统计转为数组（用于 el-table） */
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 const classCountsArray = computed(() => {
   const counts = props.result.class_counts || {};
   return Object.entries(counts).map(([className, count]) => ({
@@ -187,16 +137,10 @@ const classCountsArray = computed(() => {
 <style lang="scss" scoped>
 .detection-result-card {
   margin-top: 12px;
-<<<<<<< HEAD
-  border: 1px solid #dcdfe6;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-=======
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   overflow: hidden;
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
+  background: #fff;
 }
 
 .card-header {
@@ -205,16 +149,10 @@ const classCountsArray = computed(() => {
   gap: 8px;
   padding: 8px 12px;
   background: #f5f7fa;
-<<<<<<< HEAD
-  border-bottom: 1px solid #dcdfe6;
-  font-weight: 600;
-  font-size: 14px;
-  color: #303133;
-=======
   border-bottom: 1px solid #e0e0e0;
   font-weight: 600;
   font-size: 14px;
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
+  color: #303133;
 }
 
 .card-body {
@@ -259,11 +197,7 @@ const classCountsArray = computed(() => {
       height: 100px;
       object-fit: cover;
       border-radius: 4px;
-<<<<<<< HEAD
-      border: 1px solid #dcdfe6;
-=======
       border: 1px solid #e0e0e0;
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
       transition: opacity 0.2s;
 
       &:hover {
@@ -274,11 +208,7 @@ const classCountsArray = computed(() => {
     .image-name {
       display: block;
       font-size: 11px;
-<<<<<<< HEAD
-      color: #c0c4cc;
-=======
       color: #909399;
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
       margin-top: 4px;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -306,8 +236,4 @@ const classCountsArray = computed(() => {
     color: #303133;
   }
 }
-<<<<<<< HEAD
 </style>
-=======
-</style>
->>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14

@@ -108,52 +108,34 @@
           </div>
 
           <div v-if="result.success" class="result-content">
-            <div
-              class="result-image-container"
-              v-if="result.annotated_image_base64"
+        <div class="result-stats">
+          <span
+            >{{ $t("detection.imageSize") }}: {{ result.width }} ×
+            {{ result.height }}</span
+          >
+          <span
+            >{{ $t("detection.inferenceTime") }}:
+            {{ result.inference_time }}ms</span
+          >
+          <span
+            >{{ $t("detection.objectsFound") }}:
+            {{ result.objects?.length || 0 }}</span
+          >
+        </div>
+
+        <div v-if="result.objects?.length > 0" class="objects-list">
+          <div
+            v-for="(obj, objIndex) in result.objects"
+            :key="objIndex"
+            class="object-item"
+          >
+            <span class="object-class">{{ obj.class_name_cn }}</span>
+            <span class="object-conf"
+              >{{ (obj.confidence * 100).toFixed(1) }}%</span
             >
-              <img
-                :src="`data:image/jpeg;base64,${result.annotated_image_base64}`"
-                :alt="result.filename"
-                class="result-image"
-                @click="
-                  previewImage(
-                    `data:image/jpeg;base64,${result.annotated_image_base64}`,
-                  )
-                "
-              />
-            </div>
-
-            <div class="result-stats">
-              <span
-                >{{ $t("detection.imageSize") }}: {{ result.width }} ×
-                {{ result.height }}</span
-              >
-              <span
-                >{{ $t("detection.inferenceTime") }}:
-                {{ result.inference_time }}ms</span
-              >
-              <span
-                >{{ $t("detection.objectsFound") }}:
-                {{ result.objects?.length || 0 }}</span
-              >
-            </div>
-
-            <div v-if="result.objects?.length > 0" class="objects-list">
-              <div
-                v-for="(obj, objIndex) in result.objects"
-                :key="objIndex"
-                class="object-item"
-              >
-                <span class="object-class">{{
-                  obj.class_name_cn || obj.class_name
-                }}</span>
-                <span class="object-conf"
-                  >{{ (obj.confidence * 100).toFixed(1) }}%</span
-                >
-              </div>
-            </div>
           </div>
+        </div>
+      </div>
 
           <div v-else class="result-error">
             {{ result.error }}
@@ -161,15 +143,6 @@
         </div>
       </div>
     </div>
-
-    <el-dialog v-model="showFullImage" title="检测标注图" width="80%">
-      <img
-        v-if="previewSrc"
-        :src="previewSrc"
-        style="width: 100%"
-        alt="检测标注图"
-      />
-    </el-dialog>
   </div>
 </template>
 
@@ -184,8 +157,7 @@ const isDragover = ref(false);
 const isProcessing = ref(false);
 const pendingFiles = ref([]);
 const detectionResults = ref([]);
-const showFullImage = ref(false);
-const previewSrc = ref(null);
+
 
 const summary = computed(() => {
   const total = detectionResults.value.length;
@@ -254,9 +226,7 @@ const handlePaste = async (event) => {
 };
 
 const addFiles = (files) => {
-  const imageFiles = files.filter(
-    (f) => f.type.startsWith("image/") || f.name.endsWith(".zip"),
-  );
+  const imageFiles = files.filter((f) => f.type.startsWith("image/"));
 
   imageFiles.forEach((file) => {
     const reader = new FileReader();
@@ -266,29 +236,16 @@ const addFiles = (files) => {
         size: file.size,
         file: file,
         preview: e.target?.result,
-        isZip: file.name.endsWith(".zip"),
       });
     };
-    if (file.name.endsWith(".zip")) {
-      pendingFiles.value.push({
-        name: file.name,
-        size: file.size,
-        file: file,
-        preview: null,
-        isZip: true,
-      });
-    } else {
-      reader.readAsDataURL(file);
-    }
+    reader.readAsDataURL(file);
   });
 
   if (imageFiles.length > 0) {
     ElMessage.success(`${imageFiles.length} ${$t("detection.filesAdded")}`);
   }
 
-  const nonImageFiles = files.filter(
-    (f) => !f.type.startsWith("image/") && !f.name.endsWith(".zip"),
-  );
+  const nonImageFiles = files.filter((f) => !f.type.startsWith("image/"));
   if (nonImageFiles.length > 0) {
     ElMessage.warning(
       `${nonImageFiles.length} ${$t("detection.invalidFiles")}`,
@@ -302,11 +259,6 @@ const removeFile = (index) => {
 
 const clearAllFiles = () => {
   pendingFiles.value = [];
-};
-
-const previewImage = (src) => {
-  previewSrc.value = src;
-  showFullImage.value = true;
 };
 
 const startDetection = async () => {
