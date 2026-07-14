@@ -43,6 +43,7 @@ class UserBrief(BaseModel):
     username: str
     email: str
     avatar: Optional[str] = None
+    is_superuser: bool = False
     roles: list[str] = []
 
     model_config = {

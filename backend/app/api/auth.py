@@ -15,7 +15,6 @@ import os
 import uuid
 from typing import Optional
 
-from app.api.auth import get_current_user
 from app.config.settings import settings
 from app.core.security import decode_access_token
 from app.database.session import get_db

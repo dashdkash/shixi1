@@ -48,11 +48,9 @@ class User(Base):
     avatar = Column(String(500), nullable=True, comment="头像 URL")
     is_active = Column(Boolean, default=True, comment="是否启用")
     is_superuser = Column(Boolean, default=False, comment="是否超级管理员")
-    reset_token = Column(String(100), nullable=True, comment="密码重置令牌")
-    reset_token_expires_at = Column(DateTime, nullable=True, comment="重置令牌过期时间")
-    last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")
     reset_token = Column(String(100), nullable=True, index=True, comment="密码重置令牌")
     reset_token_expires_at = Column(DateTime, nullable=True, comment="重置令牌过期时间")
+    last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
     updated_at = Column(
         DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间"
