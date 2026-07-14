@@ -51,6 +51,10 @@
     "dashboard": {
       "title": "数据看板",
       "description": "Day 10 实现 ECharts 数据可视化看板"
+    },
+    "profile": {
+      "title": "个人中心",
+      "description": "管理您的账户信息"
     }
   },
   "lang": {
@@ -125,5 +129,20 @@
     "invalidFiles": "个无效文件被忽略",
     "detectionComplete": "检测完成",
     "detectionFailed": "检测失败"
+  },
+  "profile": {
+    "userInfo": "个人信息",
+    "username": "用户名",
+    "email": "邮箱",
+    "status": "状态",
+    "active": "已激活",
+    "inactive": "未激活",
+    "role": "角色",
+    "admin": "管理员",
+    "normal": "普通用户",
+    "createdAt": "创建时间",
+    "lastLogin": "最后登录",
+    "changePassword": "修改密码",
+    "savePassword": "保存密码"
   }
 }

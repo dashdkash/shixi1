@@ -71,6 +71,7 @@ function handleLangChange(lang) {
 function handleCommand(command) {
   switch (command) {
     case "profile":
+      router.push("/profile");
       break;
     case "logout":
       ElMessageBox.confirm(t("header.confirmLogout"), t("common.warning"), {

@@ -17,7 +17,7 @@
 """
 
 import json
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -103,7 +103,6 @@ def create_llm():
       2. OpenAI（GPT-4o-mini）
       3. Ollama 本地部署
     """
-    # 优先使用通义千问（国内访问快，有免费额度）
     qwen_api_key = getattr(settings, "QWEN_API_KEY", "")
     if qwen_api_key and qwen_api_key != "sk-your-qwen-api-key":
         api_key = qwen_api_key
@@ -112,7 +111,6 @@ def create_llm():
         )
         model_name = getattr(settings, "QWEN_MODEL", "qwen-plus")
     else:
-        # 回退到 OpenAI
         api_key = getattr(settings, "OPENAI_API_KEY", "")
         base_url = getattr(settings, "OPENAI_BASE_URL", "https://api.openai.com/v1")
         model_name = getattr(settings, "OPENAI_MODEL", "gpt-4o-mini")
@@ -121,7 +119,8 @@ def create_llm():
         model=model_name,
         openai_api_key=api_key,
         openai_api_base=base_url,
-        temperature=0.1,  # 低温度，减少随机性，检测结果需要确定性
+        temperature=0.1,
+        streaming=True,
     )
 
 
@@ -137,7 +136,6 @@ class DetectionAgent:
         """初始化 Agent，创建 LLM 和 AgentExecutor"""
         self.llm = create_llm()
 
-        # OpenAI Tools Agent 系统提示词
         system_prompt = """你是一个专业的目标检测助手。你可以帮用户检测图片中的目标物体。
 
 重要规则：
@@ -167,7 +165,6 @@ class DetectionAgent:
             ]
         )
 
-        # 创建 OpenAI Tools Agent（与 ChatPromptTemplate + MessagesPlaceholder 完全兼容）
         agent = create_openai_tools_agent(
             llm=self.llm,
             tools=DETECTION_TOOLS,
@@ -177,14 +174,14 @@ class DetectionAgent:
         self.executor = AgentExecutor(
             agent=agent,
             tools=DETECTION_TOOLS,
-            verbose=True,  # 开发阶段开启，可查看 Agent 思考过程
-            max_iterations=5,  # 限制循环次数，防止无限循环
-            return_intermediate_steps=True,  # 返回中间步骤（Tool 调用记录）
+            verbose=True,
+            max_iterations=5,
+            return_intermediate_steps=True,
         )
 
         logger.info("DetectionAgent 初始化完成，绑定 %d 个工具", len(DETECTION_TOOLS))
 
-    async def chat(self, message: str, image_path: str = None) -> dict:
+    async def chat(self, message: str, image_path: Optional[str] = None) -> dict:
         """
         处理用户对话消息
 
@@ -195,7 +192,6 @@ class DetectionAgent:
         Returns:
             Agent 响应字典
         """
-        # 如果有图片附件，将路径信息追加到消息中
         if image_path:
             message = f"{message}\n[附件图片路径: {image_path}]"
 
@@ -213,7 +209,7 @@ class DetectionAgent:
                 "intermediate_steps": [],
             }
 
-    async def chat_stream(self, message: str, image_path: str = None) -> AsyncGenerator:
+    async def chat_stream(self, message: str, image_path: Optional[str] = None) -> AsyncGenerator:
         """
         流式处理对话消息（用于 SSE）
 
@@ -237,7 +233,6 @@ class DetectionAgent:
                 event_kind = event["event"]
 
                 if event_kind == "on_chat_model_stream":
-                    # LLM 正在生成回复的文本片段
                     chunk = event["data"]["chunk"]
                     if hasattr(chunk, "content") and chunk.content:
                         yield {
@@ -246,7 +241,6 @@ class DetectionAgent:
                         }
 
                 elif event_kind == "on_tool_start":
-                    # Agent 开始调用工具
                     tool_name = event["name"]
                     tool_input = event["data"].get("input", {})
                     logger.info("工具调用: %s, 输入: %s", tool_name, str(tool_input)[:200])
@@ -257,8 +251,6 @@ class DetectionAgent:
                     }
 
                 elif event_kind == "on_tool_end":
-                    # 工具调用完成
-                    # 兼容不同 LangChain 版本的 output 路径
                     tool_data = event.get("data", {})
                     tool_output = tool_data.get("output", "")
                     tool_name = event.get("name", "")
@@ -268,7 +260,6 @@ class DetectionAgent:
                         type(tool_output).__name__,
                         len(str(tool_output)) if tool_output else 0,
                     )
-                    # 记录 event data 的所有键，便于调试
                     logger.debug("on_tool_end data keys: %s", list(tool_data.keys()))
                     yield {
                         "type": "tool_result",

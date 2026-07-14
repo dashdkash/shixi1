@@ -294,11 +294,11 @@ const getStatusText = (status) => {
 
 const fetchDetectionHistory = async (page = 1) => {
   try {
-    const res = await request.get("/api/history/detection", {
+    const res = await request.get("/history/detection", {
       params: { page, page_size: detectionPageSize.value },
     });
-    detectionList.value = res.data?.data || [];
-    detectionTotal.value = res.data?.total || 0;
+    detectionList.value = res.data || [];
+    detectionTotal.value = res.total || 0;
     detectionPage.value = page;
   } catch (e) {
     console.error("获取检测历史失败", e);
@@ -307,11 +307,11 @@ const fetchDetectionHistory = async (page = 1) => {
 
 const fetchChatHistory = async (page = 1) => {
   try {
-    const res = await request.get("/api/history/chat", {
+    const res = await request.get("/history/chat", {
       params: { page, page_size: chatPageSize.value },
     });
-    chatList.value = res.data?.data || [];
-    chatTotal.value = res.data?.total || 0;
+    chatList.value = res.data || [];
+    chatTotal.value = res.total || 0;
     chatPage.value = page;
   } catch (e) {
     console.error("获取对话历史失败", e);
@@ -328,8 +328,8 @@ const handleTabChange = (tab) => {
 
 const showDetectionDetail = async (record) => {
   try {
-    const res = await request.get(`/api/history/detection/${record.id}`);
-    currentDetection.value = res.data;
+    const res = await request.get(`/history/detection/${record.id}`);
+    currentDetection.value = res;
     showDetectionDialog.value = true;
   } catch (e) {
     console.error("获取检测详情失败", e);
@@ -338,8 +338,8 @@ const showDetectionDetail = async (record) => {
 
 const showChatDetail = async (session) => {
   try {
-    const res = await request.get(`/api/history/chat/${session.id}`);
-    currentChat.value = res.data;
+    const res = await request.get(`/history/chat/${session.id}`);
+    currentChat.value = res;
     showChatDialog.value = true;
   } catch (e) {
     console.error("获取对话详情失败", e);

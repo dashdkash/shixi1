@@ -151,9 +151,10 @@ async def get_chat_history(
         page: 页码
         page_size: 每页数量
     """
+    from sqlalchemy import desc
     query = db.query(ChatSession).filter(
         ChatSession.user_id == current_user["id"]
-    ).order_by(ChatSession.last_message_at.desc() if ChatSession.last_message_at else ChatSession.created_at.desc())
+    ).order_by(desc(ChatSession.last_message_at).nulls_last(), desc(ChatSession.created_at))
 
     total = query.count()
     sessions = query.offset((page - 1) * page_size).limit(page_size).all()
