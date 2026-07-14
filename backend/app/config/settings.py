@@ -13,6 +13,9 @@ from pydantic_settings import (
 class Settings(BaseSettings):
     """应用全局配置"""
 
+    # ── 训练配置 ──────────────────────────────────────
+    TRAIN_OUTPUT_DIR: str = "runs/train"  # 训练输出目录（模型权重、日志等）
+    DATASET_BASE_DIR: str = "datasets"    # 数据集根目录
     APP_NAME: str = "RSOD Agent Platform"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
@@ -65,6 +68,13 @@ class Settings(BaseSettings):
     QWEN_API_KEY: str = "sk-ws-H.EDDLDYP.rro7.MEUCIDsY8jq-R0stR9XVv7zST3eXILW2h-x9SRoCxhtaKqkbAiEA-yZqLlo0sc0PoVec9f5qvoXHjGc2iEw76_mQ8SdaQfQ"
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_MODEL: str = "qwen-plus"
+
+    # ── RAG 配置 ──────────────────────────────────────
+    EMBEDDING_MODEL: str = "text-embedding-v3"
+    EMBEDDING_DIM: int = 1024
+    RAG_CHUNK_SIZE: int = 500
+    RAG_CHUNK_OVERLAP: int = 50
+    RAG_TOP_K: int = 5
 
     @property
     def cors_origins_list(self) -> list:
