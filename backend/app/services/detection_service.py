@@ -103,7 +103,8 @@ class DetectionService:
             db.close()
 
         # 最终回退：预训练模型
-        return "yolo11n.pt"
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return os.path.join(backend_dir, "yolo11n.pt")
 
     @staticmethod
     def _get_model(scene_id: int = None) -> YOLO:

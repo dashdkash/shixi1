@@ -10,8 +10,6 @@ from app.core.exceptions import register_exception_handlers
 from app.middleware.request_logger import RequestLogMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.chat import router as chat_router
-from app.api.detection import router as detection_router
 
 def init_minio():
     """初始化 MinIO 存储桶"""
@@ -70,8 +68,6 @@ app.include_router(chat_router)
 app.include_router(detection_router)
 app.include_router(history_router)
 app.include_router(health_router)
-app.include_router(chat_router)  # Day 8 新增
-app.include_router(detection_router) # Day 8 新增
 
 @app.get("/")
 def root():
@@ -90,4 +86,4 @@ register_exception_handlers(app)
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8200, reload=True)

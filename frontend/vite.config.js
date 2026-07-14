@@ -24,11 +24,11 @@ export default defineConfig({
 
   // ── 开发服务器配置 ────────────────────────────────
   server: {
-    port: 5173,
+    port: 3000,
     open: true,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://localhost:8200",
         changeOrigin: true,
       },
     },
