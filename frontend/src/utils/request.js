@@ -8,9 +8,6 @@ import { ElMessage } from "element-plus";
 const request = axios.create({
   baseURL: "/api", // 配合 Vite proxy，实际请求转发到后端
   timeout: 30000, // 请求超时 30 秒
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
 // ── 请求拦截器 ──────────────────────────────────────
@@ -23,6 +20,10 @@ request.interceptors.request.use(
     }
     // 添加语言参数到请求头
     config.headers["Accept-Language"] = getCurrentLanguage();
+    // FormData 文件上传时不设置 Content-Type，让 axios 自动添加 multipart/form-data + boundary
+    if (!(config.data instanceof FormData)) {
+      config.headers["Content-Type"] = "application/json";
+    }
     return config;
   },
   (error) => {

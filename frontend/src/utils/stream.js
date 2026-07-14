@@ -127,4 +127,8 @@ function processSSEMessage(message, onMessage) {
   }
 
   return false;
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14

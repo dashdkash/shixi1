@@ -1,4 +1,5 @@
 """
+<<<<<<< HEAD
 检测 API 路由
 
 接口列表：
@@ -9,11 +10,20 @@
   - POST /api/detection/batch     批量检测（快捷检测）
   - POST /api/detection/zip       ZIP文件检测（快捷检测）
   - GET  /api/detection/status/{task_id} 查询任务状态（快捷检测）
+=======
+检测 API 路由 — 快捷检测接口（跳过 LLM，直接调用 YOLO）
+
+接口列表：
+  - POST /api/detection/single     单图检测
+  - POST /api/detection/batch      批量检测
+  - POST /api/detection/zip        ZIP 文件检测
+  - GET  /api/detection/status/:id 查询任务状态
+>>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 """
 
-import json
 import os
 import tempfile
+<<<<<<< HEAD
 import uuid
 from datetime import datetime
 from typing import List
@@ -29,12 +39,24 @@ from jose import JWTError
 import random
 from PIL import Image
 from sqlalchemy.orm import Session
+=======
 
-router = APIRouter(prefix="/api/detection", tags=["检测"])
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi.responses import JSONResponse
+>>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+from app.api.auth import get_current_user
+from app.core.logger import get_logger
+from app.database.session import SessionLocal
+from app.entity.db_models import DetectionTask
+from app.services.detection_service import detection_service
+
+logger = get_logger(__name__)
+
+router = APIRouter(prefix="/api/detection", tags=["快捷检测"])
 
 
+<<<<<<< HEAD
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
@@ -111,179 +133,110 @@ def detect_image(image_path: str, scene_name: str = "weed_detection") -> dict:
 async def upload_and_detect(
     files: List[UploadFile] = File(...),
     scene_id: int = 1,
+=======
+@router.post("/single", summary="单图检测")
+async def detect_single_api(
+    file: UploadFile = File(..., description="检测图片"),
+    conf: float = Form(0.25, description="置信度阈值"),
+    scene_id: int = Form(None, description="场景 ID"),
+>>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-    accept_language: str = Header(None),
 ):
     """
-    批量上传图片并检测
-
-    Args:
-        files: 图片文件列表
-        scene_id: 检测场景 ID
-        accept_language: 语言偏好
-
-    Returns:
-        检测任务结果
+    快捷单图检测（跳过 LLM，直接调用 YOLO）
     """
-    if not files:
-        raise HTTPException(status_code=400, detail="请选择图片文件")
+    filename = file.filename or ""
+    suffix = os.path.splitext(filename)[1] or ".jpg"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
 
-    upload_dir = os.path.join(os.path.dirname(__file__), "..", "..", "uploads")
-    os.makedirs(upload_dir, exist_ok=True)
-
-    lang = "zh"
-    if accept_language and "en" in accept_language.lower():
-        lang = "en"
-
-    scene = db.query(DetectionScene).filter(DetectionScene.id == scene_id).first()
-    if not scene:
-        scene = DetectionScene(
-            id=scene_id,
-            name="weed_detection",
-            display_name="杂草检测",
-            category="agriculture",
-            class_names=["weed", "crop", "soil", "stone"],
-            class_names_cn={"weed": "杂草", "crop": "作物", "soil": "土壤", "stone": "石头"},
+    try:
+        result = detection_service.detect_single(
+            image_path=tmp_path,
+            conf=conf,
+            scene_id=scene_id,
+            user_id=current_user.id,
         )
-        db.add(scene)
-        db.commit()
-        db.refresh(scene)
-    scene_name = scene.name
-
-    task = DetectionTask(
-        user_id=current_user["id"],
-        scene_id=scene_id,
-        task_type="batch",
-        status="processing",
-        total_images=len(files),
-    )
-    db.add(task)
-    db.commit()
-    db.refresh(task)
-
-    results = []
-    total_objects = 0
-    total_time = 0
-
-    for file in files:
-        if not file.filename.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".webp")):
-            results.append({
-                "filename": file.filename,
-                "success": False,
-                "error": "不支持的文件格式" if lang == "zh" else "Unsupported file format",
-            })
-            continue
-
-        file_ext = os.path.splitext(file.filename)[1]
-        file_uuid = str(uuid.uuid4())
-        file_path = os.path.join(upload_dir, f"{file_uuid}{file_ext}")
-
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
-
-        detect_result = detect_image(file_path, scene_name)
-
-        if detect_result["success"]:
-            results.append({
-                "filename": file.filename,
-                "success": True,
-                "width": detect_result["width"],
-                "height": detect_result["height"],
-                "objects": detect_result["objects"],
-                "inference_time": detect_result["inference_time"],
-            })
-
-            for obj in detect_result["objects"]:
-                result = DetectionResult(
-                    task_id=task.id,
-                    image_path=file_path,
-                    class_name=obj["class_name"],
-                    class_name_cn=obj["class_name_cn"],
-                    class_id=obj["class_id"],
-                    confidence=obj["confidence"],
-                    bbox=obj["bbox"],
-                    inference_time=detect_result["inference_time"],
-                    image_width=detect_result["width"],
-                    image_height=detect_result["height"],
-                )
-                db.add(result)
-
-            total_objects += len(detect_result["objects"])
-            total_time += detect_result["inference_time"]
-        else:
-            results.append({
-                "filename": file.filename,
-                "success": False,
-                "error": detect_result["error"],
-            })
-
-        os.remove(file_path)
-
-    task.status = "completed"
-    task.total_objects = total_objects
-    task.total_inference_time = total_time
-    task.completed_at = datetime.now()
-    db.commit()
-
-    return {
-        "task_id": task.id,
-        "total_images": len(files),
-        "success_count": sum(1 for r in results if r["success"]),
-        "failed_count": sum(1 for r in results if not r["success"]),
-        "total_objects": total_objects,
-        "total_time": round(total_time, 2),
-        "results": results,
-    }
+        result["filename"] = file.filename
+        return result
+    finally:
+        os.unlink(tmp_path)
 
 
-@router.get("/tasks")
-async def get_detection_tasks(
-    page: int = 1,
-    page_size: int = 20,
+@router.post("/batch", summary="批量检测")
+async def detect_batch_api(
+    files: list[UploadFile] = File(..., description="多张图片"),
+    conf: float = Form(0.25),
+    scene_id: int = Form(None),
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """
-    获取检测任务列表
-
-    Args:
-        page: 页码
-        page_size: 每页数量
+    快捷批量检测
     """
-    query = db.query(DetectionTask).filter(
-        DetectionTask.user_id == current_user["id"]
-    ).order_by(DetectionTask.created_at.desc())
+    temp_paths = []
+    try:
+        for file in files:
+            if file.filename is None:
+                continue   # 跳过无文件名的上传
+            suffix = os.path.splitext(file.filename)[1] or ".jpg"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                content = await file.read()
+                tmp.write(content)
+                temp_paths.append(tmp.name)
 
-    total = query.count()
-    tasks = query.offset((page - 1) * page_size).limit(page_size).all()
-
-    return {
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "data": [
-            {
-                "id": task.id,
-                "task_type": task.task_type,
-                "status": task.status,
-                "total_images": task.total_images,
-                "total_objects": task.total_objects,
-                "total_inference_time": task.total_inference_time,
-                "created_at": task.created_at.isoformat(),
-                "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            }
-            for task in tasks
-        ],
-    }
+        result = detection_service.detect_batch(
+            image_paths=temp_paths,
+            conf=conf,
+            scene_id=scene_id,
+            user_id=current_user.id,
+        )
+        return result
+    finally:
+        for path in temp_paths:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
 
 
-@router.get("/tasks/{task_id}")
-async def get_detection_task_detail(
+@router.post("/zip", summary="ZIP 文件检测")
+async def detect_zip_api(
+    file: UploadFile = File(..., description="ZIP 压缩包"),
+    conf: float = Form(0.25),
+    scene_id: int = Form(None),
+    current_user=Depends(get_current_user),
+):
+    """
+    快捷 ZIP 检测：解压 ZIP 并批量检测其中所有图片
+    """
+    if file.filename is None:
+        raise ValueError("上传文件无文件名")
+    suffix = os.path.splitext(file.filename)[1] or ".zip"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        result = detection_service.detect_zip(
+            zip_path=tmp_path,
+            conf=conf,
+            scene_id=scene_id,
+            user_id=current_user.id,
+        )
+        return result
+    finally:
+        os.unlink(tmp_path)
+
+
+@router.get("/status/{task_id}", summary="查询检测任务状态")
+async def get_detection_status(
     task_id: int,
     current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
+<<<<<<< HEAD
     """
     获取检测任务详情
 
@@ -431,12 +384,18 @@ async def get_detection_status(
     current_user=Depends(get_current_user),
 ):
     """查询检测任务状态"""
+=======
+>>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
     db = SessionLocal()
     try:
         task = db.query(DetectionTask).filter(DetectionTask.id == task_id).first()
         if not task:
             return JSONResponse(
+<<<<<<< HEAD
                 status_code=404,
+=======
+                status_code=status.HTTP_404_NOT_FOUND,
+>>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
                 content={"error": "任务不存在"},
             )
         return {
@@ -446,9 +405,17 @@ async def get_detection_status(
             "total_images": task.total_images,
             "total_objects": task.total_objects,
             "completed_at": (
+<<<<<<< HEAD
                 task.completed_at.isoformat() if task.completed_at else None
             ),
             "created_at": task.created_at.isoformat() if task.created_at else None,
+=======
+                task.completed_at.isoformat() if task.completed_at is not None else None
+            ),
+            "created_at": (
+                task.created_at.isoformat() if task.created_at is not None else None
+            ),
+>>>>>>> e6dc0a786441135febc780558d63e5c7da7b7b14
         }
     finally:
         db.close()

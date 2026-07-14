@@ -17,10 +17,9 @@
 """
 
 import json
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.agents import create_agent
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
@@ -134,10 +133,10 @@ class DetectionAgent:
     """检测智能体 — 封装 ReAct Agent 创建和对话逻辑"""
 
     def __init__(self):
-        """初始化 Agent，创建 LLM 和 AgentExecutor"""
+        """初始化 Agent，创建 LLM 和 Agent"""
         self.llm = create_llm()
 
-        # OpenAI Tools Agent 系统提示词
+        # 系统提示词
         system_prompt = """你是一个专业的目标检测助手。你可以帮用户检测图片中的目标物体。
 
 重要规则：
@@ -158,33 +157,17 @@ class DetectionAgent:
 - 如果有标注图，告知用户可以在结果卡片中查看
 - 简洁专业，不要过度解释"""
 
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system_prompt),
-                MessagesPlaceholder(variable_name="chat_history", optional=True),
-                ("human", "{input}"),
-                MessagesPlaceholder(variable_name="agent_scratchpad"),
-            ]
-        )
-
-        # 创建 OpenAI Tools Agent（与 ChatPromptTemplate + MessagesPlaceholder 完全兼容）
-        agent = create_openai_tools_agent(
-            llm=self.llm,
+        # 使用 langchain 1.x 新 API: create_agent
+        self.agent = create_agent(
+            model=self.llm,
             tools=DETECTION_TOOLS,
-            prompt=prompt,
-        )
-
-        self.executor = AgentExecutor(
-            agent=agent,
-            tools=DETECTION_TOOLS,
-            verbose=True,  # 开发阶段开启，可查看 Agent 思考过程
-            max_iterations=5,  # 限制循环次数，防止无限循环
-            return_intermediate_steps=True,  # 返回中间步骤（Tool 调用记录）
+            system_prompt=system_prompt,
+            debug=True,  # 开发阶段开启，可查看 Agent 思考过程
         )
 
         logger.info("DetectionAgent 初始化完成，绑定 %d 个工具", len(DETECTION_TOOLS))
 
-    async def chat(self, message: str, image_path: str = None) -> dict:
+    async def chat(self, message: str, image_path: Optional[str] = None) -> dict:
         """
         处理用户对话消息
 
@@ -195,16 +178,31 @@ class DetectionAgent:
         Returns:
             Agent 响应字典
         """
-        # 如果有图片附件，将路径信息追加到消息中
         if image_path:
             message = f"{message}\n[附件图片路径: {image_path}]"
 
         try:
-            result = await self.executor.ainvoke({"input": message})
+            result = await self.agent.ainvoke(
+                {"messages": [{"role": "user", "content": message}]}
+            )
+
+            # 新 API 返回 {"messages": [...]}, 最后一条是 AI 回复
+            messages = result["messages"]
+            ai_output = messages[-1].content if messages else ""
+
+            # 提取工具调用中间步骤
+            intermediate_steps = []
+            for msg in messages:
+                if hasattr(msg, "tool_calls") and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        intermediate_steps.append({
+                            "tool": tc.get("name", ""),
+                            "input": tc.get("args", {}),
+                        })
 
             return {
-                "output": result["output"],
-                "intermediate_steps": result.get("intermediate_steps", []),
+                "output": ai_output,
+                "intermediate_steps": intermediate_steps,
             }
         except Exception as e:
             logger.error("Agent 执行异常: %s", str(e), exc_info=True)
@@ -213,7 +211,7 @@ class DetectionAgent:
                 "intermediate_steps": [],
             }
 
-    async def chat_stream(self, message: str, image_path: str = None) -> AsyncGenerator:
+    async def chat_stream(self, message: str, image_path: Optional[str] = None) -> AsyncGenerator:
         """
         流式处理对话消息（用于 SSE）
 
@@ -230,8 +228,8 @@ class DetectionAgent:
             message = f"{message}\n[附件图片路径: {image_path}]"
 
         try:
-            async for event in self.executor.astream_events(
-                {"input": message},
+            async for event in self.agent.astream_events(
+                {"messages": [{"role": "user", "content": message}]},
                 version="v2",
             ):
                 event_kind = event["event"]
@@ -258,7 +256,6 @@ class DetectionAgent:
 
                 elif event_kind == "on_tool_end":
                     # 工具调用完成
-                    # 兼容不同 LangChain 版本的 output 路径
                     tool_data = event.get("data", {})
                     tool_output = tool_data.get("output", "")
                     tool_name = event.get("name", "")
@@ -268,7 +265,6 @@ class DetectionAgent:
                         type(tool_output).__name__,
                         len(str(tool_output)) if tool_output else 0,
                     )
-                    # 记录 event data 的所有键，便于调试
                     logger.debug("on_tool_end data keys: %s", list(tool_data.keys()))
                     yield {
                         "type": "tool_result",
