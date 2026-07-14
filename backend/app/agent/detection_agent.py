@@ -85,8 +85,35 @@ def detect_zip_images_file(zip_path: str, conf: float = 0.25) -> str:
     result = detection_service.detect_zip(zip_path, conf=conf)
     return json.dumps(result, ensure_ascii=False)
 
+@tool
+def detect_video_file(
+    video_path: str, conf: float = 0.25, frame_sample_rate: int = 5
+) -> str:
+    """
+    检测视频文件中的目标物体。对视频进行帧采样后逐帧检测。
+
+    Args:
+        video_path: 视频文件路径（mp4/avi/mov 等）
+        conf: 置信度阈值，默认 0.25
+        frame_sample_rate: 帧采样间隔，每 N 帧取 1 帧，默认 5
+
+    Returns:
+        JSON 字符串，包含视频检测结果（关键帧、目标统计、时长信息）
+    """
+    result = detection_service.detect_video(
+        video_path,
+        conf=conf,
+        frame_sample_rate=frame_sample_rate,
+    )
+    # 返回时去掉 LLM 无法使用的大体积数据
+    if "key_frames" in result:
+        for frame in result["key_frames"]:
+            frame.pop("annotated_image_base64", None)
+    result.pop("annotated_video_url", None)
+    return json.dumps(result, ensure_ascii=False)
 
 # 工具列表（绑定到 Agent）
+
 DETECTION_TOOLS = [
     detect_single_image,
     detect_batch_images,
@@ -147,6 +174,7 @@ class DetectionAgent:
 
 重要规则：
 - 当用户消息中包含 [附件图片路径: xxx] 时，xxx 就是图片的服务器路径，你应直接使用它调用检测工具
+- 当用户消息中包含 [附件视频路径: xxx] 时，xxx 就是视频的服务器路径，你应直接使用它调用视频检测工具
 - 不要要求用户再次提供路径，直接使用附件中给出的路径
 - 对于单张图片，调用 detect_single_image 工具
 - 对于多张图片或 ZIP 文件，调用 detect_batch_images 或 detect_zip_images_file 工具
@@ -283,6 +311,8 @@ class DetectionAgent:
                 "type": "error",
                 "content": f"处理出错：{str(e)}",
             }
+
+
 
 
 # 创建全局单例
