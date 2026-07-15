@@ -1,20 +1,18 @@
 <template>
   <div class="training-page">
-    <!-- ── 页面标题 ── -->
     <div class="page-header">
-      <h2>模型训练与监控</h2>
+      <h2>{{ $t("training.title") }}</h2>
       <el-button type="primary" @click="showCreateDialog = true">
-        <el-icon><Plus /></el-icon>新建训练任务
+        <el-icon><Plus /></el-icon>{{ $t("training.createTask") }}
       </el-button>
     </div>
 
-    <!-- ── 训练任务列表 ── -->
     <el-card class="task-list-card" shadow="never">
       <template #header>
         <div class="card-header">
-          <span>训练任务列表</span>
+          <span>{{ $t("training.taskList") }}</span>
           <el-button text @click="fetchTasks">
-            <el-icon><Refresh /></el-icon>刷新
+            <el-icon><Refresh /></el-icon>{{ $t("training.refresh") }}
           </el-button>
         </div>
       </template>
@@ -25,10 +23,22 @@
         style="width: 100%"
         v-loading="loadingTasks"
       >
-        <el-table-column prop="task_uuid" label="任务 ID" width="100" />
-        <el-table-column prop="model_name" label="模型" width="110" />
-        <el-table-column prop="device" label="设备" width="80" />
-        <el-table-column label="进度" width="180">
+        <el-table-column
+          prop="task_uuid"
+          :label="$t('training.taskId')"
+          width="100"
+        />
+        <el-table-column
+          prop="model_name"
+          :label="$t('training.model')"
+          width="110"
+        />
+        <el-table-column
+          prop="device"
+          :label="$t('training.device')"
+          width="80"
+        />
+        <el-table-column :label="$t('training.progress')" width="180">
           <template #default="{ row }">
             <el-progress
               :percentage="row.progress"
@@ -43,20 +53,28 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="Epoch" width="100">
+        <el-table-column :label="$t('training.epoch')" width="100">
           <template #default="{ row }">
             {{ row.current_epoch }}/{{ row.epochs }}
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="100">
+        <el-table-column :label="$t('training.status')" width="100">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" size="small">
               {{ statusText(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="170" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column
+          prop="created_at"
+          :label="$t('training.createTime')"
+          width="170"
+        />
+        <el-table-column
+          :label="$t('training.action')"
+          width="200"
+          fixed="right"
+        >
           <template #default="{ row }">
             <el-button
               size="small"
@@ -64,7 +82,7 @@
               text
               @click="selectTask(row)"
             >
-              监控
+              {{ $t("training.monitor") }}
             </el-button>
             <el-button
               v-if="row.status === 'running'"
@@ -73,19 +91,27 @@
               text
               @click="stopTask(row.id)"
             >
-              停止
+              {{ $t("training.stop") }}
+            </el-button>
+            <el-button
+              v-if="row.status === 'completed'"
+              size="small"
+              text
+              @click="downloadModel(row.id)"
+            >
+              {{ $t("training.download") }}
             </el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <!-- ── 训练监控面板 ── -->
     <el-card v-if="selectedTask" class="monitor-card" shadow="never">
       <template #header>
         <div class="card-header">
           <span>
-            训练监控 — 任务 {{ selectedTask.task_uuid }}
+            {{ $t("training.monitor") }} — {{ $t("training.task") }}
+            {{ selectedTask.task_uuid }}
             <el-tag
               :type="statusType(selectedTask.status)"
               size="small"
@@ -95,10 +121,12 @@
             </el-tag>
           </span>
           <div class="monitor-info">
-            <span>模型: {{ selectedTask.model_name }}</span>
-            <span>设备: {{ selectedTask.device }}</span>
             <span
-              >Epoch: {{ selectedTask.current_epoch }}/{{
+              >{{ $t("training.model") }}: {{ selectedTask.model_name }}</span
+            >
+            <span>{{ $t("training.device") }}: {{ selectedTask.device }}</span>
+            <span
+              >{{ $t("training.epoch") }}: {{ selectedTask.current_epoch }}/{{
                 selectedTask.epochs
               }}</span
             >
@@ -106,7 +134,6 @@
         </div>
       </template>
 
-      <!-- 最新指标卡片 -->
       <el-row :gutter="16" class="metric-cards">
         <el-col :span="4" v-for="item in metricCards" :key="item.label">
           <el-card shadow="hover" class="metric-item">
@@ -116,7 +143,6 @@
         </el-col>
       </el-row>
 
-      <!-- 训练曲线图表 -->
       <el-row :gutter="16" style="margin-top: 16px">
         <el-col :span="12">
           <div ref="lossChartRef" style="height: 350px"></div>
@@ -127,33 +153,38 @@
       </el-row>
     </el-card>
 
-    <!-- ── 新建训练任务对话框 ── -->
     <el-dialog
       v-model="showCreateDialog"
-      title="新建训练任务"
+      :title="$t('training.createTask')"
       width="600px"
       :close-on-click-modal="false"
     >
       <el-form :model="trainForm" label-width="120px">
-        <el-form-item label="检测场景">
-          <el-select v-model="trainForm.scene_id" placeholder="选择场景">
-            <el-option label="遥感目标检测" :value="1" />
-            <el-option label="工业缺陷检测" :value="2" />
-            <el-option label="农业病害检测" :value="3" />
+        <el-form-item :label="$t('training.scene')">
+          <el-select
+            v-model="trainForm.scene_id"
+            :placeholder="$t('training.selectScene')"
+          >
+            <el-option
+              v-for="scene in scenes"
+              :key="scene.id"
+              :label="scene.display_name || scene.name"
+              :value="scene.id"
+            />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="基础模型">
+        <el-form-item :label="$t('training.baseModel')">
           <el-select v-model="trainForm.model_name">
-            <el-option label="YOLOv11n (Nano, 最快)" value="yolov11n" />
-            <el-option label="YOLOv11s (Small)" value="yolov11s" />
-            <el-option label="YOLOv11m (Medium)" value="yolov11m" />
-            <el-option label="YOLOv11l (Large)" value="yolov11l" />
-            <el-option label="YOLOv11x (XLarge, 最强)" value="yolov11x" />
+            <el-option :label="$t('training.yolov11n')" value="yolov11n" />
+            <el-option :label="$t('training.yolov11s')" value="yolov11s" />
+            <el-option :label="$t('training.yolov11m')" value="yolov11m" />
+            <el-option :label="$t('training.yolov11l')" value="yolov11l" />
+            <el-option :label="$t('training.yolov11x')" value="yolov11x" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="训练轮数">
+        <el-form-item :label="$t('training.epochs')">
           <el-slider
             v-model="trainForm.epochs"
             :min="10"
@@ -163,7 +194,7 @@
           />
         </el-form-item>
 
-        <el-form-item label="批次大小">
+        <el-form-item :label="$t('training.batchSize')">
           <el-input-number
             v-model="trainForm.batch_size"
             :min="1"
@@ -172,32 +203,32 @@
           />
         </el-form-item>
 
-        <el-form-item label="图像尺寸">
+        <el-form-item :label="$t('training.imgSize')">
           <el-select v-model="trainForm.img_size">
-            <el-option label="416" :value="416" />
-            <el-option label="512" :value="512" />
-            <el-option label="640 (默认)" :value="640" />
-            <el-option label="768" :value="768" />
+            <el-option :label="416" :value="416" />
+            <el-option :label="512" :value="512" />
+            <el-option :label="$t('training.default')" :value="640" />
+            <el-option :label="768" :value="768" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="训练设备">
+        <el-form-item :label="$t('training.device')">
           <el-radio-group v-model="trainForm.device">
-            <el-radio value="cpu">CPU (本地)</el-radio>
+            <el-radio value="cpu">CPU ({{ $t("training.local") }})</el-radio>
             <el-radio value="0">GPU:0</el-radio>
             <el-radio value="1">GPU:1</el-radio>
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="优化器">
+        <el-form-item :label="$t('training.optimizer')">
           <el-select v-model="trainForm.optimizer">
-            <el-option label="SGD (推荐)" value="SGD" />
-            <el-option label="Adam" value="Adam" />
-            <el-option label="AdamW" value="AdamW" />
+            <el-option :label="$t('training.sgd')" value="SGD" />
+            <el-option :label="Adam" value="Adam" />
+            <el-option :label="AdamW" value="AdamW" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="初始学习率">
+        <el-form-item :label="$t('training.lr0')">
           <el-input-number
             v-model="trainForm.lr0"
             :min="0.0001"
@@ -209,9 +240,11 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
+        <el-button @click="showCreateDialog = false">{{
+          $t("training.cancel")
+        }}</el-button>
         <el-button type="primary" @click="createTask" :loading="creating">
-          启动训练
+          {{ $t("training.startTrain") }}
         </el-button>
       </template>
     </el-dialog>
@@ -224,26 +257,26 @@ import { Plus, Refresh } from "@element-plus/icons-vue";
 import * as echarts from "echarts";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 
-// ── 状态变量 ──
+const { t } = useI18n({ useScope: "global" });
+
 const taskList = ref([]);
 const loadingTasks = ref(false);
 const selectedTask = ref(null);
 const showCreateDialog = ref(false);
 const creating = ref(false);
+const scenes = ref([]);
 
-// ── 图表引用 ──
 const lossChartRef = ref(null);
 const mapChartRef = ref(null);
 let lossChart = null;
 let mapChart = null;
 
-// ── 轮询定时器 ──
 let pollTimer = null;
 
-// ── 训练表单 ──
 const trainForm = ref({
-  scene_id: 1,
+  scene_id: null,
   model_name: "yolov11n",
   epochs: 50,
   batch_size: 8,
@@ -253,48 +286,52 @@ const trainForm = ref({
   lr0: 0.01,
 });
 
-// ── 计算属性：最新指标卡片 ──
 const metricCards = computed(() => {
   if (!selectedTask.value) return [];
   const m = selectedTask.value.latest_metric;
   if (!m)
     return [
       {
-        label: "Epoch",
+        label: t("training.epoch"),
         value: `${selectedTask.value.current_epoch}/${selectedTask.value.epochs}`,
       },
-      { label: "进度", value: `${selectedTask.value.progress}%` },
-      { label: "Box Loss", value: "-" },
-      { label: "Cls Loss", value: "-" },
-      { label: "mAP@50", value: "-" },
-      { label: "mAP@50-95", value: "-" },
+      {
+        label: t("training.progress"),
+        value: `${selectedTask.value.progress}%`,
+      },
+      { label: t("training.boxLoss"), value: "-" },
+      { label: t("training.clsLoss"), value: "-" },
+      { label: t("training.map50"), value: "-" },
+      { label: t("training.map5095"), value: "-" },
     ];
   return [
-    { label: "Epoch", value: `${m.epoch}/${selectedTask.value.epochs}` },
     {
-      label: "Box Loss",
+      label: t("training.epoch"),
+      value: `${m.epoch}/${selectedTask.value.epochs}`,
+    },
+    {
+      label: t("training.boxLoss"),
       value: m.box_loss != null ? m.box_loss.toFixed(4) : "-",
     },
     {
-      label: "Cls Loss",
+      label: t("training.clsLoss"),
       value: m.cls_loss != null ? m.cls_loss.toFixed(4) : "-",
     },
     {
-      label: "Precision",
+      label: t("training.precision"),
       value: m.precision != null ? (m.precision * 100).toFixed(1) + "%" : "-",
     },
     {
-      label: "mAP@50",
+      label: t("training.map50"),
       value: m.map50 != null ? (m.map50 * 100).toFixed(1) + "%" : "-",
     },
     {
-      label: "mAP@50-95",
+      label: t("training.map5095"),
       value: m.map50_95 != null ? (m.map50_95 * 100).toFixed(1) + "%" : "-",
     },
   ];
 });
 
-// ── 状态映射 ──
 function statusType(status) {
   const map = {
     pending: "info",
@@ -308,29 +345,39 @@ function statusType(status) {
 
 function statusText(status) {
   const map = {
-    pending: "等待中",
-    running: "训练中",
-    completed: "已完成",
-    failed: "失败",
-    cancelled: "已取消",
+    pending: t("training.statusPending"),
+    running: t("training.statusRunning"),
+    completed: t("training.statusCompleted"),
+    failed: t("training.statusFailed"),
+    cancelled: t("training.statusCancelled"),
   };
   return map[status] || status;
 }
 
-// ── 获取任务列表 ──
 async function fetchTasks() {
   loadingTasks.value = true;
   try {
-    const res = await request.get("/api/training/tasks");
-    taskList.value = res.data?.items || [];
+    const res = await request.get("/training/tasks");
+    taskList.value = res.items || [];
   } catch (e) {
-    console.error("获取任务列表失败", e);
+    console.error(t("training.fetchError"), e);
   } finally {
     loadingTasks.value = false;
   }
 }
 
-// ── 选择任务并开始监控 ──
+async function fetchScenes() {
+  try {
+    const res = await request.get("/training/scenes");
+    scenes.value = res.items || [];
+    if (scenes.value.length > 0 && !trainForm.value.scene_id) {
+      trainForm.value.scene_id = scenes.value[0].id;
+    }
+  } catch (e) {
+    console.error(t("training.fetchScenesError"), e);
+  }
+}
+
 async function selectTask(task) {
   selectedTask.value = task;
   await nextTick();
@@ -339,7 +386,6 @@ async function selectTask(task) {
   startPolling();
 }
 
-// ── 初始化 ECharts 图表 ──
 function initCharts() {
   if (lossChart) lossChart.dispose();
   if (mapChart) mapChart.dispose();
@@ -352,37 +398,37 @@ function initCharts() {
   }
 }
 
-// ── 获取训练指标并更新图表 ──
 async function fetchMetrics() {
   if (!selectedTask.value) return;
   try {
-    const taskId = selectedTask.value.id || selectedTask.value.task?.id;
-    const res = await request.get(`/api/training/metrics/${taskId}`);
-    const metrics = res.data?.metrics || [];
+    const taskId = selectedTask.value.id;
+    const res = await request.get(`/training/metrics/${taskId}`);
+    const metrics = res.metrics || [];
 
-    // 更新任务状态
-    const statusRes = await request.get(`/api/training/status/${taskId}`);
-    if (statusRes.data) {
-      selectedTask.value = { ...selectedTask.value, ...statusRes.data };
+    const statusRes = await request.get(`/training/status/${taskId}`);
+    if (statusRes.task) {
+      selectedTask.value = {
+        ...selectedTask.value,
+        ...statusRes.task,
+        latest_metric: statusRes.latest_metric,
+      };
     }
 
     if (metrics.length > 0) {
       updateCharts(metrics);
     }
   } catch (e) {
-    console.error("获取训练指标失败", e);
+    console.error(t("training.fetchMetricsError"), e);
   }
 }
 
-// ── 更新图表 ──
 function updateCharts(metrics) {
   const epochs = metrics.map((m) => m.epoch);
 
-  // Loss 曲线
   if (lossChart) {
     lossChart.setOption({
       title: {
-        text: "训练损失曲线",
+        text: t("training.lossCurve"),
         left: "center",
         textStyle: { fontSize: 14 },
       },
@@ -417,11 +463,10 @@ function updateCharts(metrics) {
     });
   }
 
-  // mAP 曲线
   if (mapChart) {
     mapChart.setOption({
       title: {
-        text: "评估指标曲线",
+        text: t("training.metricCurve"),
         left: "center",
         textStyle: { fontSize: 14 },
       },
@@ -432,7 +477,7 @@ function updateCharts(metrics) {
       },
       grid: { left: "10%", right: "5%", top: "15%", bottom: "15%" },
       xAxis: { type: "category", data: epochs, name: "Epoch" },
-      yAxis: { type: "value", name: "指标值", max: 1 },
+      yAxis: { type: "value", name: t("training.metricValue"), max: 1 },
       series: [
         {
           name: "mAP@50",
@@ -471,14 +516,13 @@ function updateCharts(metrics) {
   }
 }
 
-// ── 轮询监控 ──
 function startPolling() {
   stopPolling();
   pollTimer = setInterval(() => {
     if (selectedTask.value) {
       fetchMetrics();
     }
-  }, 5000); // 每 5 秒轮询一次
+  }, 5000);
 }
 
 function stopPolling() {
@@ -488,49 +532,71 @@ function stopPolling() {
   }
 }
 
-// ── 创建训练任务 ──
 async function createTask() {
+  if (!trainForm.value.scene_id) {
+    ElMessage.warning(t("training.selectSceneFirst"));
+    return;
+  }
+
   creating.value = true;
   try {
-    const res = await request.post("/api/training/start", trainForm.value);
-    ElMessage.success(`训练任务已创建：${res.data?.task_uuid}`);
+    const res = await request.post("/training/start", trainForm.value);
+    ElMessage.success(`${t("training.createSuccess")} ${res.task_uuid}`);
     showCreateDialog.value = false;
     await fetchTasks();
-    // 自动选中新创建的任务
-    if (res.data?.id) {
-      const newTask = taskList.value.find((t) => t.id === res.data.id);
+    if (res.id) {
+      const newTask = taskList.value.find((t) => t.id === res.id);
       if (newTask) selectTask(newTask);
     }
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || "创建训练任务失败");
+    ElMessage.error(e.response?.data?.detail || t("training.createFailed"));
   } finally {
     creating.value = false;
   }
 }
 
-// ── 停止训练任务 ──
 async function stopTask(taskId) {
   try {
     await ElMessageBox.confirm(
-      "确定要停止当前训练任务吗？训练进度将被保留。",
-      "确认停止",
+      t("training.confirmStop"),
+      t("training.confirm"),
       {
         type: "warning",
       },
     );
-    await request.post(`/api/training/stop/${taskId}`);
-    ElMessage.success("训练任务已停止");
+    await request.post(`/training/stop/${taskId}`);
+    ElMessage.success(t("training.stopSuccess"));
     await fetchTasks();
   } catch (e) {
     if (e !== "cancel") {
-      ElMessage.error("停止训练失败");
+      ElMessage.error(t("training.stopFailed"));
     }
   }
 }
 
-// ── 生命周期 ──
+async function downloadModel(taskId) {
+  try {
+    const response = await request.get(`/training/download/${taskId}`, {
+      responseType: "blob",
+    });
+    const blob = new Blob([response]);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `model_${taskId}.pt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    ElMessage.success(t("training.downloadSuccess"));
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || t("training.downloadFailed"));
+  }
+}
+
 onMounted(() => {
   fetchTasks();
+  fetchScenes();
 });
 
 onBeforeUnmount(() => {

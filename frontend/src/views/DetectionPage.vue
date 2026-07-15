@@ -1,163 +1,202 @@
 <template>
   <div class="detection-container">
-    <div
-      class="upload-area"
-      :class="{ 'is-dragover': isDragover }"
-      @dragover.prevent="handleDragOver"
-      @dragleave="handleDragLeave"
-      @drop.prevent="handleDrop"
-      @paste="handlePaste"
-      @click="triggerFileInput"
-    >
-      <input
-        ref="fileInput"
-        type="file"
-        multiple
-        accept="image/*,.zip"
-        class="file-input"
-        @change="handleFileSelect"
-      />
-
-      <div class="upload-content">
-        <el-icon class="upload-icon">
-          <Upload />
-        </el-icon>
-        <h3>{{ $t("detection.uploadTitle") }}</h3>
-        <p>{{ $t("detection.uploadHint") }}</p>
-        <p class="upload-tip">{{ $t("detection.uploadTip") }}</p>
-      </div>
-    </div>
-
-    <div v-if="pendingFiles.length > 0" class="pending-list">
-      <h3>{{ $t("detection.pendingTitle") }} ({{ pendingFiles.length }})</h3>
-      <div class="file-grid">
-        <div
-          v-for="(file, index) in pendingFiles"
-          :key="index"
-          class="file-item"
-        >
-          <img :src="file.preview" :alt="file.name" class="file-thumb" />
-          <div class="file-info">
-            <span class="file-name">{{ file.name }}</span>
-            <span class="file-size">{{ formatSize(file.size) }}</span>
-          </div>
-          <el-button type="text" class="remove-btn" @click="removeFile(index)">
-            <el-icon><Close /></el-icon>
-          </el-button>
-        </div>
-      </div>
-
-      <div class="action-bar">
-        <el-button
-          type="primary"
-          :loading="isProcessing"
-          @click="startDetection"
-          :disabled="pendingFiles.length === 0 || isProcessing"
-        >
-          <el-icon><Search /></el-icon>
-          {{ $t("detection.startDetection") }}
-        </el-button>
-        <el-button type="default" @click="clearAllFiles">
-          {{ $t("detection.clearAll") }}
-        </el-button>
-      </div>
-    </div>
-
-    <div v-if="detectionResults.length > 0" class="results-section">
-      <h3>{{ $t("detection.resultsTitle") }}</h3>
-
-      <div class="results-summary">
-        <div class="summary-item">
-          <span class="summary-label">{{ $t("detection.totalImages") }}</span>
-          <span class="summary-value">{{ summary.total }}</span>
-        </div>
-        <div class="summary-item success">
-          <span class="summary-label">{{ $t("detection.successCount") }}</span>
-          <span class="summary-value">{{ summary.success }}</span>
-        </div>
-        <div class="summary-item error">
-          <span class="summary-label">{{ $t("detection.failedCount") }}</span>
-          <span class="summary-value">{{ summary.failed }}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">{{ $t("detection.totalObjects") }}</span>
-          <span class="summary-value">{{ summary.objects }}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">{{ $t("detection.totalTime") }}</span>
-          <span class="summary-value">{{ summary.time }}ms</span>
-        </div>
-      </div>
-
-      <div class="results-grid">
-        <div
-          v-for="(result, index) in detectionResults"
-          :key="index"
-          class="result-card"
-          :class="{ success: result.success, failed: !result.success }"
-        >
-          <div class="result-header">
-            <span class="result-filename">{{ result.filename }}</span>
-            <el-tag :type="result.success ? 'success' : 'danger'">
-              {{
-                result.success
-                  ? $t("detection.success")
-                  : $t("detection.failed")
-              }}
-            </el-tag>
-          </div>
-
-          <div v-if="result.success" class="result-content">
-        <div class="result-stats">
-          <span
-            >{{ $t("detection.imageSize") }}: {{ result.width }} ×
-            {{ result.height }}</span
-          >
-          <span
-            >{{ $t("detection.inferenceTime") }}:
-            {{ result.inference_time }}ms</span
-          >
-          <span
-            >{{ $t("detection.objectsFound") }}:
-            {{ result.objects?.length || 0 }}</span
-          >
-        </div>
-
-        <div v-if="result.objects?.length > 0" class="objects-list">
+    <div class="tabs-container">
+      <el-tabs v-model="activeTab" type="card">
+        <el-tab-pane :label="$t('detection.fileTab')" name="file">
           <div
-            v-for="(obj, objIndex) in result.objects"
-            :key="objIndex"
-            class="object-item"
+            class="upload-area"
+            :class="{ 'is-dragover': isDragover }"
+            @dragover.prevent="handleDragOver"
+            @dragleave="handleDragLeave"
+            @drop.prevent="handleDrop"
+            @paste="handlePaste"
+            @click="triggerFileInput"
           >
-            <span class="object-class">{{ obj.class_name_cn }}</span>
-            <span class="object-conf"
-              >{{ (obj.confidence * 100).toFixed(1) }}%</span
-            >
-          </div>
-        </div>
-      </div>
+            <input
+              ref="fileInput"
+              type="file"
+              multiple
+              accept="image/*,.zip"
+              class="file-input"
+              @change="handleFileSelect"
+            />
 
-          <div v-else class="result-error">
-            {{ result.error }}
+            <div class="upload-content">
+              <el-icon class="upload-icon">
+                <Upload />
+              </el-icon>
+              <h3>{{ $t("detection.uploadTitle") }}</h3>
+              <p>{{ $t("detection.uploadHint") }}</p>
+              <p class="upload-tip">{{ $t("detection.uploadTip") }}</p>
+            </div>
           </div>
-        </div>
-      </div>
+
+          <div v-if="pendingFiles.length > 0" class="pending-list">
+            <h3>
+              {{ $t("detection.pendingTitle") }} ({{ pendingFiles.length }})
+            </h3>
+            <div class="file-grid">
+              <div
+                v-for="(file, index) in pendingFiles"
+                :key="index"
+                class="file-item"
+              >
+                <img :src="file.preview" :alt="file.name" class="file-thumb" />
+                <div class="file-info">
+                  <span class="file-name">{{ file.name }}</span>
+                  <span class="file-size">{{ formatSize(file.size) }}</span>
+                </div>
+                <el-button
+                  type="text"
+                  class="remove-btn"
+                  @click="removeFile(index)"
+                >
+                  <el-icon><Close /></el-icon>
+                </el-button>
+              </div>
+            </div>
+
+            <div class="action-bar">
+              <el-button
+                type="primary"
+                :loading="isProcessing"
+                @click="startDetection"
+                :disabled="pendingFiles.length === 0 || isProcessing"
+              >
+                <el-icon><Search /></el-icon>
+                {{ $t("detection.startDetection") }}
+              </el-button>
+              <el-button type="default" @click="clearAllFiles">
+                {{ $t("detection.clearAll") }}
+              </el-button>
+            </div>
+          </div>
+
+          <div v-if="detectionResults.length > 0" class="results-section">
+            <h3>{{ $t("detection.resultsTitle") }}</h3>
+
+            <div class="results-summary">
+              <div class="summary-item">
+                <span class="summary-label">{{
+                  $t("detection.totalImages")
+                }}</span>
+                <span class="summary-value">{{ summary.total }}</span>
+              </div>
+              <div class="summary-item success">
+                <span class="summary-label">{{
+                  $t("detection.successCount")
+                }}</span>
+                <span class="summary-value">{{ summary.success }}</span>
+              </div>
+              <div class="summary-item error">
+                <span class="summary-label">{{
+                  $t("detection.failedCount")
+                }}</span>
+                <span class="summary-value">{{ summary.failed }}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">{{
+                  $t("detection.totalObjects")
+                }}</span>
+                <span class="summary-value">{{ summary.objects }}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">{{
+                  $t("detection.totalTime")
+                }}</span>
+                <span class="summary-value">{{ summary.time }}ms</span>
+              </div>
+            </div>
+
+            <div class="results-grid">
+              <div
+                v-for="(result, index) in detectionResults"
+                :key="index"
+                class="result-card"
+                :class="{ success: result.success, failed: !result.success }"
+              >
+                <div class="result-header">
+                  <span class="result-filename">{{ result.filename }}</span>
+                  <el-tag :type="result.success ? 'success' : 'danger'">
+                    {{
+                      result.success
+                        ? $t("detection.success")
+                        : $t("detection.failed")
+                    }}
+                  </el-tag>
+                </div>
+
+                <div v-if="result.success" class="result-content">
+                  <div class="result-stats">
+                    <span
+                      >{{ $t("detection.imageSize") }}: {{ result.width }} ×
+                      {{ result.height }}</span
+                    >
+                    <span
+                      >{{ $t("detection.inferenceTime") }}:
+                      {{ result.inference_time }}ms</span
+                    >
+                    <span
+                      >{{ $t("detection.objectsFound") }}:
+                      {{ result.objects?.length || 0 }}</span
+                    >
+                  </div>
+
+                  <div v-if="result.objects?.length > 0" class="objects-list">
+                    <div
+                      v-for="(obj, objIndex) in result.objects"
+                      :key="objIndex"
+                      class="object-item"
+                    >
+                      <span class="object-class">{{ obj.class_name_cn }}</span>
+                      <span class="object-conf"
+                        >{{ (obj.confidence * 100).toFixed(1) }}%</span
+                      >
+                    </div>
+                  </div>
+                </div>
+
+                <div v-else class="result-error">
+                  {{ result.error }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane :label="$t('detection.cameraTab')" name="camera">
+          <CameraDetection />
+        </el-tab-pane>
+      </el-tabs>
     </div>
   </div>
 </template>
 
 <script setup>
+import CameraDetection from "@/components/CameraDetection.vue";
+import { useStatsStore } from "@/stores/stats";
 import request from "@/utils/request";
 import { Close, Search, Upload } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 
+const activeTab = ref("file");
 const fileInput = ref(null);
 const isDragover = ref(false);
+
+const route = useRoute();
+const statsStore = useStatsStore();
+
+onMounted(() => {
+  const tab = route.query.tab;
+  if (tab === "camera") {
+    activeTab.value = "camera";
+  }
+});
 const isProcessing = ref(false);
 const pendingFiles = ref([]);
 const detectionResults = ref([]);
-
 
 const summary = computed(() => {
   const total = detectionResults.value.length;
@@ -312,6 +351,7 @@ const startDetection = async () => {
 
     pendingFiles.value = [];
     ElMessage.success($t("detection.detectionComplete"));
+    statsStore.fetchStats();
   } catch (error) {
     ElMessage.error($t("detection.detectionFailed"));
   } finally {

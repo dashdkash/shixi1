@@ -356,6 +356,63 @@ onMounted(() => {
   padding: 20px;
 }
 
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: #f5f7fa;
+  border-radius: 12px;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+
+  &.detection-icon {
+    background: #ecf5ff;
+    color: #409eff;
+  }
+
+  &.image-icon {
+    background: #f0f9eb;
+    color: #67c23a;
+  }
+
+  &.object-icon {
+    background: #fff7e6;
+    color: #e6a23c;
+  }
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
 .list-header {
   display: flex;
   justify-content: space-between;

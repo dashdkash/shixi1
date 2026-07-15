@@ -69,25 +69,85 @@ class DetectionService:
     """目标检测服务 — 封装 YOLOv11 推理全流程"""
 
     @staticmethod
+    def _ensure_default_scene() -> int:
+        """
+        确保默认检测场景存在，如果不存在则创建
+        返回场景 ID
+        """
+        db = SessionLocal()
+        try:
+            scene = db.query(DetectionScene).first()
+            if scene:
+                return scene.id
+
+            new_scene = DetectionScene(
+                name="us_weeds",
+                display_name="杂草检测",
+                description="杂草检测场景，支持识别15种常见杂草",
+                category="agriculture",
+                class_names=[
+                    "carpetweeds", "crabgrass", "eclipta", "goosegrass",
+                    "morningglory", "nutsedge", "palmeramaranth", "pricklysida",
+                    "purslane", "ragweed", "sicklepod", "spottedspurge",
+                    "spurredanoda", "swinecress", "waterhemp"
+                ],
+                class_names_cn={
+                    "carpetweeds": "地毯草", "crabgrass": "马唐草",
+                    "eclipta": "鳢肠", "goosegrass": "牛筋草",
+                    "morningglory": "牵牛花", "nutsedge": "莎草",
+                    "palmeramaranth": "苋", "pricklysida": "刺蒺藜",
+                    "purslane": "马齿苋", "ragweed": "豚草",
+                    "sicklepod": "决明", "spottedspurge": "斑地锦",
+                    "spurredanoda": "田皂角", "swinecress": "臭荠",
+                    "waterhemp": "水麻"
+                },
+                is_active=True,
+            )
+            db.add(new_scene)
+            db.commit()
+            logger.info("已创建默认杂草检测场景: id=%d, name=%s", new_scene.id, new_scene.name)
+            return new_scene.id
+        finally:
+            db.close()
+
+    @staticmethod
+    def _get_backend_dir() -> str:
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    @staticmethod
+    def _resolve_model_path(model_path: str) -> str:
+        if os.path.isabs(model_path):
+            return model_path
+        backend_dir = DetectionService._get_backend_dir()
+        return os.path.join(backend_dir, model_path)
+
+    @staticmethod
     def _get_default_model_path() -> str:
         """
         获取默认模型权重路径
 
         查找顺序：
-          1. models/ 目录下 is_default=True 的模型
-          2. runs/train/ 目录下最新训练产出的 best.pt
-          3. 回退到预训练模型 yolov11n.pt
+          1. models/us_weeds_v3.0.0/best.pt（优先使用训练好的杂草检测模型）
+          2. models/ 目录下 is_default=True 的模型
+          3. runs/train/ 目录下最新训练产出的 best.pt
+          4. 回退到预训练模型 yolov11n.pt
         """
         db = SessionLocal()
+        backend_dir = DetectionService._get_backend_dir()
         try:
-            # 查找默认模型版本
+            # 优先使用训练好的杂草检测模型
+            trained_model_path = os.path.join(backend_dir, "models", "us_weeds_v3.0.0", "best.pt")
+            if os.path.exists(trained_model_path):
+                return trained_model_path
+
             default_model = (
                 db.query(ModelVersion).filter(ModelVersion.is_default == True).first()
             )
-            if default_model and os.path.exists(default_model.model_path):
-                return default_model.model_path
+            if default_model:
+                resolved_path = DetectionService._resolve_model_path(default_model.model_path)
+                if os.path.exists(resolved_path):
+                    return resolved_path
 
-            # 回退：查找最新训练的 best.pt
             from app.entity.db_models import TrainingTask
 
             latest_task = (
@@ -98,7 +158,7 @@ class DetectionService:
             )
             if latest_task:
                 weights_path = os.path.join(
-                    os.getcwd(),
+                    backend_dir,
                     settings.TRAIN_OUTPUT_DIR,
                     f"task_{latest_task.task_uuid}",
                     "weights",
@@ -109,8 +169,6 @@ class DetectionService:
         finally:
             db.close()
 
-        # 最终回退：预训练模型
-        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return os.path.join(backend_dir, "yolo11n.pt")
 
     @staticmethod
@@ -133,8 +191,10 @@ class DetectionService:
                     )
                     .first()
                 )
-                if default_model and os.path.exists(default_model.model_path):
-                    model_path = default_model.model_path
+                if default_model:
+                    resolved_path = DetectionService._resolve_model_path(default_model.model_path)
+                    if os.path.exists(resolved_path):
+                        model_path = resolved_path
             finally:
                 db.close()
 
@@ -243,11 +303,9 @@ class DetectionService:
 
         db = SessionLocal()
         try:
-            # 当 scene_id 为 None 时，自动查询第一个可用场景
-            if not scene_id:
-                default_scene = db.query(DetectionScene).first()
-                if default_scene:
-                    scene_id = default_scene.id
+            # ── 确保默认场景存在 ──
+            if scene_id is None:
+                scene_id = DetectionService._ensure_default_scene()
 
             # ── 加载模型 ──
             model = self._get_model(scene_id)
@@ -609,6 +667,10 @@ class DetectionService:
 
         db = SessionLocal()
         try:
+            # ── 确保默认场景存在 ──
+            if scene_id is None:
+                scene_id = DetectionService._ensure_default_scene()
+
             # ── 加载模型 ──
             model = self._get_model(scene_id)
 
@@ -637,7 +699,7 @@ class DetectionService:
             if not task_id:
                 task = DetectionTask(
                     user_id=user_id or 0,
-                    scene_id=scene_id or 1,
+                    scene_id=scene_id,
                     task_type="video",
                     status="processing",
                     total_images=0,  # 后续更新

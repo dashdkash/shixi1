@@ -38,9 +38,11 @@
           v-else-if="msg.role === 'assistant'"
           class="message-content-wrapper"
         >
-          <el-avatar :size="36" class="message-avatar assistant-avatar">
-            <span></span>
-          </el-avatar>
+          <el-avatar
+            :size="36"
+            class="message-avatar assistant-avatar"
+            src="/logo.svg"
+          ></el-avatar>
           <div class="message-bubble assistant-bubble">
             <!-- thinking 指示器 -->
             <div v-if="msg.thinking" class="thinking-indicator">
@@ -81,7 +83,7 @@
         <!-- 工具调用提示（兼容旧格式） -->
         <div v-if="msg.toolCall && (!msg.toolCalls || msg.toolCalls.length === 0)" class="tool-call-info">
           <el-tag size="small" type="info">
-            🔧 调用工具: {{ msg.toolCall.tool }}
+            {{ t("chat.toolCall", { tool: msg.toolCall.tool }) }}
           </el-tag>
         </div>
       </div>
@@ -93,16 +95,26 @@
         @click="handleQuickDetect('single')"
         :disabled="agentStore.isLoading"
       >
-        📷 单图检测
+        {{ t("chat.quickActions.single") }}
       </el-button>
       <el-button
         @click="handleQuickDetect('batch')"
         :disabled="agentStore.isLoading"
       >
-         批量/ZIP
+        {{ t("chat.quickActions.batch") }}
       </el-button>
-      <el-button disabled>🎬 视频</el-button>
-      <el-button disabled> 摄像头</el-button>
+      <el-button
+        @click="handleQuickDetect('video')"
+        :disabled="agentStore.isLoading"
+      >
+        {{ t("chat.quickActions.video") }}
+      </el-button>
+      <el-button
+        @click="handleQuickDetect('camera')"
+        :disabled="agentStore.isLoading"
+      >
+        {{ t("chat.quickActions.camera") }}
+      </el-button>
     </div>
 
     <!-- ── 输入区域 ── -->
@@ -127,7 +139,7 @@
       <!-- 文本输入框 -->
       <el-input
         v-model="inputText"
-        placeholder="输入消息，或拖拽图片/ZIP 到这里..."
+        :placeholder="t('chat.inputPlaceholder')"
         @keyup.enter="sendMessage"
         :disabled="agentStore.isLoading"
       />
@@ -139,9 +151,11 @@
         @click="sendMessage"
         :disabled="!inputText.trim() && !selectedFile"
       >
-        发送
+        {{ t("chat.send") }}
       </el-button>
-      <el-button v-else type="danger" @click="handleStop"> 停止 </el-button>
+      <el-button v-else type="danger" @click="handleStop">{{
+        t("chat.stop")
+      }}</el-button>
     </div>
   </div>
 </template>
@@ -161,12 +175,22 @@
 import { detectBatch, detectSingle, detectZip } from "@/api/detection";
 import DetectionResultCard from "@/components/DetectionResultCard.vue";
 import { useAgentStore } from "@/stores/agent";
+import { useStatsStore } from "@/stores/stats";
 import { useUserStore } from "@/stores/user";
 import { renderMarkdown } from "@/utils/markdown";
 import request from "@/utils/request";
 import { streamChat, TOOL_NAME_MAP } from "@/utils/stream";
 import { ElMessage } from "element-plus";
-import { computed, nextTick, onMounted, ref } from "vue";
+import {
+  computed,
+  getCurrentInstance,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from "vue";
+import { useRouter } from "vue-router";
 
 /** 工具名称中文映射 */
 function getToolName(toolName) {
@@ -176,12 +200,19 @@ function getToolName(toolName) {
 // ── Store ──
 const agentStore = useAgentStore();
 const userStore = useUserStore();
+const statsStore = useStatsStore();
+const router = useRouter();
+
+// ── i18n ──
+const { proxy } = getCurrentInstance();
+const t = proxy.$t.bind(proxy);
 
 // ── 响应式状态 ──
 const inputText = ref("");
 const selectedFile = ref(null);
 const messageListRef = ref(null);
 const fileInputRef = ref(null);
+const shouldAutoScroll = ref(true);
 
 // ── 计算属性 ──
 const canSend = computed(() => {
@@ -247,7 +278,9 @@ async function sendMessage() {
     message,
     ...(serverImagePath ? { image_path: serverImagePath } : {}),
     // 传递当前会话 ID，为空则后端自动创建新会话
-    ...(agentStore.currentSessionId ? { session_id: agentStore.currentSessionId } : {}),
+    ...(agentStore.currentSessionId
+      ? { session_id: agentStore.currentSessionId }
+      : {}),
   };
 
   let fullContent = "";
@@ -388,6 +421,14 @@ function scrollToBottom() {
   });
 }
 
+/** 处理滚动事件 */
+function handleScroll() {
+  if (!messageListRef.value) return;
+  const { scrollTop, scrollHeight, clientHeight } = messageListRef.value;
+  const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+  shouldAutoScroll.value = distanceToBottom < 100;
+}
+
 /**
  * 快捷单图检测流程：
  * 1. 用户点击"📷 单图检测"按钮
@@ -430,6 +471,7 @@ async function handleQuickDetect(type) {
         lastMsg.content = `检测完成！发现 ${result.total_objects} 个目标。`;
         lastMsg.loading = false;
         lastMsg.detectionResult = result;
+        statsStore.fetchStats();
       } catch (err) {
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
         lastMsg.content = "检测失败，请重试";
@@ -470,7 +512,7 @@ async function handleQuickDetect(type) {
 
       agentStore.addMessage({
         role: "assistant",
-        content: "正在批量检测中...",
+        content: t("chat.batchDetecting"),
         loading: true,
       });
 
@@ -481,39 +523,116 @@ async function handleQuickDetect(type) {
 
         // 检查是否有错误
         if (result.error) {
-          lastMsg.content = `批量检测失败：${result.error}`;
+          lastMsg.content = t("chat.batchFailed", { error: result.error });
           lastMsg.loading = false;
           lastMsg.error = true;
           return;
         }
 
         const totalObjects = result.total_objects ?? 0;
-        lastMsg.content = `批量检测完成！共 ${totalObjects} 个目标。`;
+        lastMsg.content = t("chat.batchComplete", { count: totalObjects });
         lastMsg.loading = false;
         lastMsg.detectionResult = result;
+        statsStore.fetchStats();
         console.log("[批量检测结果]", result);
       } catch (err) {
         console.error("[批量检测异常]", err);
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-        lastMsg.content = `批量检测失败：${err.message || err}`;
+        lastMsg.content = t("chat.batchFailed", { error: err.message || err });
         lastMsg.loading = false;
         lastMsg.error = true;
       }
     };
     input.click();
+  } else if (type === "video") {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/*";
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      agentStore.addMessage({
+        role: "user",
+        content: `[视频检测] ${file.name}`,
+      });
+
+      agentStore.addMessage({
+        role: "assistant",
+        content: "正在上传视频并处理...",
+        loading: true,
+      });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const result = await request.post("/detection/video", formData, {
+          timeout: 180000,
+        });
+
+        if (result.task_id) {
+          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+          lastMsg.content = `视频已上传，任务 ID: ${result.task_id}，正在后台处理中...\n\n${result.message}`;
+          lastMsg.loading = false;
+          statsStore.fetchStats();
+        } else {
+          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+          lastMsg.content = result.message || "视频检测完成";
+          lastMsg.loading = false;
+          if (result.detectionResult) {
+            lastMsg.detectionResult = result.detectionResult;
+          }
+          statsStore.fetchStats();
+        }
+      } catch (err) {
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        lastMsg.content = `视频检测失败：${err.response?.data?.error || err.message || err}`;
+        lastMsg.loading = false;
+        lastMsg.error = true;
+      }
+    };
+    input.click();
+  } else if (type === "camera") {
+    router.push("/detection?tab=camera");
+  }
+}
+
+function updateWelcomeMessage() {
+  if (agentStore.messages.length === 0) {
+    agentStore.addMessage({
+      role: "assistant",
+      content: t("chat.welcome"),
+    });
+  } else if (
+    agentStore.messages[0].role === "assistant" &&
+    !agentStore.messages[0].loading
+  ) {
+    agentStore.messages[0].content = t("chat.welcome");
   }
 }
 
 onMounted(() => {
-  // 页面加载时显示欢迎消息
-  if (agentStore.messages.length === 0) {
-    agentStore.addMessage({
-      role: "assistant",
-      content:
-        "🌿 你好！我是杂草识别智能助手。\n\n我可以帮你：\n- 📷 识别图片中的杂草种类和数量\n- 📊 提供杂草分布统计分析\n- 💡 给出专业的除草建议\n\n上传一张农田或草坪的照片，我来帮你分析！",
-    });
+  updateWelcomeMessage();
+  if (messageListRef.value) {
+    messageListRef.value.addEventListener("scroll", handleScroll);
   }
 });
+
+onUnmounted(() => {
+  if (messageListRef.value) {
+    messageListRef.value.removeEventListener("scroll", handleScroll);
+  }
+});
+
+watch(
+  () => agentStore.messages.length,
+  () => {
+    if (shouldAutoScroll.value) {
+      scrollToBottom();
+    }
+  },
+);
 </script>
 
 <style lang="scss" scoped>
@@ -575,7 +694,7 @@ onMounted(() => {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 
   &.assistant-avatar {
-    background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+    background: #fff;
     border-color: #67c23a;
   }
 }

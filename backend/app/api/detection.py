@@ -21,7 +21,7 @@ from app.api.auth import get_current_user
 from app.core.logger import get_logger
 from app.database.session import SessionLocal
 from app.entity.db_models import DetectionTask
-from app.services.detection_service import detection_service
+from app.services.detection_service import detection_service, DetectionService
 
 logger = get_logger(__name__)
 
@@ -289,9 +289,10 @@ async def detect_video_api(
     # ── 先创建检测任务记录 ──
     db = SessionLocal()
     try:
+        scene_id = scene_id or DetectionService._ensure_default_scene()
         task = DetectionTask(
             user_id=current_user.id,
-            scene_id=scene_id or 1,
+            scene_id=scene_id,
             task_type="video",
             status="processing",
             conf_threshold=conf,
@@ -470,11 +471,14 @@ async def camera_detection_ws(websocket: WebSocket):
                 iou = data.get("iou", 0.45)
                 scene_id = data.get("scene_id")
 
+                # 确保默认场景存在
+                if scene_id is None:
+                    scene_id = DetectionService._ensure_default_scene()
+
                 # 加载模型（指定设备）
                 device = "cpu" if mode == "cpu" else "0"
                 try:
-                    from app.services.detection_service import get_model
-                    model = get_model(scene_id)
+                    model = DetectionService._get_model(scene_id)
 
                     dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
                     model.predict(

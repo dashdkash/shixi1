@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
@@ -6,11 +7,13 @@ from app.api.detection import router as detection_router
 from app.api.health import router as health_router
 from app.api.history import router as history_router
 from app.api.knowledge import router as knowledge_router
+from app.api.training import router as training_router
 from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.middleware.request_logger import RequestLogMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 def init_minio():
     """初始化 MinIO 存储桶"""
@@ -63,6 +66,11 @@ app.add_middleware(
 )
 
 
+# ── 静态文件服务 ─────────────────────────────────────
+upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(upload_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
+
 # ── 注册路由 ─────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(chat_router)
@@ -70,6 +78,7 @@ app.include_router(detection_router)
 app.include_router(history_router)
 app.include_router(health_router)
 app.include_router(knowledge_router)
+app.include_router(training_router)
 
 @app.get("/")
 def root():
