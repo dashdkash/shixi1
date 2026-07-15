@@ -127,3 +127,6 @@ FRONTEND_URL=http://localhost:5173
 - QQ 邮箱： smtp.qq.com ，使用授权码
 - 163 邮箱： smtp.163.com ，使用授权码
 - Gmail： smtp.gmail.com ，使用应用专用密码
+
+### 注意事项
+需要配置.env文件中的邮箱信息,否则会报错

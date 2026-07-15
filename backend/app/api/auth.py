@@ -9,6 +9,8 @@
 - PUT  /api/auth/profile           修改个人信息
 - PUT  /api/auth/password          修改密码
 - POST /api/auth/avatar            上传头像
+- POST /api/auth/verify-email      验证邮箱
+- POST /api/auth/resend-verification 重新发送验证邮件
 """
 
 import os
@@ -29,10 +31,12 @@ from app.entity.schemas import (
     UserRegister,
     UserResponse,
     UserResponseWithStats,
+    VerifyEmailRequest,
+    ResendVerificationRequest,
 )
 from app.services.user_service import user_service
 from app.storage.minio_client import MinIOClient
-from app.core.email import send_password_reset_email
+from app.core.email import send_password_reset_email, send_verification_email
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
@@ -78,13 +82,42 @@ async def register(request: UserRegister, db: Session = Depends(get_db)):
     - **username**: 用户名（3-50 字符）
     - **email**: 邮箱
     - **password**: 密码（至少 6 位）
+    
+    开发环境（DEBUG=true）：注册后自动验证，可直接登录
+    生产环境（DEBUG=false）：需要验证邮箱后才能登录
     """
+    # 根据环境决定是否要求邮箱验证
+    require_verification = not settings.DEBUG
+    
     user = user_service.register(
         db=db,
         username=request.username,
         email=request.email,
         password=request.password,
+        require_verification=require_verification,
     )
+    
+    # 如果需要验证，发送验证邮件
+    if require_verification and user.verification_token:
+        email_sent = send_verification_email(user.email, user.verification_token)
+        
+        # 开发环境下如果发送失败，返回 token 便于测试
+        if not email_sent and settings.DEBUG:
+            return {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "phone": user.phone,
+                "avatar": user.avatar,
+                "is_active": user.is_active,
+                "is_superuser": user.is_superuser,
+                "email_verified": user.email_verified,
+                "roles": [],
+                "last_login_at": user.last_login_at,
+                "created_at": user.created_at,
+                "verification_token": user.verification_token,  # 仅开发环境返回
+            }
+    
     return user
 
 
@@ -95,11 +128,18 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
 
     - 返回 JWT access_token（24小时有效）
     - 后续请求在 Header 中携带：Authorization: Bearer <token>
+    
+    开发环境（DEBUG=true）：不检查邮箱验证状态
+    生产环境（DEBUG=false）：需要邮箱已验证才能登录
     """
+    # 根据环境决定是否检查邮箱验证
+    require_verification = not settings.DEBUG
+    
     user = user_service.login(
         db=db,
         username=request.username,
         password=request.password,
+        require_verification=require_verification,
     )
 
     access_token = user_service.create_access_token_for_user(user)
@@ -114,6 +154,7 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
             "email": user.email,
             "avatar": user.avatar,
             "is_superuser": user.is_superuser,
+            "email_verified": user.email_verified,
             "roles": roles,
         },
     }
@@ -319,3 +360,50 @@ async def upload_avatar(
     user_service.update_avatar(db, current_user, avatar_url)
 
     return {"avatar_url": avatar_url}
+
+
+@router.post("/verify-email")
+async def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db)):
+    """
+    验证邮箱
+
+    - 验证令牌并更新邮箱验证状态
+    - 令牌使用后自动失效
+    """
+    success = user_service.verify_email(db, request.token)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="验证令牌无效或已过期")
+
+    return {"message": "邮箱验证成功"}
+
+
+@router.post("/resend-verification")
+async def resend_verification(
+    request: ResendVerificationRequest, 
+    db: Session = Depends(get_db)
+):
+    """
+    重新发送验证邮件
+
+    - 生成新的验证令牌
+    - 发送验证邮件到用户邮箱
+    """
+    token = user_service.resend_verification_email(db, request.email)
+
+    # 如果用户存在且未验证，发送邮件
+    if token:
+        email_sent = send_verification_email(request.email, token)
+        
+        # 开发环境下如果发送失败，返回 token 便于测试
+        if not email_sent and settings.DEBUG:
+            return {
+                "message": "验证邮件已发送（邮件发送失败，开发环境直接返回）",
+                "verify_url": f"/verify-email?token={token}",
+                "token": token,
+            }
+
+    # 无论邮箱是否存在都返回成功，防止邮箱枚举攻击
+    return {
+        "message": "如果该邮箱已注册且未验证，验证链接将发送至您的邮箱"
+    }

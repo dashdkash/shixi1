@@ -96,6 +96,18 @@ class ChangePassword(BaseModel):
     new_password: str = Field(..., min_length=6, max_length=100, description="新密码")
 
 
+class VerifyEmailRequest(BaseModel):
+    """验证邮箱请求"""
+
+    token: str = Field(..., description="验证令牌")
+
+
+class ResendVerificationRequest(BaseModel):
+    """重新发送验证邮件请求"""
+
+    email: str = Field(..., description="邮箱")
+
+
 class ForgotPasswordRequest(BaseModel):
     """忘记密码请求"""
 
