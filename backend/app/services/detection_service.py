@@ -680,18 +680,21 @@ class DetectionService:
 
             # ── 如果没有传入 task_id，创建检测任务 ──
             if not task_id:
-                task = DetectionTask(
-                    user_id=user_id or 0,
-                    scene_id=scene_id,
-                    task_type="video",
-                    status="processing",
-                    total_images=0,  # 后续更新
-                    conf_threshold=conf,
-                    iou_threshold=iou,
-                )
-                db.add(task)
-                db.flush()
-                task_id = task.id
+                if user_id:
+                    task = DetectionTask(
+                        user_id=user_id,
+                        scene_id=scene_id,
+                        task_type="video",
+                        status="processing",
+                        total_images=0,
+                        conf_threshold=conf,
+                        iou_threshold=iou,
+                    )
+                    db.add(task)
+                    db.flush()
+                    task_id = task.id
+                else:
+                    task = None
             else:
                 task = (
                     db.query(DetectionTask).filter(DetectionTask.id == task_id).first()
@@ -750,14 +753,14 @@ class DetectionService:
                     )
                 return annotated
 
-            # 创建临时文件用于输出标注视频
+            # 创建临时文件用于输出标注视频（使用MJPG格式，浏览器兼容性更好）
             output_tmp = tempfile.NamedTemporaryFile(
-                suffix=".mp4", delete=False
+                suffix=".avi", delete=False
             )
             output_video_path = output_tmp.name
             output_tmp.close()
 
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            fourcc = cv2.VideoWriter_fourcc(*"MJPG")
             video_writer = cv2.VideoWriter(
                 output_video_path, fourcc, fps, (width, height)
             )
@@ -768,23 +771,24 @@ class DetectionService:
                 if not ret:
                     break
 
-                # 场景变化检测：比较当前帧与上一帧的差异
-                current_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                current_frame_gray = cv2.resize(current_frame_gray, (100, 100))
+                # 判断是否需要处理当前帧：采样帧或第一帧
+                should_process = frame_idx == 0 or frame_idx in sample_set
 
-                scene_changed = False
-                if last_frame is not None:
+                # 场景变化检测：比较当前帧与上一帧的差异（仅用于非采样帧的优化）
+                if not should_process and last_frame is not None:
+                    current_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    current_frame_gray = cv2.resize(current_frame_gray, (100, 100))
                     frame_diff = cv2.absdiff(last_frame, current_frame_gray)
                     diff_score = frame_diff.mean()
-                    if diff_score > 10:
-                        scene_changed = True
-                else:
-                    scene_changed = True
+                    should_process = diff_score > 10
+                    last_frame = current_frame_gray.copy()
+                elif frame_idx == 0:
+                    current_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    current_frame_gray = cv2.resize(current_frame_gray, (100, 100))
+                    last_frame = current_frame_gray.copy()
 
-                last_frame = current_frame_gray.copy()
-
-                # 场景变化时才执行检测和计数
-                if scene_changed:
+                # 采样帧或场景变化时执行检测
+                if should_process:
                     results = model.predict(
                         source=frame,
                         conf=conf,
@@ -849,18 +853,19 @@ class DetectionService:
                         }
                     )
 
-                    # 保存检测结果到数据库
-                    for det in frame_detections:
-                        db_result = DetectionResult(
-                            task_id=task_id,
-                            image_path=f"frame_{frame_idx}.jpg",
-                            class_name=det["class_name"],
-                            class_id=det["class_id"],
-                            confidence=det["confidence"],
-                            bbox=det["bbox"],
-                            inference_time=inference_time,
-                        )
-                        db.add(db_result)
+                    # 保存检测结果到数据库（仅当有 task_id 时）
+                    if task_id:
+                        for det in frame_detections:
+                            db_result = DetectionResult(
+                                task_id=task_id,
+                                image_path=f"frame_{frame_idx}.jpg",
+                                class_name=det["class_name"],
+                                class_id=det["class_id"],
+                                confidence=det["confidence"],
+                                bbox=det["bbox"],
+                                inference_time=inference_time,
+                            )
+                            db.add(db_result)
 
                     # 更新任务进度
                     if task:
@@ -887,12 +892,24 @@ class DetectionService:
             cap.release()
             video_writer.release()
 
-            # ── 使用 ffmpeg 转码为浏览器可播放的 H.264 ──
-            h264_video_path = output_video_path.replace(".mp4", "_h264.mp4")
+            # ── 尝试使用 ffmpeg 转码为浏览器可播放的 H.264 ──
+            final_video_path = output_video_path.replace(".avi", ".mp4")
+            # 查找 ffmpeg 可执行文件（优先 PATH，再尝试常见安装路径）
+            ffmpeg_path = shutil.which("ffmpeg")
+            if not ffmpeg_path:
+                common_paths = [
+                    r"D:\1\ffmpeg-8.1.2-essentials_build\bin\ffmpeg.exe",
+                    r"C:\ffmpeg\bin\ffmpeg.exe",
+                ]
+                for p in common_paths:
+                    if os.path.isfile(p):
+                        ffmpeg_path = p
+                        break
+            ffmpeg_path = ffmpeg_path or "ffmpeg"
             try:
                 subprocess.run(
                     [
-                        shutil.which("ffmpeg") or "ffmpeg",
+                        ffmpeg_path,
                         "-y",
                         "-i", output_video_path,
                         "-c:v", "libx264",
@@ -900,33 +917,38 @@ class DetectionService:
                         "-crf", "23",
                         "-pix_fmt", "yuv420p",
                         "-movflags", "+faststart",
-                        h264_video_path,
+                        final_video_path,
                     ],
                     capture_output=True,
                     timeout=300,
                     check=True,
                 )
-                # 替换原文件
-                os.replace(h264_video_path, output_video_path)
                 logger.info("视频已转码为 H.264 格式")
             except Exception as e:
-                logger.warning("ffmpeg 转码失败，使用原始 mp4v 视频: %s", str(e))
-                try:
-                    os.unlink(h264_video_path)
-                except Exception:
-                    pass
+                logger.warning("ffmpeg 转码失败，使用原始 MJPG 视频: %s", str(e))
+                final_video_path = output_video_path
 
-            # ── 上传标注视频到 MinIO ──
+            # ── 上传标注视频到 MinIO 或本地文件系统 ──
             annotated_video_url = None
             try:
                 minio_client = MinIOClient()
                 object_name = f"detections/{task_id}/annotated_video.mp4"
                 annotated_video_url = minio_client.upload_file(
-                    object_name, output_video_path
+                    object_name, final_video_path
                 )
-                logger.info("标注视频已上传: %s", object_name)
+                logger.info("标注视频已上传到 MinIO: %s", object_name)
             except Exception as e:
-                logger.warning("标注视频上传 MinIO 失败: %s", str(e))
+                logger.warning("标注视频上传 MinIO 失败，保存到本地: %s", str(e))
+                local_detections_dir = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                    "detections",
+                    str(task_id),
+                )
+                os.makedirs(local_detections_dir, exist_ok=True)
+                local_video_path = os.path.join(local_detections_dir, "annotated_video.mp4")
+                shutil.copy2(final_video_path, local_video_path)
+                annotated_video_url = f"/detections/{task_id}/annotated_video.mp4"
+                logger.info("标注视频已保存到本地: %s", annotated_video_url)
 
             # 清理临时视频文件
             try:
@@ -940,6 +962,7 @@ class DetectionService:
                 task.total_objects = total_objects
                 task.total_inference_time = total_inference_time
                 task.completed_at = datetime.now()
+                task.annotated_video_url = annotated_video_url
                 db.commit()
 
             logger.info(

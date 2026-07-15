@@ -247,6 +247,9 @@ class DetectionTask(Base):
     # 分析与建议（AI 生成）
     analysis_report = Column(Text, nullable=True, comment="分析报告（Markdown 格式）")
     analysis_suggestion = Column(Text, nullable=True, comment="专业建议")
+
+    # 视频检测结果
+    annotated_video_url = Column(String(500), nullable=True, comment="标注视频 URL")
     risk_level = Column(
         String(20), nullable=True, comment="风险等级：low/medium/high/critical"
     )

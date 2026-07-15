@@ -31,6 +31,14 @@
                 alt="附件图片"
               />
             </div>
+            <div v-if="msg.videoUrl" class="message-video-attachment">
+              <video
+                :src="msg.videoUrl"
+                controls
+                preload="metadata"
+                class="message-video"
+              ></video>
+            </div>
           </div>
         </div>
 
@@ -110,7 +118,7 @@
       <input
         ref="fileInputRef"
         type="file"
-        accept="image/*,.zip"
+        accept="image/*,.zip,video/mp4,video/avi,video/quicktime,.mp4,.avi,.mov,.mkv,.wmv,.flv"
         style="display: none"
         @change="handleFileSelect"
       />
@@ -151,7 +159,13 @@
  *   - 快捷操作栏（单图/批量/视频/摄像头）
  *   - 中断当前对话
  */
-import { detectBatch, detectSingle, detectZip } from "@/api/detection";
+import {
+  detectBatch,
+  detectSingle,
+  detectVideo,
+  detectZip,
+  getVideoStatus,
+} from "@/api/detection";
 import DetectionResultCard from "@/components/DetectionResultCard.vue";
 import { useAgentStore } from "@/stores/agent";
 import { useStatsStore } from "@/stores/stats";
@@ -195,6 +209,14 @@ const canSend = computed(() => {
 
 // ── 方法 ──
 
+/** 判断是否为视频文件 */
+function isVideoFile(file) {
+  if (!file) return false;
+  const videoSuffixes = [".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv"];
+  const suffix = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+  return videoSuffixes.includes(suffix) || file.type.startsWith("video/");
+}
+
 /** 发送消息 */
 async function sendMessage() {
   if (!canSend.value) return;
@@ -202,14 +224,19 @@ async function sendMessage() {
   const message = inputText.value.trim();
   // ── 关键：在清空之前保存文件引用 ──
   const fileToSend = selectedFile.value;
-  const imagePreview = fileToSend ? URL.createObjectURL(fileToSend) : null;
+  const isVideo = isVideoFile(fileToSend);
+  const imagePreview =
+    fileToSend && !isVideo ? URL.createObjectURL(fileToSend) : null;
+  const videoPreview =
+    fileToSend && isVideo ? URL.createObjectURL(fileToSend) : null;
 
   // 添加用户消息到列表
   agentStore.addMessage({
     role: "user",
     content: message,
-    image: fileToSend ? fileToSend.name : null,
+    image: fileToSend && !isVideo ? fileToSend.name : null,
     imagePreview,
+    videoUrl: videoPreview,
   });
 
   // 清空输入
@@ -226,19 +253,24 @@ async function sendMessage() {
   // 滚动到底部
   scrollToBottom();
 
-  // ── 如果有附件图片，先上传到服务端获取真实路径 ──
+  // ── 如果有附件文件，先上传到服务端获取真实路径 ─
   let serverImagePath = null;
+  let serverVideoPath = null;
   if (fileToSend) {
     try {
       const formData = new FormData();
       formData.append("file", fileToSend);
       // 不设置 Content-Type，让 axios 自动添加 boundary
       const uploadResult = await request.post("/chat/upload", formData);
-      serverImagePath = uploadResult.image_path;
+      if (isVideo) {
+        serverVideoPath = uploadResult.video_path;
+      } else {
+        serverImagePath = uploadResult.image_path;
+      }
     } catch (err) {
-      console.error("[图片上传失败]", err.response?.data || err.message || err);
+      console.error("[文件上传失败]", err.response?.data || err.message || err);
       const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-      lastMsg.content = `图片上传失败：${err.response?.data?.detail || err.message || "未知错误"}，请重试`;
+      lastMsg.content = `文件上传失败：${err.response?.data?.detail || err.message || "未知错误"}，请重试`;
       lastMsg.loading = false;
       lastMsg.error = true;
       return;
@@ -249,6 +281,7 @@ async function sendMessage() {
   const requestBody = {
     message,
     ...(serverImagePath ? { image_path: serverImagePath } : {}),
+    ...(serverVideoPath ? { video_path: serverVideoPath } : {}),
     // 传递当前会话 ID，为空则后端自动创建新会话
     ...(agentStore.currentSessionId
       ? { session_id: agentStore.currentSessionId }
@@ -295,8 +328,12 @@ async function sendMessage() {
             result.total_objects,
             "detections:",
             result.detections?.length,
+            "key_frames:",
+            result.key_frames?.length,
+            "annotated_video_url:",
+            result.annotated_video_url,
           );
-          if (result.detections) {
+          if (result.detections || result.key_frames) {
             // 有检测结果，设置到消息中
             lastMsg.detectionResult = result;
             lastMsg.loading = false;
@@ -500,57 +537,138 @@ async function handleQuickDetect(type) {
     };
     input.click();
   } else if (type === "video") {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "video/*";
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      agentStore.addMessage({
-        role: "user",
-        content: `[视频检测] ${file.name}`,
-      });
-
-      agentStore.addMessage({
-        role: "assistant",
-        content: "正在上传视频并处理...",
-        loading: true,
-      });
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      try {
-        const result = await request.post("/detection/video", formData, {
-          timeout: 180000,
-        });
-
-        if (result.task_id) {
-          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-          lastMsg.content = `视频已上传，任务 ID: ${result.task_id}，正在后台处理中...\n\n${result.message}`;
-          lastMsg.loading = false;
-          statsStore.fetchStats();
-        } else {
-          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-          lastMsg.content = result.message || "视频检测完成";
-          lastMsg.loading = false;
-          if (result.detectionResult) {
-            lastMsg.detectionResult = result.detectionResult;
-          }
-          statsStore.fetchStats();
-        }
-      } catch (err) {
-        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-        lastMsg.content = `视频检测失败：${err.response?.data?.error || err.message || err}`;
-        lastMsg.loading = false;
-        lastMsg.error = true;
-      }
-    };
-    input.click();
+    handleVideoDetect();
   } else if (type === "camera") {
     router.push("/detection?tab=camera");
   }
+}
+
+async function handleVideoDetect() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "video/mp4,video/avi,video/quicktime,video/x-msvideo";
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      ElMessage.warning("视频文件不能超过 50MB");
+      return;
+    }
+
+    const videoUrl = URL.createObjectURL(file);
+
+    agentStore.addMessage({
+      role: "user",
+      content: `[视频检测] ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)}MB)`,
+      videoUrl,
+    });
+
+    agentStore.addMessage({
+      role: "assistant",
+      content: "正在上传视频...",
+      loading: true,
+    });
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const uploadResult = await detectVideo(formData);
+      const taskId = uploadResult.task_id;
+
+      const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+      lastMsg.content = "视频已上传，正在处理中...";
+
+      await pollVideoProgress(taskId);
+    } catch (err) {
+      console.error("[视频检测失败]", err);
+      const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+      lastMsg.content = `视频检测失败：${err.message || err}`;
+      lastMsg.loading = false;
+      lastMsg.error = true;
+    }
+  };
+  input.click();
+}
+
+async function pollVideoProgress(taskId) {
+  let pollCount = 0;
+  const maxPolls = 60;
+  const pollInterval = 2000;
+
+  return new Promise((resolve) => {
+    const pollTimer = setInterval(async () => {
+      pollCount++;
+      try {
+        const statusResult = await getVideoStatus(taskId);
+
+        if (statusResult.status === "completed") {
+          clearInterval(pollTimer);
+          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+
+          const totalObjects = statusResult.total_objects || 0;
+          const classCounts = statusResult.class_counts || {};
+          const processedFrames = statusResult.processed_frames || 0;
+
+          let resultText = `视频检测完成！\n\n`;
+          resultText += `- 处理帧数：${processedFrames} 帧\n`;
+          resultText += `- 检测目标：${totalObjects} 个\n`;
+
+          if (Object.keys(classCounts).length > 0) {
+            resultText += `- 类别统计：\n`;
+            for (const [className, count] of Object.entries(classCounts)) {
+              resultText += `  • ${className}: ${count} 个\n`;
+            }
+          }
+
+          lastMsg.content = resultText;
+          lastMsg.loading = false;
+          lastMsg.detectionResult = {
+            type: "video",
+            total_objects: totalObjects,
+            class_counts: classCounts,
+            total_inference_time: statusResult.total_inference_time || 0,
+            annotated_video_url: statusResult.annotated_video_url,
+            duration_seconds: statusResult.duration_seconds,
+            fps: statusResult.fps,
+            processed_frames: processedFrames,
+            key_frames: statusResult.key_frames,
+          };
+          statsStore.fetchStats();
+          resolve();
+        } else if (statusResult.status === "failed") {
+          clearInterval(pollTimer);
+          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+          lastMsg.content = `视频检测失败：${statusResult.message || "未知错误"}`;
+          lastMsg.loading = false;
+          lastMsg.error = true;
+          resolve();
+        } else {
+          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+          lastMsg.content = `视频检测中... (进度: ${statusResult.progress || 0}%)`;
+        }
+      } catch (pollErr) {
+        console.error("[视频检测轮询失败]", pollErr);
+        if (pollCount >= maxPolls) {
+          clearInterval(pollTimer);
+          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+          lastMsg.content = "视频检测超时，请稍后通过历史记录查看结果";
+          lastMsg.loading = false;
+          resolve();
+        }
+      }
+
+      if (pollCount >= maxPolls) {
+        clearInterval(pollTimer);
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        lastMsg.content = "视频检测轮询已结束，请通过历史记录查看结果";
+        lastMsg.loading = false;
+        resolve();
+      }
+    }, pollInterval);
+  });
 }
 
 function updateWelcomeMessage() {
@@ -787,6 +905,17 @@ watch(
     border-radius: 6px;
     border: 2px solid rgba(255, 255, 255, 0.4);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.message-video-attachment {
+  margin-top: 8px;
+
+  .message-video {
+    max-width: 280px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 }
 

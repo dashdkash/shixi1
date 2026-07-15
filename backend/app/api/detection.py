@@ -14,6 +14,8 @@ import tempfile
 import threading
 import asyncio
 import time
+import cv2
+import numpy as np
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from fastapi.responses import JSONResponse
 from fastapi import WebSocket, WebSocketDisconnect
@@ -323,10 +325,14 @@ async def get_video_detection_status(
     progress_info = redis_client.get_json(f"video_task:{task_id}")
 
     if progress_info:
-        return {
+        result = {
             "task_id": task_id,
             **progress_info,
         }
+        # 展开 result 字段，方便前端直接访问
+        if "result" in result:
+            result.update(result.pop("result"))
+        return result
 
     # 回退：从数据库查询
     db = SessionLocal()
@@ -343,6 +349,7 @@ async def get_video_detection_status(
             "status": task.status,
             "task_type": task.task_type,
             "total_images": task.total_images,
+            "processed_frames": task.total_images,
             "total_objects": task.total_objects or 0,
         }
 
@@ -362,6 +369,7 @@ async def get_video_detection_status(
 
             result["class_counts"] = class_counts
             result["total_inference_time"] = task.total_inference_time
+            result["annotated_video_url"] = task.annotated_video_url
 
         return result
     finally:

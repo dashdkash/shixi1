@@ -9,8 +9,23 @@
     </div>
 
     <div class="card-body">
+      <!-- 视频模式：标注视频 -->
+      <div class="result-video" v-if="annotatedVideoSrc">
+        <video
+          :src="annotatedVideoSrc"
+          controls
+          class="video-player"
+          :poster="result.video_thumbnail"
+        >
+          您的浏览器不支持视频播放
+        </video>
+      </div>
+
       <!-- 单图模式：标注图 -->
-      <div class="result-image" v-if="annotatedImageSrc && !isBatch">
+      <div
+        class="result-image"
+        v-if="annotatedImageSrc && !isBatch && !annotatedVideoSrc"
+      >
         <img
           :src="annotatedImageSrc"
           alt="检测标注图"
@@ -19,7 +34,10 @@
       </div>
 
       <!-- 批量模式：多图展示 -->
-      <div class="result-images-grid" v-if="isBatch && batchImages.length > 0">
+      <div
+        class="result-images-grid"
+        v-if="isBatch && batchImages.length > 0 && !annotatedVideoSrc"
+      >
         <div
           v-for="(img, index) in batchImages"
           :key="index"
@@ -131,6 +149,11 @@ const isBatch = computed(() => {
   );
 });
 
+/** 视频模式：标注视频 URL */
+const annotatedVideoSrc = computed(() => {
+  return props.result.annotated_video_url || null;
+});
+
 /** 单图模式：标注图 URL（优先使用 MinIO URL，否则用 base64） */
 const annotatedImageSrc = computed(() => {
   if (props.result.annotated_image_url) {
@@ -192,6 +215,19 @@ const classCountsArray = computed(() => {
   display: flex;
   gap: 16px;
   padding: 12px;
+}
+
+.result-video {
+  flex: 1;
+  min-width: 0;
+
+  .video-player {
+    width: 100%;
+    max-height: 300px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: #000;
+  }
 }
 
 .result-image {

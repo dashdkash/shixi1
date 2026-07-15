@@ -100,16 +100,17 @@ def detect_video_file(
     Returns:
         JSON 字符串，包含视频检测结果（关键帧、目标统计、时长信息）
     """
+    # Agent 调用时不传 user_id，使用 None 让后端自动处理
     result = detection_service.detect_video(
         video_path,
         conf=conf,
         frame_sample_rate=frame_sample_rate,
+        user_id=None,
     )
-    # 返回时去掉 LLM 无法使用的大体积数据
+    # 返回时去掉 LLM 无法使用的大体积数据，但保留 annotated_video_url 供前端播放
     if "key_frames" in result:
         for frame in result["key_frames"]:
             frame.pop("annotated_image_base64", None)
-    result.pop("annotated_video_url", None)
     return json.dumps(result, ensure_ascii=False)
 
 # 工具列表（绑定到 Agent）
@@ -232,7 +233,7 @@ class DetectionAgent:
                 "intermediate_steps": [],
             }
 
-    async def chat_stream(self, message: str, image_path: Optional[str] = None) -> AsyncGenerator:
+    async def chat_stream(self, message: str, image_path: Optional[str] = None, video_path: Optional[str] = None) -> AsyncGenerator:
         """
         流式处理对话消息（用于 SSE）
 
@@ -241,12 +242,15 @@ class DetectionAgent:
         Args:
             message: 用户文本消息
             image_path: 附带的图片路径（可选）
+            video_path: 附带的视频路径（可选）
 
         Yields:
             SSE 事件数据字典
         """
         if image_path:
             message = f"{message}\n[附件图片路径: {image_path}]"
+        if video_path:
+            message = f"{message}\n[附件视频路径: {video_path}]"
 
         try:
             async for event in self.executor.astream_events(

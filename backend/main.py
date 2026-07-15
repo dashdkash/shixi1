@@ -71,6 +71,11 @@ upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(upload_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
+# 检测结果文件服务
+detections_dir = os.path.join(os.path.dirname(__file__), "detections")
+os.makedirs(detections_dir, exist_ok=True)
+app.mount("/detections", StaticFiles(directory=detections_dir), name="detections")
+
 # ── 注册路由 ─────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(chat_router)

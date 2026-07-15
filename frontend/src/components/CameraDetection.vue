@@ -7,30 +7,20 @@
         autoplay
         playsinline
         muted
-        @loadedmetadata="onVideoLoaded"
-        @click="togglePlay"
+        style="display: none"
       ></video>
+
       <canvas
         ref="canvasElement"
         class="camera-canvas"
-        style="display: none"
       ></canvas>
-      <img
-        v-if="annotatedFrame"
-        :src="annotatedFrame"
-        class="annotated-overlay"
-      />
 
       <div
-        v-if="!stream && !isRunning && !isConnecting"
+        v-if="!isRunning && !isConnecting"
         class="camera-placeholder"
       >
         <el-icon class="placeholder-icon"><VideoCamera /></el-icon>
         <p>{{ t("camera.noCamera") }}</p>
-      </div>
-
-      <div v-if="stream && !isRunning && !isConnecting" class="camera-ready">
-        <p>{{ t("camera.ready") }}</p>
       </div>
 
       <div v-if="isConnecting" class="camera-connecting">
@@ -148,17 +138,16 @@ import {
 import { ElMessage } from "element-plus";
 import { onUnmounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { createCameraWs } from "@/utils/cameraWs";
 
 const { t } = useI18n({ useScope: "global" });
 
 const videoElement = ref(null);
 const canvasElement = ref(null);
-const annotatedFrame = ref("");
 
 const isRunning = ref(false);
 const isConnecting = ref(false);
 const errorMessage = ref("");
-const stream = ref(null);
 
 const fps = ref(0);
 const objectCount = ref(0);
@@ -166,8 +155,8 @@ const inferenceTime = ref(0);
 const frameCount = ref(0);
 const detections = ref([]);
 
-let websocket = null;
-let sendInterval = null;
+let cameraWs = null;
+let mediaStream = null;
 
 const config = reactive({
   mode: "cpu",
@@ -175,33 +164,12 @@ const config = reactive({
   iou: 0.45,
 });
 
-const getWebSocketUrl = () => {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/api/detection/camera`;
-};
-
-const onVideoLoaded = () => {
-  if (videoElement.value) {
-    videoElement.value.play();
-  }
-};
-
-const togglePlay = () => {
-  if (videoElement.value) {
-    if (videoElement.value.paused) {
-      videoElement.value.play();
-    } else {
-      videoElement.value.pause();
-    }
-  }
-};
-
 const startDetection = async () => {
   errorMessage.value = "";
   isConnecting.value = true;
 
   try {
-    const mediaStream = await navigator.mediaDevices.getUserMedia({
+    mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "environment",
         width: { ideal: 640 },
@@ -210,71 +178,14 @@ const startDetection = async () => {
       audio: false,
     });
 
-    stream.value = mediaStream;
+    videoElement.value.srcObject = mediaStream;
+    await videoElement.value.play();
 
-    if (videoElement.value) {
-      videoElement.value.srcObject = mediaStream;
-    }
+    createCameraWsInstance();
+    cameraWs.connect();
 
-    websocket = new WebSocket(getWebSocketUrl());
-
-    websocket.onopen = () => {
-      websocket.send(
-        JSON.stringify({
-          type: "config",
-          mode: config.mode,
-          conf: config.conf,
-          iou: config.iou,
-        }),
-      );
-    };
-
-    websocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "config_ok") {
-          isRunning.value = true;
-          isConnecting.value = false;
-          ElMessage.success(data.message);
-          startFrameSending();
-        } else if (data.type === "result") {
-          if (data.annotated_frame) {
-            annotatedFrame.value = `data:image/jpeg;base64,${data.annotated_frame}`;
-          }
-          if (data.detections) {
-            detections.value = data.detections;
-          }
-          if (data.object_count !== undefined) {
-            objectCount.value = data.object_count;
-          }
-          if (data.inference_time !== undefined) {
-            inferenceTime.value = data.inference_time;
-          }
-          if (data.fps !== undefined) {
-            fps.value = data.fps;
-          }
-          if (data.frame_count !== undefined) {
-            frameCount.value = data.frame_count;
-          }
-        } else if (data.type === "error") {
-          errorMessage.value = data.message;
-        }
-      } catch (e) {
-        console.error("WebSocket message parse error:", e);
-      }
-    };
-
-    websocket.onerror = (error) => {
-      isConnecting.value = false;
-      errorMessage.value = t("camera.connectionError");
-      console.error("WebSocket error:", error);
-    };
-
-    websocket.onclose = () => {
-      if (isRunning.value) {
-        stopDetection();
-      }
-    };
+    isRunning.value = true;
+    ElMessage.success(t("camera.started"));
   } catch (err) {
     isConnecting.value = false;
     errorMessage.value = t("camera.cameraError");
@@ -282,50 +193,98 @@ const startDetection = async () => {
   }
 };
 
-const startFrameSending = () => {
-  sendInterval = setInterval(() => {
-    if (!websocket || websocket.readyState !== WebSocket.OPEN) return;
-    if (!videoElement.value || !canvasElement.value) return;
+const createCameraWsInstance = () => {
+  cameraWs = createCameraWs({
+    mode: config.mode,
+    conf: config.conf,
+    iou: config.iou,
+    onResult: handleDetectionResult,
+    onConfigOk: handleConfigOk,
+    onError: handleWsError,
+    onClose: handleWsClose,
+  });
+};
 
-    const video = videoElement.value;
-    const canvas = canvasElement.value;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+const handleDetectionResult = (data) => {
+  renderAnnotatedFrame(data.annotatedFrame);
+  fps.value = data.fps;
+  frameCount.value = data.frameCount;
+  inferenceTime.value = data.inferenceTime;
+  objectCount.value = data.objectCount;
+  detections.value = data.detections;
+};
 
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+const handleConfigOk = () => {
+  requestAnimationFrame(sendSingleFrame);
+};
 
-    const base64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+const handleWsError = (msg) => {
+  errorMessage.value = msg;
+};
 
-    websocket.send(JSON.stringify({ type: "frame", data: base64 }));
-  }, 100);
+const handleWsClose = () => {
+  isConnecting.value = false;
+};
+
+const sendSingleFrame = () => {
+  if (!cameraWs || !cameraWs.isConnected) return;
+  if (!videoElement.value || videoElement.value.readyState < 2) return;
+
+  const targetSize = config.mode === "cpu" ? 416 : 640;
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = targetSize;
+  tempCanvas.height = targetSize;
+  const ctx = tempCanvas.getContext("2d");
+
+  const vw = videoElement.value.videoWidth;
+  const vh = videoElement.value.videoHeight;
+  const scale = Math.min(targetSize / vw, targetSize / vh);
+  const x = (targetSize - vw * scale) / 2;
+  const y = (targetSize - vh * scale) / 2;
+  ctx.drawImage(videoElement.value, x, y, vw * scale, vh * scale);
+
+  const dataUrl = tempCanvas.toDataURL("image/jpeg", 0.6);
+  const base64Data = dataUrl.split(",")[1];
+
+  cameraWs.sendFrame(base64Data);
+};
+
+const renderAnnotatedFrame = (annotatedBase64) => {
+  if (!canvasElement.value) return;
+
+  const img = new Image();
+  img.onload = () => {
+    const ctx = canvasElement.value.getContext("2d");
+    canvasElement.value.width = img.width;
+    canvasElement.value.height = img.height;
+    ctx.drawImage(img, 0, 0);
+
+    requestAnimationFrame(sendSingleFrame);
+  };
+  img.src = `data:image/jpeg;base64,${annotatedBase64}`;
 };
 
 const stopDetection = () => {
+  if (cameraWs) {
+    cameraWs.close();
+    cameraWs = null;
+  }
+
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop());
+    mediaStream = null;
+  }
+
   isRunning.value = false;
-  annotatedFrame.value = "";
+  isConnecting.value = false;
+  fps.value = 0;
+  inferenceTime.value = 0;
+  objectCount.value = 0;
   detections.value = [];
 
-  if (sendInterval) {
-    clearInterval(sendInterval);
-    sendInterval = null;
-  }
-
-  if (websocket) {
-    try {
-      websocket.send(JSON.stringify({ type: "close" }));
-    } catch (e) {}
-    websocket.close();
-    websocket = null;
-  }
-
-  if (stream.value) {
-    stream.value.getTracks().forEach((track) => track.stop());
-    stream.value = null;
-  }
-
-  if (videoElement.value) {
-    videoElement.value.srcObject = null;
+  if (canvasElement.value) {
+    const ctx = canvasElement.value.getContext("2d");
+    ctx.clearRect(0, 0, canvasElement.value.width, canvasElement.value.height);
   }
 
   ElMessage.info(t("camera.stopped"));
@@ -354,23 +313,10 @@ onUnmounted(() => {
   aspect-ratio: 4/3;
 }
 
-.camera-video {
-  position: absolute;
-  top: 0;
-  left: 0;
+.camera-canvas {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-}
-
-.annotated-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
+  display: block;
 }
 
 .camera-placeholder {
@@ -394,26 +340,6 @@ onUnmounted(() => {
 
   p {
     font-size: 14px;
-  }
-}
-
-.camera-ready {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.3);
-  color: #fff;
-
-  p {
-    font-size: 16px;
-    background: rgba(0, 0, 0, 0.6);
-    padding: 10px 20px;
-    border-radius: 8px;
   }
 }
 
