@@ -96,6 +96,51 @@ class ChangePassword(BaseModel):
     new_password: str = Field(..., min_length=6, max_length=100, description="新密码")
 
 
+class ForgotPasswordRequest(BaseModel):
+    """忘记密码请求"""
+
+    email: str = Field(..., description="注册邮箱")
+
+
+class ResetPasswordRequest(BaseModel):
+    """重置密码请求"""
+
+    token: str = Field(..., description="重置令牌")
+    new_password: str = Field(..., min_length=6, max_length=100, description="新密码")
+
+
+class ProfileUpdate(BaseModel):
+    """修改个人信息"""
+
+    email: Optional[str] = Field(None, description="邮箱（唯一性校验）")
+    phone: Optional[str] = Field(None, max_length=20, description="手机号")
+
+
+class AvatarResponse(BaseModel):
+    """头像上传响应"""
+
+    avatar_url: str = Field(..., description="头像 URL")
+
+
+class UserResponseWithStats(BaseModel):
+    """用户详情响应（含检测统计数据）"""
+
+    id: int
+    username: str
+    email: str
+    phone: Optional[str] = None
+    avatar: Optional[str] = None
+    is_active: bool
+    is_superuser: bool
+    roles: list[str] = []
+    last_login_at: Optional[datetime] = None
+    created_at: datetime
+    # 检测统计数据
+    total_detections: int = 0
+    total_images_detected: int = 0
+    total_objects_found: int = 0
+
+
 # --- 角色权限 ---
 
 
