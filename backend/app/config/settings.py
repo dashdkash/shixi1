@@ -87,6 +87,12 @@ class Settings(BaseSettings):
     
     # 前端地址（用于生成重置链接）
     FRONTEND_URL: str = "http://localhost:5173"
+    # ── RAG 配置 ──────────────────────────────────────
+    EMBEDDING_MODEL: str = "text-embedding-v3"
+    EMBEDDING_DIM: int = 1024
+    RAG_CHUNK_SIZE: int = 500
+    RAG_CHUNK_OVERLAP: int = 50
+    RAG_TOP_K: int = 5
 
     @property
     def cors_origins_list(self) -> list:
