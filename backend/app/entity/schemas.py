@@ -72,6 +72,7 @@ class UserResponse(BaseModel):
     avatar: Optional[str] = None
     is_active: bool
     is_superuser: bool
+    email_verified: bool = False
     roles: list[str] = []
     last_login_at: Optional[datetime] = None
     created_at: datetime
@@ -144,6 +145,7 @@ class UserResponseWithStats(BaseModel):
     avatar: Optional[str] = None
     is_active: bool
     is_superuser: bool
+    email_verified: bool = False
     roles: list[str] = []
     last_login_at: Optional[datetime] = None
     created_at: datetime
