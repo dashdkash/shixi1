@@ -13,6 +13,9 @@ from pydantic_settings import (
 class Settings(BaseSettings):
     """应用全局配置"""
 
+    # ── 训练配置 ──────────────────────────────────────
+    TRAIN_OUTPUT_DIR: str = "runs/train"  # 训练输出目录（模型权重、日志等）
+    DATASET_BASE_DIR: str = "datasets"    # 数据集根目录
     APP_NAME: str = "RSOD Agent Platform"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
@@ -77,6 +80,12 @@ class Settings(BaseSettings):
     
     # 前端地址（用于生成重置链接）
     FRONTEND_URL: str = "http://localhost:5173"
+    # ── RAG 配置 ──────────────────────────────────────
+    EMBEDDING_MODEL: str = "text-embedding-v3"
+    EMBEDDING_DIM: int = 1024
+    RAG_CHUNK_SIZE: int = 500
+    RAG_CHUNK_OVERLAP: int = 50
+    RAG_TOP_K: int = 5
 
     @property
     def cors_origins_list(self) -> list:
