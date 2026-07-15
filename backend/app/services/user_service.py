@@ -17,7 +17,7 @@ class UserService:
     """用户服务"""
 
     @staticmethod
-    def register(db: Session, username: str, email: str, password: str) -> User:
+    def register(db: Session, username: str, email: str, password: str, require_verification: bool = False) -> User:
         """
         用户注册
 
@@ -26,6 +26,7 @@ class UserService:
             username: 用户名
             email: 邮箱
             password: 明文密码
+            require_verification: 是否需要邮箱验证
 
         Returns:
             新创建的用户对象
@@ -48,7 +49,14 @@ class UserService:
             username=username,
             email=email,
             hashed_password=hash_password(password),
+            email_verified=not require_verification,  # 开发环境直接验证
         )
+        
+        # 如果需要验证，生成验证令牌
+        if require_verification:
+            new_user.verification_token = secrets.token_urlsafe(32)
+            new_user.verification_token_expires_at = datetime.now() + timedelta(hours=24)
+        
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
@@ -63,7 +71,59 @@ class UserService:
         return new_user
 
     @staticmethod
-    def login(db: Session, username: str, password: str) -> User:
+    def verify_email(db: Session, token: str) -> bool:
+        """
+        验证邮箱
+
+        Args:
+            db: 数据库会话
+            token: 验证令牌
+
+        Returns:
+            是否验证成功
+        """
+        user = db.query(User).filter(User.verification_token == token).first()
+        if not user:
+            return False
+
+        # 检查令牌是否过期
+        if user.verification_token_expires_at and user.verification_token_expires_at < datetime.now():
+            return False
+
+        # 更新验证状态
+        user.email_verified = True
+        user.verification_token = None
+        user.verification_token_expires_at = None
+        db.commit()
+
+        return True
+
+    @staticmethod
+    def resend_verification_email(db: Session, email: str) -> str | None:
+        """
+        重新发送验证邮件
+
+        Args:
+            db: 数据库会话
+            email: 用户邮箱
+
+        Returns:
+            验证令牌，如果用户不存在或已验证返回 None
+        """
+        user = db.query(User).filter(User.email == email).first()
+        if not user or user.email_verified:
+            return None
+
+        # 生成新的验证令牌
+        token = secrets.token_urlsafe(32)
+        user.verification_token = token
+        user.verification_token_expires_at = datetime.now() + timedelta(hours=24)
+        db.commit()
+
+        return token
+
+    @staticmethod
+    def login(db: Session, username: str, password: str, require_verification: bool = False) -> User:
         """
         用户登录
 
@@ -71,12 +131,13 @@ class UserService:
             db: 数据库会话
             username: 用户名
             password: 明文密码
+            require_verification: 是否要求邮箱已验证
 
         Returns:
             登录成功的用户对象
 
         Raises:
-            HTTPException: 用户名或密码错误
+            HTTPException: 用户名或密码错误，或邮箱未验证
         """
         user = db.query(User).filter(User.username == username).first()
         if not user:
@@ -84,6 +145,10 @@ class UserService:
 
         if not verify_password(password, user.hashed_password):  # type: ignore
             raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+        # 检查邮箱是否已验证（生产环境）
+        if require_verification and not user.email_verified:
+            raise HTTPException(status_code=403, detail="邮箱未验证，请先验证邮箱")
 
         # 更新最后登录时间
         user.last_login_at = datetime.now()

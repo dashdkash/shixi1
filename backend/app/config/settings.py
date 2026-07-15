@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
     # 通义千问（推荐，国内访问快）
-    QWEN_API_KEY: str = "sk-ws-H.EDDLDYP.rro7.MEUCIDsY8jq-R0stR9XVv7zST3eXILW2h-x9SRoCxhtaKqkbAiEA-yZqLlo0sc0PoVec9f5qvoXHjGc2iEw76_mQ8SdaQfQ"
+    QWEN_API_KEY: str = "sk-your-qwen-api-key"
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_MODEL: str = "qwen-plus"
 
@@ -76,6 +76,17 @@ class Settings(BaseSettings):
     RAG_CHUNK_SIZE: int = 500
     RAG_CHUNK_OVERLAP: int = 50
     RAG_TOP_K: int = 5
+
+    # ── 邮件配置 ──────────────────────────────────────
+    SMTP_HOST: str = "smtp.example.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = "noreply@example.com"
+    SMTP_PASSWORD: str = "your-smtp-password"
+    SMTP_FROM_NAME: str = "RSOD Agent Platform"
+    SMTP_USE_TLS: bool = True
+    
+    # 前端地址（用于生成重置链接）
+    FRONTEND_URL: str = "http://localhost:5173"
 
     @property
     def cors_origins_list(self) -> list:
