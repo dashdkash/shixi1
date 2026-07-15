@@ -10,26 +10,23 @@ from email.mime.multipart import MIMEMultipart
 from app.config.settings import settings
 
 
-def send_password_reset_email(to_email: str, reset_token: str) -> bool:
+def send_password_reset_email(to_email: str, verification_code: str) -> bool:
     """
-    发送密码重置邮件
+    发送密码重置邮件（包含验证码）
 
     Args:
         to_email: 收件人邮箱
-        reset_token: 重置令牌
+        verification_code: 6位验证码
 
     Returns:
         bool: 是否发送成功
     """
     try:
-        # 构建重置链接
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
-
         # 创建邮件对象
         msg = MIMEMultipart()
         msg['From'] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
         msg['To'] = to_email
-        msg['Subject'] = "密码重置 - RSOD Agent Platform"
+        msg['Subject'] = "密码重置验证码 - RSOD Agent Platform"
 
         # 邮件正文（HTML 格式）
         html_body = f"""
@@ -38,20 +35,14 @@ def send_password_reset_email(to_email: str, reset_token: str) -> bool:
             <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #409eff;">密码重置</h2>
                 <p>您好，</p>
-                <p>我们收到了您的密码重置请求。请点击下方按钮重置密码：</p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="{reset_url}" 
-                       style="background-color: #409eff; color: white; padding: 12px 30px; 
-                              text-decoration: none; border-radius: 5px; display: inline-block;">
-                        重置密码
-                    </a>
+                <p>我们收到了您的密码重置请求。请使用以下验证码完成密码重置：</p>
+                <div style="margin: 30px 0; text-align: center;">
+                    <div style="display: inline-block; background-color: #f5f5f5; padding: 15px 30px; border-radius: 8px;">
+                        <span style="font-size: 32px; font-weight: bold; color: #409eff; letter-spacing: 4px;">{verification_code}</span>
+                    </div>
                 </div>
-                <p>或者，您可以复制以下链接到浏览器中打开：</p>
-                <p style="background-color: #f5f5f5; padding: 10px; border-radius: 3px; word-break: break-all;">
-                    {reset_url}
-                </p>
                 <p style="color: #999; font-size: 14px;">
-                    此链接将在 1 小时后失效。如果您没有请求重置密码，请忽略此邮件。
+                    此验证码将在 5 分钟后失效。如果您没有请求重置密码，请忽略此邮件。
                 </p>
                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
                 <p style="color: #999; font-size: 12px;">
@@ -94,8 +85,8 @@ def send_verification_email(to_email: str, verification_token: str) -> bool:
         bool: 是否发送成功
     """
     try:
-        # 构建验证链接
-        verify_url = f"{settings.FRONTEND_URL}/verify-email?token={verification_token}"
+        # 构建验证链接（通过后端重定向，绕过邮件客户端安全检查）
+        verify_url = f"{settings.SERVER_HOST}:{settings.SERVER_PORT}/api/auth/verify-email-redirect?token={verification_token}"
 
         # 创建邮件对象
         msg = MIMEMultipart()
@@ -110,18 +101,12 @@ def send_verification_email(to_email: str, verification_token: str) -> bool:
             <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2 style="color: #409eff;">邮箱验证</h2>
                 <p>您好，</p>
-                <p>感谢您注册 RSOD Agent Platform。请点击下方按钮验证您的邮箱：</p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="{verify_url}" 
-                       style="background-color: #409eff; color: white; padding: 12px 30px; 
-                              text-decoration: none; border-radius: 5px; display: inline-block;">
-                        验证邮箱
+                <p>感谢您注册 RSOD Agent Platform。请点击下面的链接验证您的邮箱：</p>
+                <div style="margin: 30px 0;">
+                    <a href="{verify_url}" style="color: #409eff; text-decoration: underline; font-size: 16px;">
+                        {verify_url}
                     </a>
                 </div>
-                <p>或者，您可以复制以下链接到浏览器中打开：</p>
-                <p style="background-color: #f5f5f5; padding: 10px; border-radius: 3px; word-break: break-all;">
-                    {verify_url}
-                </p>
                 <p style="color: #999; font-size: 14px;">
                     此链接将在 24 小时后失效。
                 </p>

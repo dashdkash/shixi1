@@ -174,6 +174,7 @@
 
 <script setup>
 import CameraDetection from "@/components/CameraDetection.vue";
+import { useStatsStore } from "@/stores/stats";
 import request from "@/utils/request";
 import { Close, Search, Upload } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
@@ -185,6 +186,7 @@ const fileInput = ref(null);
 const isDragover = ref(false);
 
 const route = useRoute();
+const statsStore = useStatsStore();
 
 onMounted(() => {
   const tab = route.query.tab;
@@ -349,6 +351,7 @@ const startDetection = async () => {
 
     pendingFiles.value = [];
     ElMessage.success($t("detection.detectionComplete"));
+    statsStore.fetchStats();
   } catch (error) {
     ElMessage.error($t("detection.detectionFailed"));
   } finally {

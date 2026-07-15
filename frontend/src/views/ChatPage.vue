@@ -154,17 +154,27 @@
 import { detectBatch, detectSingle, detectZip } from "@/api/detection";
 import DetectionResultCard from "@/components/DetectionResultCard.vue";
 import { useAgentStore } from "@/stores/agent";
+import { useStatsStore } from "@/stores/stats";
 import { useUserStore } from "@/stores/user";
 import { renderMarkdown } from "@/utils/markdown";
 import request from "@/utils/request";
 import { streamChat } from "@/utils/stream";
 import { ElMessage } from "element-plus";
-import { computed, getCurrentInstance, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  getCurrentInstance,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from "vue";
 import { useRouter } from "vue-router";
 
 // ── Store ──
 const agentStore = useAgentStore();
 const userStore = useUserStore();
+const statsStore = useStatsStore();
 const router = useRouter();
 
 // ── i18n ──
@@ -416,6 +426,7 @@ async function handleQuickDetect(type) {
         lastMsg.content = `检测完成！发现 ${result.total_objects} 个目标。`;
         lastMsg.loading = false;
         lastMsg.detectionResult = result;
+        statsStore.fetchStats();
       } catch (err) {
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
         lastMsg.content = "检测失败，请重试";
@@ -477,6 +488,7 @@ async function handleQuickDetect(type) {
         lastMsg.content = t("chat.batchComplete", { count: totalObjects });
         lastMsg.loading = false;
         lastMsg.detectionResult = result;
+        statsStore.fetchStats();
         console.log("[批量检测结果]", result);
       } catch (err) {
         console.error("[批量检测异常]", err);
@@ -518,6 +530,7 @@ async function handleQuickDetect(type) {
           const lastMsg = agentStore.messages[agentStore.messages.length - 1];
           lastMsg.content = `视频已上传，任务 ID: ${result.task_id}，正在后台处理中...\n\n${result.message}`;
           lastMsg.loading = false;
+          statsStore.fetchStats();
         } else {
           const lastMsg = agentStore.messages[agentStore.messages.length - 1];
           lastMsg.content = result.message || "视频检测完成";
@@ -525,6 +538,7 @@ async function handleQuickDetect(type) {
           if (result.detectionResult) {
             lastMsg.detectionResult = result.detectionResult;
           }
+          statsStore.fetchStats();
         }
       } catch (err) {
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];

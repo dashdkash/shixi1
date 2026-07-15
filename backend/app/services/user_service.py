@@ -180,6 +180,87 @@ class UserService:
         return db.query(User).filter(User.email == email).first()
 
     @staticmethod
+    def generate_reset_verification_code(db: Session, email: str) -> str | None:
+        """
+        生成密码重置验证码（6位数字）
+
+        Args:
+            db: 数据库会话
+            email: 用户邮箱
+
+        Returns:
+            验证码，如果用户不存在返回 None
+        """
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return None
+
+        import random
+        code = str(random.randint(100000, 999999))
+        
+        user.reset_verification_code = code
+        user.reset_verification_code_expires_at = datetime.now() + timedelta(minutes=5)
+        db.commit()
+
+        return code
+
+    @staticmethod
+    def verify_reset_code(db: Session, email: str, code: str) -> bool:
+        """
+        验证密码重置验证码
+
+        Args:
+            db: 数据库会话
+            email: 用户邮箱
+            code: 验证码
+
+        Returns:
+            是否验证成功
+        """
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False
+
+        if not user.reset_verification_code or user.reset_verification_code != code:
+            return False
+
+        if user.reset_verification_code_expires_at and user.reset_verification_code_expires_at < datetime.now():
+            return False
+
+        return True
+
+    @staticmethod
+    def reset_password_with_code(db: Session, email: str, code: str, new_password: str) -> bool:
+        """
+        使用验证码重置密码
+
+        Args:
+            db: 数据库会话
+            email: 用户邮箱
+            code: 验证码
+            new_password: 新密码
+
+        Returns:
+            是否重置成功
+        """
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False
+
+        if not user.reset_verification_code or user.reset_verification_code != code:
+            return False
+
+        if user.reset_verification_code_expires_at and user.reset_verification_code_expires_at < datetime.now():
+            return False
+
+        user.hashed_password = hash_password(new_password)
+        user.reset_verification_code = None
+        user.reset_verification_code_expires_at = None
+        db.commit()
+
+        return True
+
+    @staticmethod
     def generate_reset_token(db: Session, email: str) -> str | None:
         """
         生成密码重置令牌
@@ -222,6 +303,31 @@ class UserService:
 
         # 检查令牌是否过期
         if user.reset_token_expires_at and user.reset_token_expires_at < datetime.now():
+            return False
+
+        # 更新密码
+        user.hashed_password = hash_password(new_password)
+        user.reset_token = None
+        user.reset_token_expires_at = None
+        db.commit()
+
+        return True
+
+    @staticmethod
+    def reset_password_by_email(db: Session, email: str, new_password: str) -> bool:
+        """
+        通过邮箱直接重置密码
+
+        Args:
+            db: 数据库会话
+            email: 用户邮箱
+            new_password: 新密码
+
+        Returns:
+            是否重置成功
+        """
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
             return False
 
         # 更新密码

@@ -56,6 +56,9 @@
       </el-form>
 
       <div class="login-footer">
+        <router-link to="/forgot-password" class="forgot-link">
+          {{ $t("forgotPassword.title") }}
+        </router-link>
         <span>{{ $t("login.noAccount") }}</span>
         <router-link to="/register">{{ $t("login.register") }}</router-link>
       </div>
@@ -210,6 +213,12 @@ async function handleLogin() {
   text-align: center;
   font-size: 13px;
   color: $text-secondary;
+  margin-top: 16px;
+
+  .forgot-link {
+    float: left;
+    margin-left: 0;
+  }
 
   a {
     color: $primary-color;
