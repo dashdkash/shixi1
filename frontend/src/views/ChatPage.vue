@@ -159,7 +159,7 @@ import { renderMarkdown } from "@/utils/markdown";
 import request from "@/utils/request";
 import { streamChat } from "@/utils/stream";
 import { ElMessage } from "element-plus";
-import { computed, getCurrentInstance, nextTick, onMounted, ref } from "vue";
+import { computed, getCurrentInstance, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 // ── Store ──
@@ -176,6 +176,7 @@ const inputText = ref("");
 const selectedFile = ref(null);
 const messageListRef = ref(null);
 const fileInputRef = ref(null);
+const shouldAutoScroll = ref(true);
 
 // ── 计算属性 ──
 const canSend = computed(() => {
@@ -365,6 +366,14 @@ function scrollToBottom() {
   });
 }
 
+/** 处理滚动事件 */
+function handleScroll() {
+  if (!messageListRef.value) return;
+  const { scrollTop, scrollHeight, clientHeight } = messageListRef.value;
+  const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+  shouldAutoScroll.value = distanceToBottom < 100;
+}
+
 /**
  * 快捷单图检测流程：
  * 1. 用户点击"📷 单图检测"按钮
@@ -501,7 +510,7 @@ async function handleQuickDetect(type) {
       formData.append("file", file);
 
       try {
-        const result = await request.post("/api/detection/video", formData, {
+        const result = await request.post("/detection/video", formData, {
           timeout: 180000,
         });
 
@@ -546,7 +555,25 @@ function updateWelcomeMessage() {
 
 onMounted(() => {
   updateWelcomeMessage();
+  if (messageListRef.value) {
+    messageListRef.value.addEventListener("scroll", handleScroll);
+  }
 });
+
+onUnmounted(() => {
+  if (messageListRef.value) {
+    messageListRef.value.removeEventListener("scroll", handleScroll);
+  }
+});
+
+watch(
+  () => agentStore.messages.length,
+  () => {
+    if (shouldAutoScroll.value) {
+      scrollToBottom();
+    }
+  },
+);
 </script>
 
 <style lang="scss" scoped>

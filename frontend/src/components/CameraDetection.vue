@@ -26,16 +26,16 @@
         class="camera-placeholder"
       >
         <el-icon class="placeholder-icon"><VideoCamera /></el-icon>
-        <p>{{ $t("camera.noCamera") }}</p>
+        <p>{{ t("camera.noCamera") }}</p>
       </div>
 
       <div v-if="stream && !isRunning && !isConnecting" class="camera-ready">
-        <p>{{ $t("camera.ready") }}</p>
+        <p>{{ t("camera.ready") }}</p>
       </div>
 
       <div v-if="isConnecting" class="camera-connecting">
         <el-icon class="loading-icon"><Loading /></el-icon>
-        <p>{{ $t("camera.connecting") }}</p>
+        <p>{{ t("camera.connecting") }}</p>
       </div>
 
       <div class="camera-controls">
@@ -46,7 +46,7 @@
           :disabled="isRunning || isConnecting"
         >
           <el-icon><VideoPlay /></el-icon>
-          {{ $t("camera.start") }}
+          {{ t("camera.start") }}
         </el-button>
         <el-button
           type="danger"
@@ -54,32 +54,32 @@
           :disabled="!isRunning && !isConnecting"
         >
           <el-icon><VideoPause /></el-icon>
-          {{ $t("camera.stop") }}
+          {{ t("camera.stop") }}
         </el-button>
       </div>
 
       <div v-if="isRunning" class="camera-stats">
         <div class="stat-item">
-          <span class="stat-label">{{ $t("camera.fps") }}</span>
+          <span class="stat-label">{{ t("camera.fps") }}</span>
           <span class="stat-value">{{ fps.toFixed(1) }}</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">{{ $t("camera.objects") }}</span>
+          <span class="stat-label">{{ t("camera.objects") }}</span>
           <span class="stat-value">{{ objectCount }}</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">{{ $t("camera.inference") }}</span>
+          <span class="stat-label">{{ t("camera.inference") }}</span>
           <span class="stat-value">{{ inferenceTime.toFixed(2) }}ms</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">{{ $t("camera.frame") }}</span>
+          <span class="stat-label">{{ t("camera.frame") }}</span>
           <span class="stat-value">{{ frameCount }}</span>
         </div>
       </div>
     </div>
 
     <div class="config-panel">
-      <h3>{{ $t("camera.config") }}</h3>
+      <h3>{{ t("camera.config") }}</h3>
 
       <el-form :model="config" label-width="100px">
         <el-form-item :label="$t('camera.mode')">
@@ -112,7 +112,7 @@
     </div>
 
     <div v-if="detections.length > 0" class="detections-panel">
-      <h3>{{ $t("camera.detections") }} ({{ detections.length }})</h3>
+      <h3>{{ t("camera.detections") }} ({{ detections.length }})</h3>
       <div class="detections-list">
         <div
           v-for="(det, index) in detections"
@@ -147,6 +147,9 @@ import {
 } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { onUnmounted, reactive, ref } from "vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n({ useScope: "global" });
 
 const videoElement = ref(null);
 const canvasElement = ref(null);
@@ -263,7 +266,7 @@ const startDetection = async () => {
 
     websocket.onerror = (error) => {
       isConnecting.value = false;
-      errorMessage.value = $t("camera.connectionError");
+      errorMessage.value = t("camera.connectionError");
       console.error("WebSocket error:", error);
     };
 
@@ -274,7 +277,7 @@ const startDetection = async () => {
     };
   } catch (err) {
     isConnecting.value = false;
-    errorMessage.value = $t("camera.cameraError");
+    errorMessage.value = t("camera.cameraError");
     console.error("Camera access error:", err);
   }
 };
@@ -325,7 +328,7 @@ const stopDetection = () => {
     videoElement.value.srcObject = null;
   }
 
-  ElMessage.info($t("camera.stopped"));
+  ElMessage.info(t("camera.stopped"));
 };
 
 onUnmounted(() => {
