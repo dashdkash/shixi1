@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
     # 通义千问（推荐，国内访问快）
-    QWEN_API_KEY: str = "sk-ws-H.EDDLDYP.rro7.MEUCIDsY8jq-R0stR9XVv7zST3eXILW2h-x9SRoCxhtaKqkbAiEA-yZqLlo0sc0PoVec9f5qvoXHjGc2iEw76_mQ8SdaQfQ"
+    QWEN_API_KEY: str = "sk-your-qwen-api-key"
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_MODEL: str = "qwen-plus"
 
