@@ -179,6 +179,9 @@ class DetectionAgent:
         Yields:
             SSE 事件数据字典
         """
+        # 保存原始用户文本到记忆（不含图片路径，防止下轮误触发检测）
+        original_message = message
+
         if image_path:
             message = f"{message}\n[附件图片路径: {image_path}]"
 
@@ -194,9 +197,9 @@ class DetectionAgent:
         except Exception as e:
             logger.warning("加载对话历史失败: %s", str(e))
 
-        # ── Step 2: 保存用户消息到记忆 ──
+        # ── Step 2: 保存用户消息到记忆（只保存原始文本，不含图片路径） ──
         try:
-            conversation_memory.save_message(user_id, session_id, "user", message)
+            conversation_memory.save_message(user_id, session_id, "user", original_message)
         except Exception as e:
             logger.warning("保存用户消息失败: %s", str(e))
 
