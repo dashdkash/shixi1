@@ -1,33 +1,44 @@
 import vue from "@vitejs/plugin-vue";
+import http from "http";
 import path from "path";
-import net from "net";
 import { fileURLToPath } from "url";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// 自动寻找后端服务端口（从 8200 开始尝试）
-async function findBackendPort(start = 8200, end = 8300) {
-  for (let port = start; port < end; port++) {
-    try {
-      await new Promise((resolve, reject) => {
-        const socket = new net.Socket();
-        socket.setTimeout(200);
-        socket.on("connect", () => { socket.destroy(); resolve(); });
-        socket.on("timeout", () => { socket.destroy(); reject(); });
-        socket.on("error", () => { socket.destroy(); reject(); });
-        socket.connect(port, "127.0.0.1");
+// 通过 HTTP 请求 /api/health 验证是否是后端服务
+// 避免 TCP 连接误匹配 Windows 系统保留端口
+function probeBackend(port) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${port}/api/health`, { timeout: 500 }, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(json.code === 200 || json.data?.status === "healthy");
+        } catch {
+          resolve(false);
+        }
       });
-      return port;
-    } catch { /* port not in use, try next */ }
-  }
-  return start; // 回退到默认端口
+    });
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+  });
 }
 
-export default defineConfig(async () => {
-  // 优先使用环境变量，否则自动探测后端端口
-  const backendPort = process.env.VITE_BACKEND_PORT
-    ? parseInt(process.env.VITE_BACKEND_PORT)
+async function findBackendPort(start = 8200, end = 8300) {
+  for (let port = start; port < end; port++) {
+    if (await probeBackend(port)) return port;
+  }
+  return start;
+}
+
+export default defineConfig(async ({ mode }) => {
+  // 优先使用 .env 文件中的端口，否则自动探测
+  const env = loadEnv(mode, process.cwd());
+  const backendPort = env.VITE_BACKEND_PORT
+    ? parseInt(env.VITE_BACKEND_PORT)
     : await findBackendPort();
   console.log(`[vite] 后端代理端口: ${backendPort}`);
 

@@ -40,3 +40,9 @@ def search_knowledge_base(query: str) -> str:
         )
 
     return "\n\n---\n\n".join(formatted)
+
+
+# 知识库工具列表
+KNOWLEDGE_TOOLS = [
+    search_knowledge_base,
+]
