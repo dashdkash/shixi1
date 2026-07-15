@@ -1,8 +1,7 @@
 """
 知识库检索工具 — 供 LangChain Agent 调用的 @tool
 
-当用户询问目标检测相关概念、YOLO 使用方法、模型训练技巧等
-知识性问题时，Agent 会自动调用此工具从知识库中检索相关内容。
+对于用户的任何提问（不仅限于目标检测），Agent 都应调用此工具检索知识库。
 """
 
 from langchain_core.tools import tool
@@ -16,14 +15,11 @@ logger = get_logger(__name__)
 @tool
 def search_knowledge_base(query: str) -> str:
     """
-    从知识库中检索与问题相关的专业知识。
+    从知识库中检索与用户问题相关的内容。
 
-    当用户询问以下类型的问题时，应调用此工具：
-    - 目标检测相关概念（如 NMS、IoU、mAP 等）
-    - YOLO 模型的使用方法和参数配置
-    - 模型训练技巧和调参建议
-    - 数据标注和数据集相关问题
-    - 检测结果的解读和分析方法
+    重要：对于用户的任何提问（不仅限于目标检测），都应该调用此工具。
+    包括但不限于：人物、项目、技术概念、操作方法、常见问题等。
+    不要自行判断问题是否在知识库中，必须调用工具检索后再回答。
 
     Args:
         query: 检索查询，应包含问题的关键词
@@ -44,3 +40,9 @@ def search_knowledge_base(query: str) -> str:
         )
 
     return "\n\n---\n\n".join(formatted)
+
+
+# 知识库工具列表
+KNOWLEDGE_TOOLS = [
+    search_knowledge_base,
+]
