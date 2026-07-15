@@ -1,11 +1,37 @@
 import vue from "@vitejs/plugin-vue";
 import path from "path";
+import net from "net";
 import { fileURLToPath } from "url";
 import { defineConfig } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig({
+// 自动寻找后端服务端口（从 8200 开始尝试）
+async function findBackendPort(start = 8200, end = 8300) {
+  for (let port = start; port < end; port++) {
+    try {
+      await new Promise((resolve, reject) => {
+        const socket = new net.Socket();
+        socket.setTimeout(200);
+        socket.on("connect", () => { socket.destroy(); resolve(); });
+        socket.on("timeout", () => { socket.destroy(); reject(); });
+        socket.on("error", () => { socket.destroy(); reject(); });
+        socket.connect(port, "127.0.0.1");
+      });
+      return port;
+    } catch { /* port not in use, try next */ }
+  }
+  return start; // 回退到默认端口
+}
+
+export default defineConfig(async () => {
+  // 优先使用环境变量，否则自动探测后端端口
+  const backendPort = process.env.VITE_BACKEND_PORT
+    ? parseInt(process.env.VITE_BACKEND_PORT)
+    : await findBackendPort();
+  console.log(`[vite] 后端代理端口: ${backendPort}`);
+
+  return {
   plugins: [vue()],
   resolve: {
     alias: {
@@ -28,7 +54,7 @@ export default defineConfig({
     open: true,
     proxy: {
       "/api": {
-        target: "http://localhost:8200",
+        target: `http://localhost:${backendPort}`,
         changeOrigin: true,
       },
     },
@@ -48,4 +74,5 @@ export default defineConfig({
       reporter: ["text", "html"],
     },
   },
+};
 });

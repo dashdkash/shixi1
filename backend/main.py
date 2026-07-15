@@ -86,6 +86,20 @@ register_exception_handlers(app)
 
 
 if __name__ == "__main__":
+    import socket
     import uvicorn
 
-    uvicorn.run("main:app", host="127.0.0.1", port=8200, reload=True)
+    def find_free_port(start: int = 8200, end: int = 8300) -> int:
+        """从 start 开始寻找可用端口"""
+        for port in range(start, end):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(("127.0.0.1", port))
+                    return port
+                except OSError:
+                    continue
+        raise RuntimeError(f"在 {start}-{end} 范围内未找到可用端口")
+
+    port = find_free_port()
+    print(f"启动服务: http://127.0.0.1:{port}")
+    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)

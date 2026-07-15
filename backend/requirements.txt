@@ -28,6 +28,7 @@ psycopg2-binary==2.9.9  # Post greSQL数据库驱动
 pgvector==0.3.0   #PostgreSQL 向量存储扩展（RAG 用）
 langchain-text-splitters==0.3.0  # RAG 文本切片
 pypdf==5.0.0                     # RAG PDF 文档解析
+dashscope>=1.20.0                # DashScope Reranker SDK
 
 alembic==1.13.0  # Alembic 数据库迁移框架
 

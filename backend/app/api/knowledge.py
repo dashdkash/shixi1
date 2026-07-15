@@ -8,7 +8,9 @@
 
 import os
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
@@ -55,8 +57,8 @@ class SearchRequest(BaseModel):
 @router.post("/upload")
 async def upload_document(
     file: UploadFile = File(..., description="知识文档文件（PDF/TXT/MD）"),
-    title: str = None,
-    source_type: str = "upload",
+    title: Optional[str] = Form(None, description="文档标题，不传则使用文件名"),
+    source_type: str = Form("upload", description="来源类型：upload（用户上传）/ preset（系统预置）"),
     current_user=Depends(get_current_user),
 ):
     """

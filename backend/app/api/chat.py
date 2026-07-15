@@ -17,6 +17,7 @@ from app.agent.detection_agent import detection_agent
 from app.core.security import decode_access_token
 from app.database.session import SessionLocal, get_db
 from app.entity.db_models import ChatMessage, ChatSession
+from app.services.detection_service import current_user_id as user_id_ctx
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -262,6 +263,9 @@ async def chat_stream(
         db.close()
 
     async def event_stream():
+        # 设置用户上下文变量，让 detection_service 能获取到 user_id
+        user_id_ctx.set(user_id)
+
         # 先发送 session_id，让前端知道当前会话
         yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"
 
@@ -316,6 +320,9 @@ async def chat(
     """
     非流式对话接口
     """
+    # 设置用户上下文变量，让 detection_service 能获取到 user_id
+    user_id_ctx.set(current_user["id"])
+
     result = await detection_agent.chat(
         message=request.message,
         image_path=request.image_path,
