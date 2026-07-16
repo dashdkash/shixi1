@@ -2,7 +2,6 @@
 """
 FastAPI 应用入口
 """
-
 from contextlib import asynccontextmanager
 
 from app.api.auth import router as auth_router
@@ -10,6 +9,8 @@ from app.api.chat import router as chat_router  # Day 8 新增
 from app.api.detection import router as detection_router  # Day 8 新增
 from app.api.health import router as health_router
 from app.api.training import router as training_router  # 新增：训练路由
+from app.api.history import router as history_router
+from app.api.knowledge import router as knowledge_router
 from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.middleware.request_logger import RequestLogMiddleware
@@ -71,6 +72,7 @@ app.include_router(training_router)  # 新增：注册训练路由
 app.include_router(chat_router)  # Day 8 新增
 app.include_router(detection_router)  # Day 8 新增
 
+app.include_router(knowledge_router)
 
 # ===== 根路径 =====
 @app.get("/")
@@ -84,11 +86,20 @@ def root():
 
 
 if __name__ == "__main__":
+    import socket
     import uvicorn
 
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=False,
-    )
+    def find_free_port(start: int = 8200, end: int = 8300) -> int:
+        """从 start 开始寻找可用端口"""
+        for port in range(start, end):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(("127.0.0.1", port))
+                    return port
+                except OSError:
+                    continue
+        raise RuntimeError(f"在 {start}-{end} 范围内未找到可用端口")
+
+    port = find_free_port()
+    print(f"启动服务: http://127.0.0.1:{port}")
+    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)

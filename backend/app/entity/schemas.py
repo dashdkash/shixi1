@@ -71,6 +71,8 @@ class UserResponse(BaseModel):
     is_active: bool
     is_superuser: bool
     roles: List[str] = []
+    email_verified: bool = False
+    roles: list[str] = []
     last_login_at: Optional[datetime] = None
     created_at: datetime
     model_config = {"from_attributes": True}
@@ -92,10 +94,71 @@ class ChangePassword(BaseModel):
 
 
 # ---- 角色权限 ----
+class VerifyEmailRequest(BaseModel):
+    """验证邮箱请求"""
+
+    token: str = Field(..., description="验证令牌")
+
+
+class ResendVerificationRequest(BaseModel):
+    """重新发送验证邮件请求"""
+
+    email: str = Field(..., description="邮箱")
+
+
+class ForgotPasswordRequest(BaseModel):
+    """忘记密码请求"""
+
+    email: str = Field(..., description="注册邮箱")
+
+
+class ResetPasswordRequest(BaseModel):
+    """重置密码请求"""
+
+    token: str = Field(..., description="重置令牌")
+    new_password: str = Field(..., min_length=6, max_length=100, description="新密码")
+
+
+class ProfileUpdate(BaseModel):
+    """修改个人信息"""
+
+    email: Optional[str] = Field(None, description="邮箱（唯一性校验）")
+    phone: Optional[str] = Field(None, max_length=20, description="手机号")
+
+
+class AvatarResponse(BaseModel):
+    """头像上传响应"""
+
+    avatar_url: str = Field(..., description="头像 URL")
+
+
+class UserResponseWithStats(BaseModel):
+    """用户详情响应（含检测统计数据）"""
+
+    id: int
+    username: str
+    email: str
+    phone: Optional[str] = None
+    avatar: Optional[str] = None
+    is_active: bool
+    is_superuser: bool
+    email_verified: bool = False
+    roles: list[str] = []
+    last_login_at: Optional[datetime] = None
+    created_at: datetime
+    # 检测统计数据
+    total_detections: int = 0
+    total_images_detected: int = 0
+    total_objects_found: int = 0
+
+
+# --- 角色权限 ---
 
 
 class RoleResponse(BaseModel):
     """角色响应"""
+
+    model_config = {"from_attributes": True}
 
     id: int
     name: str
@@ -119,6 +182,8 @@ class RoleCreate(BaseModel):
 class PermissionResponse(BaseModel):
     """权限响应"""
 
+    model_config = {"from_attributes": True}
+
     id: int
     code: str
     name: str
@@ -128,6 +193,7 @@ class PermissionResponse(BaseModel):
 
 
 # ============================================================
+# ══════════════════════════════════════════════════════════════
 # 二、检测业务
 # ============================================================
 
@@ -149,6 +215,8 @@ class SceneCreate(BaseModel):
 class SceneResponse(BaseModel):
     """检测场景响应"""
 
+    model_config = {"from_attributes": True}
+
     id: int
     name: str
     display_name: str
@@ -167,6 +235,8 @@ class SceneResponse(BaseModel):
 
 class DetectionTaskResponse(BaseModel):
     """检测任务响应"""
+
+    model_config = {"protected_namespaces": (), "from_attributes": True}
 
     id: int
     user_id: int
@@ -188,6 +258,8 @@ class DetectionTaskResponse(BaseModel):
 
 class DetectionResultResponse(BaseModel):
     """单条检测结果响应"""
+
+    model_config = {"from_attributes": True}
 
     id: int
     task_id: int
@@ -237,6 +309,8 @@ class DetectionStatistics(BaseModel):
 class TrainingTaskCreate(BaseModel):
     """创建训练任务"""
 
+    model_config = {"protected_namespaces": ()}
+
     scene_id: int = Field(..., description="关联场景 ID")
     model_name: str = Field(default="yolov11n", description="基础模型")
     epochs: int = Field(default=100, ge=10, le=500, description="训练轮数")
@@ -250,6 +324,8 @@ class TrainingTaskCreate(BaseModel):
 
 class TrainingTaskResponse(BaseModel):
     """训练任务响应"""
+
+    model_config = {"protected_namespaces": (), "from_attributes": True}
 
     id: int
     user_id: int
@@ -275,6 +351,8 @@ class TrainingTaskResponse(BaseModel):
 class TrainingMetricResponse(BaseModel):
     """训练指标响应（单 epoch）"""
 
+    model_config = {"from_attributes": True}
+
     epoch: int
     box_loss: Optional[float] = None
     cls_loss: Optional[float] = None
@@ -293,6 +371,8 @@ class TrainingMetricResponse(BaseModel):
 class ModelVersionBrief(BaseModel):
     """模型版本简要信息"""
 
+    model_config = {"protected_namespaces": (), "from_attributes": True}
+
     id: int
     version: str
     model_name: str
@@ -305,6 +385,8 @@ class ModelVersionBrief(BaseModel):
 
 class ModelVersionResponse(BaseModel):
     """模型版本详情"""
+
+    model_config = {"protected_namespaces": (), "from_attributes": True}
 
     id: int
     scene_id: int
@@ -331,6 +413,8 @@ class ModelVersionResponse(BaseModel):
 class ModelVersionCreate(BaseModel):
     """手动上传模型版本"""
 
+    model_config = {"protected_namespaces": ()}
+
     scene_id: int
     version: str = Field(..., description="版本号")
     model_name: str = Field(..., description="模型名称")
@@ -351,6 +435,8 @@ class ChatSessionCreate(BaseModel):
 
 class ChatSessionResponse(BaseModel):
     """对话会话响应"""
+
+    model_config = {"from_attributes": True}
 
     id: int
     session_uid: str
@@ -373,6 +459,8 @@ class ChatMessageRequest(BaseModel):
 
 class ChatMessageResponse(BaseModel):
     """对话消息响应"""
+
+    model_config = {"from_attributes": True}
 
     id: int
     session_id: int
@@ -402,6 +490,8 @@ class ChatHistoryResponse(BaseModel):
 class OperationLogResponse(BaseModel):
     """操作日志响应"""
 
+    model_config = {"from_attributes": True}
+
     id: int
     user_id: Optional[int] = None
     username: Optional[str] = None
@@ -418,6 +508,7 @@ class OperationLogResponse(BaseModel):
 
 
 # ============================================================
+# ══════════════════════════════════════════════════════════════
 # 六、通用模型
 # ============================================================
 

@@ -13,14 +13,14 @@ from minio.error import S3Error
 class MinIOClient:
     """MinIO 客户端封装"""
 
-    def __init__(self):
+    def __init__(self, bucket_name: str = None):
         self.client = Minio(
             settings.MINIO_ENDPOINT,
             access_key=settings.MINIO_ACCESS_KEY,
             secret_key=settings.MINIO_SECRET_KEY,
             secure=settings.MINIO_SECURE,
         )
-        self.bucket_name = settings.MINIO_BUCKET
+        self.bucket_name = bucket_name or settings.MINIO_BUCKET
         self._ensure_bucket()
 
     def _ensure_bucket(self):

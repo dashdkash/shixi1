@@ -14,9 +14,11 @@ from datetime import datetime
 from typing import Optional
 
 from app.agent.detection_agent import detection_agent
+from app.agent.memory import conversation_memory
 from app.core.security import decode_access_token
 from app.database.session import SessionLocal, get_db
 from app.entity.db_models import ChatMessage, ChatSession
+from app.services.detection_service import current_user_id as user_id_ctx
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -191,6 +193,22 @@ async def delete_session(
         db.close()
 
 
+@router.post("/clear")
+async def clear_session(
+    session_id: int,
+    current_user=Depends(get_current_user),
+):
+    """
+    清空指定会话的 Redis 对话历史
+
+    注意：DB 中的会话和消息记录不受影响，仅清除 Redis 中的 Agent 记忆。
+    """
+    user_id = current_user["id"]
+    conversation_memory.clear_session(user_id, str(session_id))
+    logger.info("清空会话历史: session_id=%d, user_id=%d", session_id, user_id)
+    return {"message": f"会话 {session_id} 的对话记忆已清空"}
+
+
 # ══════════════════════════════════════════════════════════════
 # 对话消息接口
 # ══════════════════════════════════════════════════════════════
@@ -262,12 +280,17 @@ async def chat_stream(
         db.close()
 
     async def event_stream():
+        # 设置用户上下文变量，让 detection_service 能获取到 user_id
+        user_id_ctx.set(user_id)
+
         # 先发送 session_id，让前端知道当前会话
         yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"
 
         full_content = ""
         async for event in detection_agent.chat_stream(
             message=request.message,
+            user_id=user_id or 0,
+            session_id=str(session_id),
             image_path=request.image_path,
         ):
             if event.get("type") == "text_chunk":
@@ -316,6 +339,9 @@ async def chat(
     """
     非流式对话接口
     """
+    # 设置用户上下文变量，让 detection_service 能获取到 user_id
+    user_id_ctx.set(current_user["id"])
+
     result = await detection_agent.chat(
         message=request.message,
         image_path=request.image_path,

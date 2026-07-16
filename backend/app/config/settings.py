@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     """应用全局配置"""
 
     # ---- 应用基础配置 ----
+    # ── 训练配置 ──────────────────────────────────────
+    TRAIN_OUTPUT_DIR: str = "runs/train"  # 训练输出目录（模型权重、日志等）
+    DATASET_BASE_DIR: str = "datasets"    # 数据集根目录
     APP_NAME: str = "RSOD Agent Platform"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
@@ -48,12 +51,13 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "rsod-agent-images"
+    MINIO_AVATAR_BUCKET: str = "rsod-agent-avatars"
     MINIO_SECURE: bool = False
 
     # ---- JWT 认证配置 ----
     JWT_SECRET_KEY: str = "rsod-dev-secret-key-2026"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24小时
 
     # ---- CORS 配置 ----
     ALLOWED_ORIGINS: str = (
@@ -75,6 +79,31 @@ class Settings(BaseSettings):
     USE_LOCAL_LLM: bool = False
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:7b"
+    # 通义千问（推荐，国内访问快）
+    QWEN_API_KEY: str = "sk-your-qwen-api-key"
+    QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    QWEN_MODEL: str = "qwen-plus"
+
+    # ── RAG 配置 ──────────────────────────────────────
+    EMBEDDING_MODEL: str = "text-embedding-v3"
+    EMBEDDING_DIM: int = 1024
+    RAG_CHUNK_SIZE: int = 500
+    RAG_CHUNK_OVERLAP: int = 50
+    RAG_TOP_K: int = 5
+    RERANKER_MODEL: str = "gte-rerank"  # DashScope 重排模型
+    RERANKER_TOP_N: int = 3  # 重排后保留的条数（<= RAG_TOP_K）
+    RAG_ENABLE_RERANK: bool = True  # 是否启用重排
+
+    # ── 邮件配置 ──────────────────────────────────────
+    SMTP_HOST: str = "smtp.example.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = "noreply@example.com"
+    SMTP_PASSWORD: str = "your-smtp-password"
+    SMTP_FROM_NAME: str = "RSOD Agent Platform"
+    SMTP_USE_TLS: bool = True
+    
+    # 前端地址（用于生成重置链接）
+    FRONTEND_URL: str = "http://localhost:5173"
 
     @property
     def cors_origins_list(self) -> list[str]:

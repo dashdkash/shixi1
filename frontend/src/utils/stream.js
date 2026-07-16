@@ -2,17 +2,28 @@
  * SSE (Server-Sent Events) 流式处理工具
  * 用于 Day 11 智能体对话的流式渲染
  *
- * 使用方式：
- *   const stop = streamChat(
- *     '/api/chat/stream',
- *     { message: '你好' },
- *     {
- *       onMessage: (chunk) => { content += chunk },
- *       onDone: () => { console.log('完成') },
- *       onError: (err) => { console.error(err) },
- *     }
- *   )
+ * 支持的事件类型：
+ *   - thinking: Agent 正在思考
+ *   - tool_start: 开始调用工具
+ *   - tool_end: 工具调用完成
+ *   - text_chunk: LLM 回复文本片段
+ *   - done: 对话完成
+ *   - error: 出错
  */
+
+/**
+ * 工具名称中文映射
+ */
+export const TOOL_NAME_MAP = {
+  detect_single_image: "单图检测",
+  detect_batch_images: "批量检测",
+  detect_zip_images_file: "ZIP 检测",
+  detect_video_file: "视频检测",
+  search_knowledge_base: "知识库检索",
+  query_detection_stats: "统计查询",
+  query_detection_history: "历史查询",
+  query_user_list: "用户查询",
+};
 
 /**
  * 发起 SSE 流式请求

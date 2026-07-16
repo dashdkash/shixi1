@@ -42,11 +42,32 @@
             <span></span>
           </el-avatar>
           <div class="message-bubble assistant-bubble">
+            <!-- thinking 指示器 -->
+            <div v-if="msg.thinking" class="thinking-indicator">
+              <span class="thinking-dot"></span>
+              <span class="thinking-text">正在思考...</span>
+            </div>
+
+            <!-- 工具调用状态卡片 -->
+            <div v-if="msg.toolCalls && msg.toolCalls.length > 0" class="tool-calls">
+              <div
+                v-for="(tc, idx) in msg.toolCalls"
+                :key="idx"
+                :class="['tool-call-item', { 'is-loading': tc.status === 'loading' }]"
+              >
+                <span v-if="tc.status === 'loading'" class="tool-icon tool-loading">⟳</span>
+                <span v-else class="tool-icon tool-done">✓</span>
+                <span class="tool-name">{{ getToolName(tc.tool) }}</span>
+                <span v-if="tc.summary" class="tool-summary">{{ tc.summary }}</span>
+              </div>
+            </div>
+
             <div
+              v-if="msg.content"
               class="message-content markdown-body"
               v-html="renderMarkdown(msg.content)"
             ></div>
-            <div v-if="msg.loading && !msg.content" class="typing-indicator">
+            <div v-if="msg.loading && !msg.content && !msg.thinking" class="typing-indicator">
               <span></span><span></span><span></span>
             </div>
 
@@ -57,8 +78,8 @@
           </div>
         </div>
 
-        <!-- 工具调用提示 -->
-        <div v-if="msg.toolCall" class="tool-call-info">
+        <!-- 工具调用提示（兼容旧格式） -->
+        <div v-if="msg.toolCall && (!msg.toolCalls || msg.toolCalls.length === 0)" class="tool-call-info">
           <el-tag size="small" type="info">
             🔧 调用工具: {{ msg.toolCall.tool }}
           </el-tag>
@@ -143,9 +164,14 @@ import { useAgentStore } from "@/stores/agent";
 import { useUserStore } from "@/stores/user";
 import { renderMarkdown } from "@/utils/markdown";
 import request from "@/utils/request";
-import { streamChat } from "@/utils/stream";
+import { streamChat, TOOL_NAME_MAP } from "@/utils/stream";
 import { ElMessage } from "element-plus";
 import { computed, nextTick, onMounted, ref } from "vue";
+
+/** 工具名称中文映射 */
+function getToolName(toolName) {
+  return TOOL_NAME_MAP[toolName] || toolName;
+}
 
 // ── Store ──
 const agentStore = useAgentStore();
@@ -190,6 +216,8 @@ async function sendMessage() {
     role: "assistant",
     content: "",
     loading: true,
+    thinking: false,
+    toolCalls: [],
   });
 
   // 滚动到底部
@@ -227,27 +255,59 @@ async function sendMessage() {
   const stop = streamChat("/api/chat/stream", requestBody, {
     onMessage: (data) => {
       // 调试日志：查看收到的所有 SSE 事件
-      console.log("[SSE事件]", data.type, data.type === "tool_result" ? data : "");
+      console.log("[SSE事件]", data.type, data.type === "tool_end" || data.type === "tool_result" ? data : "");
 
       if (data.type === "session_id") {
         // 后端返回当前会话 ID，保存到 store
         agentStore.currentSessionId = data.session_id;
         console.log("[会话ID]", data.session_id);
+      } else if (data.type === "thinking") {
+        // Agent 正在思考 — 显示 thinking 指示器
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        lastMsg.thinking = true;
+        scrollToBottom();
       } else if (data.type === "text_chunk") {
+        // 收到第一个文本 chunk 时，关闭 thinking 状态
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        if (lastMsg.thinking) {
+          lastMsg.thinking = false;
+        }
         fullContent += data.content;
         agentStore.updateLastAssistantMessage(fullContent);
         scrollToBottom();
-      } else if (data.type === "tool_call") {
-        // 工具调用中，更新最后一条 AI 消息的工具信息
+      } else if (data.type === "tool_call" || data.type === "tool_start") {
+        // 工具开始调用 — 添加到 toolCalls 数组
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        if (lastMsg.thinking) lastMsg.thinking = false;
+        if (!lastMsg.toolCalls) lastMsg.toolCalls = [];
+        lastMsg.toolCalls.push({
+          tool: data.tool,
+          status: "loading",
+          input: data.input,
+          summary: "",
+        });
+        // 兼容旧格式
         lastMsg.toolCall = { tool: data.tool, input: data.input };
-      } else if (data.type === "tool_result") {
+        scrollToBottom();
+      } else if (data.type === "tool_result" || data.type === "tool_end") {
         // 工具调用返回结果
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-        console.log("[工具结果] tool:", data.tool, "result长度:", data.result?.length);
+        const resultData = data.result || data.summary || "";
+        console.log("[工具结果] tool:", data.tool, "result长度:", resultData?.length);
+
+        // 更新 toolCalls 数组中对应工具的状态
+        if (lastMsg.toolCalls && lastMsg.toolCalls.length > 0) {
+          const tc = lastMsg.toolCalls.find(
+            (t) => t.tool === data.tool && t.status === "loading"
+          );
+          if (tc) {
+            tc.status = "done";
+            tc.summary = data.summary || "";
+          }
+        }
+
         try {
-          const result = JSON.parse(data.result);
-          console.log("[工具结果解析]", "total_objects:", result.total_objects, "detections:", result.detections?.length);
+          const result = JSON.parse(resultData);
           if (result.detections) {
             // 有检测结果，设置到消息中
             lastMsg.detectionResult = result;
@@ -255,15 +315,20 @@ async function sendMessage() {
             console.log("[检测结果卡片已设置]", lastMsg.detectionResult);
           }
         } catch (e) {
-          console.warn("[工具结果解析失败]", e.message, "原始数据:", data.result?.substring(0, 200));
-          // 非检测结果 JSON，作为普通文本
-          lastMsg.content += `\n[工具结果: ${data.result?.substring(0, 100)}...]`;
+          console.warn("[工具结果解析失败]", e.message, "原始数据:", resultData?.substring(0, 200));
         }
         scrollToBottom();
+      } else if (data.type === "done") {
+        // Agent 回复完成
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        lastMsg.loading = false;
+        lastMsg.thinking = false;
+        console.log("[完成] 回复长度:", data.full_text?.length);
       } else if (data.type === "error") {
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
         lastMsg.content = data.content;
         lastMsg.loading = false;
+        lastMsg.thinking = false;
         lastMsg.error = true;
       }
     },
@@ -659,6 +724,98 @@ onMounted(() => {
   font-size: 12px;
   color: #409eff;
   border: 1px solid #e3f2fd;
+}
+
+/* ── Thinking 指示器 ── */
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+
+  .thinking-dot {
+    width: 8px;
+    height: 8px;
+    background: #409eff;
+    border-radius: 50%;
+    animation: thinking-pulse 1.4s infinite ease-in-out;
+  }
+
+  .thinking-text {
+    font-size: 13px;
+    color: #909399;
+  }
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ── 工具调用状态卡片 ── */
+.tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.tool-call-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #f0f9ff;
+  border: 1px solid #d9ecff;
+  border-radius: 8px;
+  font-size: 12px;
+  transition: all 0.3s;
+
+  &.is-loading {
+    background: #fdf6ec;
+    border-color: #faecd8;
+  }
+}
+
+.tool-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: bold;
+
+  &.tool-loading {
+    background: #e6a23c;
+    color: #fff;
+    animation: spin 1s linear infinite;
+  }
+
+  &.tool-done {
+    background: #67c23a;
+    color: #fff;
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.tool-name {
+  font-weight: 500;
+  color: #303133;
+}
+
+.tool-summary {
+  color: #909399;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
 }
 
 .attach-btn {

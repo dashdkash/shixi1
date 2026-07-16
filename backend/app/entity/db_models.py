@@ -26,6 +26,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 
 # ============================================================
 # 一、用户与权限（RBAC）
@@ -47,6 +48,11 @@ class User(Base):
     avatar = Column(String(500), nullable=True, comment="头像 URL")
     is_active = Column(Boolean, default=True, comment="是否启用")
     is_superuser = Column(Boolean, default=False, comment="是否超级管理员")
+    email_verified = Column(Boolean, default=False, comment="邮箱是否已验证")
+    verification_token = Column(String(100), nullable=True, index=True, comment="邮箱验证令牌")
+    verification_token_expires_at = Column(DateTime, nullable=True, comment="验证令牌过期时间")
+    reset_token = Column(String(100), nullable=True, index=True, comment="密码重置令牌")
+    reset_token_expires_at = Column(DateTime, nullable=True, comment="重置令牌过期时间")
     last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
     updated_at = Column(
@@ -574,3 +580,67 @@ class OperationLog(Base):
 
     # 关联
     user = relationship("User", back_populates="operation_logs")
+
+
+# ══════════════════════════════════════════════════════════════
+# 六、知识库（RAG）
+# ══════════════════════════════════════════════════════════════
+
+
+class KnowledgeDocument(Base):
+    """知识文档表 — 管理上传或预置的知识文档"""
+
+    __tablename__ = "knowledge_documents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String(200), nullable=False, comment="文档标题")
+    file_type = Column(
+        String(20), nullable=False, comment="文件类型：pdf/txt/md"
+    )
+    file_path = Column(String(500), nullable=True, comment="原始文件路径")
+    chunk_count = Column(Integer, default=0, comment="切片数量")
+    source_type = Column(
+        String(20),
+        default="upload",
+        comment="来源类型：upload（用户上传）/ preset（系统预置）",
+    )
+    uploaded_by = Column(
+        Integer, ForeignKey("users.id"), nullable=True, comment="上传人"
+    )
+    created_at = Column(DateTime, default=datetime.now, comment="创建时间")
+
+    # 关联
+    chunks = relationship(
+        "KnowledgeChunk",
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
+
+
+class KnowledgeChunk(Base):
+    """知识片段表 — 存储文档切片及其向量"""
+
+    __tablename__ = "knowledge_chunks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    document_id = Column(
+        Integer,
+        ForeignKey("knowledge_documents.id"),
+        nullable=False,
+        index=True,
+        comment="所属文档",
+    )
+    content = Column(Text, nullable=False, comment="片段文本内容")
+    metadata_ = Column(
+        "metadata",
+        JSON,
+        nullable=True,
+        comment="片段元数据（页码、章节等）",
+    )
+    embedding = Column(
+        Vector(1024), nullable=False, comment="文本向量（text-embedding-v3）"
+    )
+    created_at = Column(DateTime, default=datetime.now, comment="创建时间")
+
+    # 关联
+    document = relationship("KnowledgeDocument", back_populates="chunks")
