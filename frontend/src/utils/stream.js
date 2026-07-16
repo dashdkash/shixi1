@@ -56,6 +56,18 @@ export function streamChat(url, body, callbacks) {
   })
     .then(async (response) => {
       if (!response.ok) {
+        // 401：Token 过期或无效，清除用户信息并跳转登录页
+        if (response.status === 401) {
+          const { ElMessage } = await import("element-plus");
+          const [{ useUserStore }, { default: router }] = await Promise.all([
+            import("@/stores/user"),
+            import("@/router"),
+          ]);
+          ElMessage.error("登录已过期，请重新登录");
+          useUserStore().logout();
+          router.push("/login");
+          return;
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 

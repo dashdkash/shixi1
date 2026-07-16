@@ -8,6 +8,22 @@ import { defineStore } from "pinia";
 const TOKEN_KEY = "rsod_token";
 const USER_KEY = "rsod_user";
 
+/**
+ * 解析 JWT Token 中的 exp 字段，判断是否已过期
+ * @param {string} token
+ * @returns {boolean} true = 未过期，false = 已过期或无法解析
+ */
+function isTokenValid(token) {
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    // exp 为 Unix 时间戳（秒），留 30 秒缓冲
+    return payload.exp * 1000 > Date.now() + 30000;
+  } catch {
+    return false;
+  }
+}
+
 export const useUserStore = defineStore("user", {
   state: () => ({
     // JWT Token
@@ -17,8 +33,8 @@ export const useUserStore = defineStore("user", {
   }),
 
   getters: {
-    /** 是否已登录 */
-    isLoggedIn: (state) => !!state.token,
+    /** 是否已登录（同时检查 Token 是否过期） */
+    isLoggedIn: (state) => !!state.token && isTokenValid(state.token),
 
     /** 用户名 */
     username: (state) => state.user?.username || "",

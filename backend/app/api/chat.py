@@ -13,7 +13,8 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from app.agent.detection_agent import detection_agent
+from app.agent.detection_agent import detection_agent  # 保留用于非流式接口
+from app.agent.graph import build_multi_agent_graph
 from app.agent.memory import conversation_memory
 from app.core.security import decode_access_token
 from app.database.session import SessionLocal, get_db
@@ -25,6 +26,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from langchain_core.messages import AIMessage, HumanMessage
 
 from app.core.logger import get_logger
 
@@ -236,12 +238,16 @@ async def chat_stream(
     current_user=Depends(get_current_user_optional),
 ):
     """
-    流式对话接口 — 调用真实的 DetectionAgent
+    流式对话接口 — LangGraph 多 Agent 协作
 
     通过 SSE 返回 Agent 的思考过程、工具调用和最终结果
     同时持久化会话和消息到数据库
     """
     user_id = current_user["id"] if current_user else None
+
+    # 未登录用户不允许创建对话会话
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录后再使用对话功能")
 
     # ── 创建或获取会话 ──
     db = SessionLocal()
@@ -286,16 +292,85 @@ async def chat_stream(
         # 先发送 session_id，让前端知道当前会话
         yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"
 
-        full_content = ""
-        async for event in detection_agent.chat_stream(
-            message=request.message,
-            user_id=user_id or 0,
-            session_id=str(session_id),
-            image_path=request.image_path,
-        ):
-            if event.get("type") == "text_chunk":
-                full_content += event.get("content", "")
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        # ── 加载对话历史，构建 LangGraph 初始状态 ──
+        from app.agent.memory import conversation_memory as mem
+        from langchain_core.messages import AIMessage as _AI, HumanMessage as _HM
+
+        graph_messages = []
+        try:
+            history = mem.load_history(user_id or 0, str(session_id))
+            for m in history:
+                if m["role"] == "user":
+                    graph_messages.append(_HM(content=m["content"]))
+                elif m["role"] == "ai":
+                    graph_messages.append(_AI(content=m["content"]))
+        except Exception as e:
+            logger.warning("加载对话历史失败: %s", e)
+
+        # 将当前用户消息加入状态（附带图片路径）
+        user_text = request.message
+        if request.image_path:
+            user_text = f"{user_text}\n[附件图片路径: {request.image_path}]"
+        graph_messages.append(_HM(content=user_text))
+
+        # 保存用户原始消息到 Redis（不含图片路径，防止下轮误触发）
+        try:
+            mem.save_message(user_id or 0, str(session_id), "user", request.message)
+        except Exception as e:
+            logger.warning("保存用户消息失败: %s", e)
+
+        # ── 通过 LangGraph 多 Agent 状态图流式执行 ──
+        graph = build_multi_agent_graph()
+        full_text = ""
+
+        # thinking 事件
+        yield f"data: {json.dumps({'type': 'thinking', 'content': '正在分析您的请求...'})}\n\n"
+
+        try:
+            async for event in graph.astream_events(
+                {"messages": graph_messages},
+                version="v2",
+            ):
+                kind = event.get("event", "")
+
+                if kind == "on_chat_model_stream":
+                    chunk = event.get("data", {}).get("chunk")
+                    if chunk and hasattr(chunk, "content") and chunk.content:
+                        full_text += chunk.content
+                        yield (
+                            f"data: {json.dumps({'type': 'text_chunk', 'content': chunk.content}, ensure_ascii=False)}\n\n"
+                        )
+
+                elif kind == "on_tool_start":
+                    tool_name = event.get("name", "")
+                    tool_input = event.get("data", {}).get("input", {})
+                    logger.info("[Multi-Agent] 工具调用: %s", tool_name)
+                    yield (
+                        f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': {k: str(v)[:100] for k, v in (tool_input or {}).items()}}, ensure_ascii=False)}\n\n"
+                    )
+
+                elif kind == "on_tool_end":
+                    tool_name = event.get("name", "")
+                    output = event.get("data", {}).get("output", "")
+                    result_str = str(output) if output else ""
+                    logger.info("[Multi-Agent] 工具完成: %s (%d 字符)", tool_name, len(result_str))
+                    yield (
+                        f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'summary': result_str[:100], 'result': result_str}, ensure_ascii=False)}\n\n"
+                    )
+
+        except Exception as e:
+            logger.error("Multi-Agent 流式执行异常: %s", str(e), exc_info=True)
+            yield (
+                f"data: {json.dumps({'type': 'error', 'content': f'处理出错：{str(e)}'}, ensure_ascii=False)}\n\n"
+            )
+
+        # 保存 AI 回复到 Redis 记忆（截断防止上下文超限）
+        if full_text:
+            try:
+                memory_text = full_text[:1500] + "\n...[回复已截断]" if len(full_text) > 1500 else full_text
+                mem.save_message(user_id or 0, str(session_id), "ai", memory_text)
+            except Exception as e:
+                logger.warning("保存 AI 回复失败: %s", e)
 
         # 保存 AI 回复到数据库
         db2 = SessionLocal()
@@ -303,14 +378,13 @@ async def chat_stream(
             ai_msg = ChatMessage(
                 session_id=session_id,
                 role="assistant",
-                content=full_content or "[无响应]",
-                agent_used="detection",
+                content=full_text or "[无响应]",
+                agent_used="multi_agent",
             )
             db2.add(ai_msg)
-            # 更新会话统计
             chat_session = db2.query(ChatSession).filter(ChatSession.id == session_id).first()
             if chat_session:
-                chat_session.message_count += 2  # user + assistant
+                chat_session.message_count += 2
                 chat_session.last_message_at = datetime.now()
             db2.commit()
         except Exception as e:
@@ -336,12 +410,8 @@ async def chat(
     request: ChatRequest,
     current_user=Depends(get_current_user),
 ):
-    """
-    非流式对话接口
-    """
-    # 设置用户上下文变量，让 detection_service 能获取到 user_id
+    """非流式对话接口（仍然使用单 Agent，保持向后兼容）"""
     user_id_ctx.set(current_user["id"])
-
     result = await detection_agent.chat(
         message=request.message,
         image_path=request.image_path,
