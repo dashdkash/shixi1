@@ -168,7 +168,6 @@ class RoleResponse(BaseModel):
     is_system: bool
     permissions: List[str] = []  # 权限编码列表
     created_at: datetime
-    model_config = {"from_attributes": True}
 
 
 class RoleCreate(BaseModel):
@@ -190,7 +189,6 @@ class PermissionResponse(BaseModel):
     name: str
     module: str
     description: Optional[str] = None
-    model_config = {"from_attributes": True}
 
 
 # ============================================================
@@ -228,7 +226,6 @@ class SceneResponse(BaseModel):
     is_active: bool
     default_model: Optional["ModelVersionBrief"] = None
     created_at: datetime
-    model_config = {"from_attributes": True}
 
 
 # ---- 检测任务 ----
@@ -254,7 +251,6 @@ class DetectionTaskResponse(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
-    model_config = {"from_attributes": True}
 
 
 class DetectionResultResponse(BaseModel):
@@ -275,7 +271,6 @@ class DetectionResultResponse(BaseModel):
     image_width: Optional[int] = None
     image_height: Optional[int] = None
     created_at: datetime
-    model_config = {"from_attributes": True}
 
 
 class DetectionTaskDetail(BaseModel):
@@ -346,7 +341,6 @@ class TrainingTaskResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    model_config = {"from_attributes": True}
 
 
 class TrainingMetricResponse(BaseModel):
@@ -363,7 +357,6 @@ class TrainingMetricResponse(BaseModel):
     map50: Optional[float] = None
     map50_95: Optional[float] = None
     lr: Optional[float] = None
-    model_config = {"from_attributes": True}
 
 
 # ---- 模型版本 ----
@@ -381,7 +374,6 @@ class ModelVersionBrief(BaseModel):
     map50: Optional[float] = None
     is_default: bool
     created_at: datetime
-    model_config = {"from_attributes": True}
 
 
 class ModelVersionResponse(BaseModel):
@@ -408,7 +400,6 @@ class ModelVersionResponse(BaseModel):
     file_size: Optional[int] = None
     is_default: bool
     created_at: datetime
-    model_config = {"from_attributes": True}
 
 
 class ModelVersionCreate(BaseModel):
@@ -440,13 +431,12 @@ class ChatSessionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     id: int
-    session_uid: str
+    session_uuid: str
     title: Optional[str] = None
     status: str
     message_count: int
     last_message_at: Optional[datetime] = None
     created_at: datetime
-    model_config = {"from_attributes": True}
 
 
 class ChatMessageRequest(BaseModel):
@@ -473,7 +463,6 @@ class ChatMessageResponse(BaseModel):
     tokens_used: Optional[int] = None
     latency_ms: Optional[int] = None
     created_at: datetime
-    model_config = {"from_attributes": True}
 
 
 class ChatHistoryResponse(BaseModel):
@@ -505,7 +494,6 @@ class OperationLogResponse(BaseModel):
     status: str
     error_message: Optional[str] = None
     created_at: datetime
-    model_config = {"from_attributes": True}
 
 
 # ============================================================

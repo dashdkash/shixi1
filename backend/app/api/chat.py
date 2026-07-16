@@ -13,7 +13,8 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from app.agent.detection_agent import detection_agent
+from app.agent.detection_agent import detection_agent  # 保留用于非流式接口
+from app.agent.graph import build_multi_agent_graph
 from app.agent.memory import conversation_memory
 from app.core.security import decode_access_token
 from app.database.session import SessionLocal, get_db
@@ -25,6 +26,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from langchain_core.messages import AIMessage, HumanMessage
 
 from app.core.logger import get_logger
 
@@ -237,12 +239,16 @@ async def chat_stream(
     current_user=Depends(get_current_user_optional),
 ):
     """
-    流式对话接口 — 调用真实的 DetectionAgent
+    流式对话接口 — LangGraph 多 Agent 协作
 
     通过 SSE 返回 Agent 的思考过程、工具调用和最终结果
     同时持久化会话和消息到数据库
     """
     user_id = current_user["id"] if current_user else None
+
+    # 未登录用户不允许创建对话会话
+    if not user_id:
+        raise HTTPException(status_code=401, detail="请先登录后再使用对话功能")
 
     # ── 创建或获取会话 ──
     db = SessionLocal()
@@ -306,13 +312,12 @@ async def chat_stream(
                 session_id=session_id,
                 role="assistant",
                 content=full_content or "[无响应]",
-                agent_used="detection",
+                agent_used="multi_agent",
             )
             db2.add(ai_msg)
-            # 更新会话统计
             chat_session = db2.query(ChatSession).filter(ChatSession.id == session_id).first()
             if chat_session:
-                chat_session.message_count += 2  # user + assistant
+                chat_session.message_count += 2
                 chat_session.last_message_at = datetime.now()
             db2.commit()
         except Exception as e:
@@ -338,12 +343,8 @@ async def chat(
     request: ChatRequest,
     current_user=Depends(get_current_user),
 ):
-    """
-    非流式对话接口
-    """
-    # 设置用户上下文变量，让 detection_service 能获取到 user_id
+    """非流式对话接口（仍然使用单 Agent，保持向后兼容）"""
     user_id_ctx.set(current_user["id"])
-
     result = await detection_agent.chat(
         message=request.message,
         image_path=request.image_path,

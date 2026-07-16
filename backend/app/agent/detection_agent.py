@@ -11,7 +11,6 @@
   用户消息 → 加载历史 → Agent（LLM + 8 工具）→ 调用工具 → SSE 流式返回
 """
 
-import json
 from typing import AsyncGenerator, Optional
 
 from langchain.agents import AgentExecutor, create_openai_tools_agent
@@ -162,46 +161,11 @@ def create_llm():
 # 常量
 # ══════════════════════════════════════════════════════════════
 
-# 工具输出传给 LLM 的最大字符数（防止上下文超限）
-MAX_TOOL_OUTPUT_CHARS = 2000
+# 工具输出截断逻辑复用 sub_agents 的 _wrap_tool
+from app.agent.sub_agents import _wrap_tool as _truncate_tool_output
+
 # 保存到对话记忆的 AI 回复最大字符数
 MAX_MEMORY_TEXT_CHARS = 1500
-
-
-def _truncate_tool_output(tool):
-    """
-    包装工具，截断其返回值，防止上下文超限
-
-    LLM 只能看到截断后的结果，前端通过 SSE 事件获取完整结果。
-    """
-    original_func = tool.func
-
-    def wrapped_func(*args, **kwargs):
-        result = original_func(*args, **kwargs)
-        result_str = str(result) if result is not None else ""
-        if len(result_str) > MAX_TOOL_OUTPUT_CHARS:
-            return result_str[:MAX_TOOL_OUTPUT_CHARS] + f"\n...[输出已截断，原始长度 {len(result_str)} 字符]"
-        return result_str
-
-    # 如果有 async func，也包装
-    original_afunc = getattr(tool, 'coroutine', None)
-    wrapped_afunc = None
-    if original_afunc:
-        async def async_wrapped_func(*args, **kwargs):
-            result = await original_afunc(*args, **kwargs)
-            result_str = str(result) if result is not None else ""
-            if len(result_str) > MAX_TOOL_OUTPUT_CHARS:
-                return result_str[:MAX_TOOL_OUTPUT_CHARS] + f"\n...[输出已截断，原始长度 {len(result_str)} 字符]"
-            return result_str
-        wrapped_afunc = async_wrapped_func
-
-    return StructuredTool(
-        name=tool.name,
-        description=tool.description,
-        func=wrapped_func,
-        coroutine=wrapped_afunc,
-        args_schema=tool.args_schema,
-    )
 
 
 # ══════════════════════════════════════════════════════════════
@@ -256,6 +220,7 @@ class DetectionAgent:
         user_id: int = 0,
         session_id: str = "default",
         image_path: Optional[str] = None,
+        video_path: Optional[str] = None,
     ) -> AsyncGenerator:
         """
         流式处理对话消息（增强版 SSE）
@@ -265,15 +230,18 @@ class DetectionAgent:
             user_id: 用户 ID
             session_id: 会话 ID
             image_path: 附带的图片路径（可选）
+            video_path: 附带的视频路径（可选）
 
         Yields:
             SSE 事件数据字典
         """
-        # 保存原始用户文本到记忆（不含图片路径，防止下轮误触发检测）
+        # 保存原始用户文本到记忆（不含图片/视频路径，防止下轮误触发检测）
         original_message = message
 
         if image_path:
             message = f"{message}\n[附件图片路径: {image_path}]"
+        if video_path:
+            message = f"{message}\n[附件视频路径: {video_path}]"
 
         # ── Step 1: 加载对话历史 ──
         chat_history = []
@@ -376,74 +344,6 @@ class DetectionAgent:
             return {
                 "output": f"抱歉，处理过程中出现错误：{str(e)}",
                 "intermediate_steps": [],
-            }
-
-    async def chat_stream(self, message: str, image_path: Optional[str] = None, video_path: Optional[str] = None) -> AsyncGenerator:
-        """
-        流式处理对话消息（用于 SSE）
-
-        逐个 yield Agent 的思考步骤和最终结果
-
-        Args:
-            message: 用户文本消息
-            image_path: 附带的图片路径（可选）
-            video_path: 附带的视频路径（可选）
-
-        Yields:
-            SSE 事件数据字典
-        """
-        if image_path:
-            message = f"{message}\n[附件图片路径: {image_path}]"
-        if video_path:
-            message = f"{message}\n[附件视频路径: {video_path}]"
-
-        try:
-            async for event in self.executor.astream_events(
-                {"input": message},
-                version="v2",
-            ):
-                event_kind = event["event"]
-
-                if event_kind == "on_chat_model_stream":
-                    chunk = event["data"]["chunk"]
-                    if hasattr(chunk, "content") and chunk.content:
-                        yield {
-                            "type": "text_chunk",
-                            "content": chunk.content,
-                        }
-
-                elif event_kind == "on_tool_start":
-                    tool_name = event["name"]
-                    tool_input = event["data"].get("input", {})
-                    logger.info("工具调用: %s, 输入: %s", tool_name, str(tool_input)[:200])
-                    yield {
-                        "type": "tool_call",
-                        "tool": tool_name,
-                        "input": tool_input,
-                    }
-
-                elif event_kind == "on_tool_end":
-                    tool_data = event.get("data", {})
-                    tool_output = tool_data.get("output", "")
-                    tool_name = event.get("name", "")
-                    logger.info(
-                        "工具完成: %s, output类型=%s, output长度=%d",
-                        tool_name,
-                        type(tool_output).__name__,
-                        len(str(tool_output)) if tool_output else 0,
-                    )
-                    logger.debug("on_tool_end data keys: %s", list(tool_data.keys()))
-                    yield {
-                        "type": "tool_result",
-                        "tool": tool_name,
-                        "result": str(tool_output) if tool_output else "",
-                    }
-
-        except Exception as e:
-            logger.error("Agent 流式执行异常: %s", str(e), exc_info=True)
-            yield {
-                "type": "error",
-                "content": f"处理出错：{str(e)}",
             }
 
 # 创建全局单例

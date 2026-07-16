@@ -127,11 +127,26 @@ class DetectionService:
         获取默认模型权重路径
 
         查找顺序：
-          1. models/us_weeds_v3.0.0/best.pt（优先使用训练好的杂草检测模型）
+          0. settings.DEFAULT_MODEL_PATH（配置的默认模型，优先级最高）
+          1. models/us_weeds_v3.0.0/best.pt（训练好的杂草检测模型）
           2. models/ 目录下 is_default=True 的模型
           3. runs/train/ 目录下最新训练产出的 best.pt
           4. 回退到预训练模型 yolov11n.pt
         """
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+        # 优先级 0：settings 中配置的默认模型路径
+        configured_path = getattr(settings, "DEFAULT_MODEL_PATH", "")
+        if configured_path:
+            # 支持绝对路径和相对于 backend/ 的相对路径
+            if not os.path.isabs(configured_path):
+                configured_path = os.path.join(backend_dir, configured_path)
+            if os.path.exists(configured_path):
+                logger.info("使用配置的默认模型: %s", configured_path)
+                return configured_path
+            else:
+                logger.warning("配置的 DEFAULT_MODEL_PATH 不存在，跳过: %s", configured_path)
+
         db = SessionLocal()
         backend_dir = DetectionService._get_backend_dir()
         try:
@@ -169,6 +184,7 @@ class DetectionService:
         finally:
             db.close()
 
+        # 最终回退：预训练模型
         return os.path.join(backend_dir, "yolo11n.pt")
 
     @staticmethod
@@ -247,26 +263,52 @@ class DetectionService:
             annotated_image_url = minio_client.upload_bytes(
                 object_name, annotated_image, "image/jpeg"
             )
-            task.annotated_image_url = annotated_image_url  # 修正：这里应该更新的是 annotated_image_url 字段，但这个字段不存在于 DetectionTask 中
         except Exception as e:
             logger.warning("MinIO 上传失败（不影响检测结果）: %s", str(e))
 
         # ── 保存每条检测结果 ──
-        for det in detections:
-            result = DetectionResult(
+        if detections:
+            for det in detections:
+                result = DetectionResult(
+                    task_id=task.id,
+                    image_path=original_filename,
+                    annotated_image_url=annotated_image_url,
+                    class_name=det["class_name"],
+                    class_name_cn=det.get("class_name_cn"),
+                    class_id=det["class_id"],
+                    confidence=det["confidence"],
+                    bbox=det["bbox"],
+                    inference_time=inference_time,
+                )
+                db.add(result)
+        else:
+            # 检测到 0 个目标时，创建占位记录以保留标注图 URL（供历史记录/图片代理查询）
+            placeholder = DetectionResult(
                 task_id=task.id,
                 image_path=original_filename,
                 annotated_image_url=annotated_image_url,
-                class_name=det["class_name"],
-                class_name_cn=det.get("class_name_cn"),
-                class_id=det["class_id"],
-                confidence=det["confidence"],
-                bbox=det["bbox"],
+                class_name="no_detection",
+                class_name_cn="未检测到目标",
+                class_id=-1,
+                confidence=0.0,
+                bbox=[],
                 inference_time=inference_time,
             )
-            db.add(result)
+            db.add(placeholder)
 
-        db.commit()
+        try:
+            db.commit()
+            logger.info(
+                "检测任务 %d 已保存，%d 条结果%s",
+                task.id,
+                len(detections),
+                "（无目标，已创建占位记录）" if not detections else "",
+            )
+        except Exception as e:
+            db.rollback()
+            logger.error("检测任务 %d 保存失败: %s", task.id, str(e), exc_info=True)
+            raise
+
         return {"task_id": task.id, "annotated_image_url": annotated_image_url}
 
     def detect_single(
@@ -1021,3 +1063,8 @@ class DetectionService:
             db.close()
 # 创建全局单例
 detection_service = DetectionService()
+
+
+def get_model(scene_id: int = None):
+    """模块级快捷函数：获取 YOLO 模型（供 WebSocket 等场景使用）"""
+    return DetectionService._get_model(scene_id)

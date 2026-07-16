@@ -12,8 +12,8 @@ import base64
 import os
 import tempfile
 import threading
-import asyncio
 import time
+
 import cv2
 import numpy as np
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status

@@ -21,6 +21,20 @@
               class="record-card"
               @click="showDetectionDetail(record)"
             >
+              <!-- 预览图 -->
+              <div class="record-preview">
+                <img
+                  v-if="record.first_result_id"
+                  :src="`/api/history/image-proxy/${record.first_result_id}?thumb=true`"
+                  alt="检测预览图"
+                  loading="lazy"
+                  @error="handleImgError"
+                />
+                <div v-else class="preview-placeholder">
+                  <el-icon :size="32"><Picture /></el-icon>
+                </div>
+              </div>
+
               <div class="record-header">
                 <span class="record-id"
                   >{{ $t("history.id") }}: {{ record.id }}</span
@@ -41,8 +55,23 @@
                   >
                   <span
                     >{{ $t("history.inferenceTime") }}:
-                    {{ record.total_inference_time }}ms</span
+                    {{ formatInferenceTime(record.total_inference_time) }}ms</span
                   >
+                </div>
+                <!-- 检测物体标签 -->
+                <div
+                  v-if="record.top_classes && record.top_classes.length"
+                  class="record-classes"
+                >
+                  <el-tag
+                    v-for="cls in record.top_classes"
+                    :key="cls"
+                    size="small"
+                    type="success"
+                    class="class-tag"
+                  >
+                    {{ cls }}
+                  </el-tag>
                 </div>
               </div>
               <div class="record-footer">
@@ -162,7 +191,7 @@
           <div class="summary-item">
             <span class="summary-label">{{ $t("history.inferenceTime") }}</span>
             <span class="summary-value"
-              >{{ currentDetection.total_inference_time }}ms</span
+              >{{ formatInferenceTime(currentDetection.total_inference_time) }}ms</span
             >
           </div>
         </div>
@@ -174,29 +203,42 @@
           <h4>{{ $t("history.images") }}</h4>
           <div class="images-list">
             <div
-              v-for="(image, idx) in currentDetection.images"
-              :key="idx"
-              class="image-item"
-            >
-              <div class="image-info">
-                <span>{{ $t("history.image") }} {{ idx + 1 }}</span>
-                <span>{{ image.inference_time }}ms</span>
-              </div>
-              <div
-                v-if="image.objects && image.objects.length > 0"
-                class="objects-list"
-              >
-                <div
-                  v-for="(obj, objIdx) in image.objects"
-                  :key="objIdx"
-                  class="object-tag"
-                >
-                  {{ obj.class_name_cn }} ({{
-                    (obj.confidence * 100).toFixed(1)
-                  }}%)
-                </div>
+            v-for="(image, idx) in currentDetection.images"
+            :key="idx"
+            class="image-item"
+          >
+            <!-- 检测标注图 -->
+            <div class="image-preview">
+              <img
+                v-if="image.result_id"
+                :src="`/api/history/image-proxy/${image.result_id}`"
+                :alt="`检测结果图 ${idx + 1}`"
+                loading="lazy"
+                @error="handleImgError"
+              />
+              <div v-else class="preview-placeholder-sm">
+                <el-icon :size="24"><Picture /></el-icon>
               </div>
             </div>
+            <div class="image-info">
+              <span>{{ $t("history.image") }} {{ idx + 1 }}</span>
+              <span>{{ formatInferenceTime(image.inference_time) }}ms</span>
+            </div>
+            <div
+              v-if="image.objects && image.objects.length > 0"
+              class="objects-list"
+            >
+              <div
+                v-for="(obj, objIdx) in image.objects"
+                :key="objIdx"
+                class="object-tag"
+              >
+                {{ obj.class_name_cn }} ({{
+                  (obj.confidence * 100).toFixed(1)
+                }}%)
+              </div>
+            </div>
+          </div>
           </div>
         </div>
       </div>
@@ -237,6 +279,7 @@ import {
   ArrowRight,
   ChatDotRound,
   ChatLineRound,
+  Picture,
   Search,
   User,
 } from "@element-plus/icons-vue";
@@ -290,6 +333,15 @@ const getStatusText = (status) => {
     failed: "失败",
   };
   return map[status] || status;
+};
+
+const formatInferenceTime = (val) => {
+  if (val == null) return "—";
+  return Number(val).toFixed(2);
+};
+
+const handleImgError = (e) => {
+  e.target.style.display = "none";
 };
 
 const fetchDetectionHistory = async (page = 1) => {
@@ -453,9 +505,10 @@ onMounted(() => {
 .record-card {
   border: 1px solid #e4e7ed;
   border-radius: 8px;
-  padding: 16px;
+  padding: 0;
   cursor: pointer;
   transition: all 0.3s ease;
+  overflow: hidden;
 
   &:hover {
     border-color: #409eff;
@@ -463,11 +516,37 @@ onMounted(() => {
   }
 }
 
+.record-preview {
+  width: 100%;
+  height: 140px;
+  background: #f5f7fa;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .preview-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #c0c4cc;
+  }
+}
+
 .record-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  padding: 12px 16px 0;
+  margin-bottom: 8px;
 
   .record-id {
     font-size: 13px;
@@ -477,12 +556,14 @@ onMounted(() => {
 
 .record-body {
   margin-bottom: 12px;
+  padding: 0 16px;
 }
 
 .record-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
 
   span {
     font-size: 12px;
@@ -493,11 +574,21 @@ onMounted(() => {
   }
 }
 
+.record-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+
+  .class-tag {
+    font-size: 11px;
+  }
+}
+
 .record-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 12px;
+  padding: 12px 16px;
   border-top: 1px solid #f0f0f0;
 
   .record-time {
@@ -649,6 +740,32 @@ onMounted(() => {
       padding: 12px;
       background: #f5f7fa;
       border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      .image-preview {
+        width: 100%;
+        max-height: 300px;
+        overflow: hidden;
+        border-radius: 6px;
+        background: #e8e8e8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        img {
+          width: 100%;
+          max-height: 300px;
+          object-fit: contain;
+          display: block;
+        }
+
+        .preview-placeholder-sm {
+          padding: 20px;
+          color: #c0c4cc;
+        }
+      }
 
       .image-info {
         display: flex;

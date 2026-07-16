@@ -116,6 +116,11 @@ class Settings(BaseSettings):
     TRAIN_OUTPUT_DIR: str = "runs/train"  # 训练输出目录（模型权重、日志等）
     DATASET_BASE_DIR: str = "datasets"  # 数据集根目录
 
+    # ---- 检测模型配置 ----
+    # 默认检测模型权重路径
+    # 优先级最高：只要配置且文件存在，检测时优先使用该模型
+    DEFAULT_MODEL_PATH: str = "models/us_weeds_v3.0.0/best.pt"
+
     # ---- Pydantic V2 配置 ----
     model_config = SettingsConfigDict(
         env_file=".env",
