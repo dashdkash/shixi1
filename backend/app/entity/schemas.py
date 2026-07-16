@@ -1,24 +1,25 @@
+# backend/app/entity/schemas.py
 """
 Pydantic 请求/响应模型
 用于 API 接口的数据验证和序列化
 
 分层原则：
-  - Create 模型：创建资源时的请求体
-  - Update 模型：更新资源时的请求体（所有字段可选）
-  - Response 模型：API 返回的响应体（过滤敏感字段）
-  - List 模型：分页列表查询的参数和响应
+- Create 模型：创建资源时的请求体
+- Update 模型：更新资源时的请求体（所有字段可选）
+- Response 模型：API 返回的响应体（过滤敏感字段）
+- List 模型：分页列表查询的参数和响应
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 一、用户与权限
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
-# --- 认证相关 ---
+# ---- 认证相关 ----
 
 
 class UserRegister(BaseModel):
@@ -43,12 +44,8 @@ class UserBrief(BaseModel):
     username: str
     email: str
     avatar: Optional[str] = None
-    is_superuser: bool = False
-    roles: list[str] = []
-
-    model_config = {
-        "from_attributes": True,
-    }
+    roles: List[str] = []
+    model_config = {"from_attributes": True}
 
 
 class TokenResponse(BaseModel):
@@ -57,9 +54,10 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserBrief
+    model_config = {"from_attributes": True}
 
 
-# --- 用户管理 ---
+# ---- 用户管理 ----
 
 
 class UserResponse(BaseModel):
@@ -72,13 +70,10 @@ class UserResponse(BaseModel):
     avatar: Optional[str] = None
     is_active: bool
     is_superuser: bool
-    roles: list[str] = []
+    roles: List[str] = []
     last_login_at: Optional[datetime] = None
     created_at: datetime
-
-    model_config = {
-        "from_attributes": True,
-    }
+    model_config = {"from_attributes": True}
 
 
 class UserUpdate(BaseModel):
@@ -96,7 +91,7 @@ class ChangePassword(BaseModel):
     new_password: str = Field(..., min_length=6, max_length=100, description="新密码")
 
 
-# --- 角色权限 ---
+# ---- 角色权限 ----
 
 
 class RoleResponse(BaseModel):
@@ -107,11 +102,9 @@ class RoleResponse(BaseModel):
     display_name: str
     description: Optional[str] = None
     is_system: bool
-    permissions: list[str] = []  # 权限编码列表
+    permissions: List[str] = []  # 权限编码列表
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class RoleCreate(BaseModel):
@@ -120,7 +113,7 @@ class RoleCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=50, description="角色标识")
     display_name: str = Field(..., description="角色显示名")
     description: Optional[str] = None
-    permission_codes: list[str] = Field(default=[], description="权限编码列表")
+    permission_codes: List[str] = Field(default=[], description="权限编码列表")
 
 
 class PermissionResponse(BaseModel):
@@ -131,29 +124,26 @@ class PermissionResponse(BaseModel):
     name: str
     module: str
     description: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 二、检测业务
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
-# --- 检测场景 ---
+# ---- 检测场景 ----
 
 
 class SceneCreate(BaseModel):
     """创建检测场景"""
 
-    name: str = Field(..., description="场景标识，如 remote_sensing")
-    display_name: str = Field(..., description="场景显示名，如 遥感目标检测")
+    name: str = Field(..., description="场景标识, 如 remote_sensing")
+    display_name: str = Field(..., description="场景显示名, 如遥感目标检测")
     description: Optional[str] = None
     category: str = Field(
-        ..., description="分类：agriculture/industry/remote_sensing/medical/traffic"
+        ..., description="分类: agriculture/industry/remote_sensing/medical/traffic"
     )
-    class_names: list[str] = Field(..., description="类别列表")
-    class_names_cn: Optional[dict[str, str]] = Field(None, description="中文名映射")
+    class_names: List[str] = Field(..., description="类别列表")
 
 
 class SceneResponse(BaseModel):
@@ -164,17 +154,15 @@ class SceneResponse(BaseModel):
     display_name: str
     description: Optional[str] = None
     category: str
-    class_names: list
-    class_names_cn: Optional[dict] = None
+    class_names: List[str]
+    class_names_cn: Optional[Dict[str, str]] = None
     is_active: bool
     default_model: Optional["ModelVersionBrief"] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
-# --- 检测任务 ---
+# ---- 检测任务 ----
 
 
 class DetectionTaskResponse(BaseModel):
@@ -195,9 +183,7 @@ class DetectionTaskResponse(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class DetectionResultResponse(BaseModel):
@@ -211,24 +197,22 @@ class DetectionResultResponse(BaseModel):
     class_name_cn: Optional[str] = None
     class_id: int
     confidence: float
-    bbox: list  # [x1, y1, x2, y2]
+    bbox: List[float]  # [x1, y1, x2, y2]
     inference_time: Optional[float] = None
     image_width: Optional[int] = None
     image_height: Optional[int] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class DetectionTaskDetail(BaseModel):
     """检测任务详情（含结果列表）"""
 
     task: DetectionTaskResponse
-    results: list[DetectionResultResponse] = []
+    results: List[DetectionResultResponse] = []
 
 
-# --- 检测统计 ---
+# ---- 检测统计 ----
 
 
 class DetectionStatistics(BaseModel):
@@ -238,16 +222,16 @@ class DetectionStatistics(BaseModel):
     total_images: int
     total_objects: int
     avg_inference_time: float
-    class_distribution: dict[str, int]  # 各类别检测次数
-    daily_trend: list[dict]  # 每日检测趋势
-    scene_distribution: dict[str, int]  # 各场景检测次数
+    class_distribution: Dict[str, int]  # 各类别检测次数
+    daily_trend: List[Dict[str, Any]]  # 每日检测趋势
+    scene_distribution: Dict[str, int]  # 各场景检测次数
 
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 三、模型管理
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
-# --- 训练任务 ---
+# ---- 训练任务 ----
 
 
 class TrainingTaskCreate(BaseModel):
@@ -261,7 +245,7 @@ class TrainingTaskCreate(BaseModel):
     device: str = Field(default="0", description="训练设备")
     optimizer: str = Field(default="SGD", description="优化器")
     lr0: float = Field(default=0.01, description="初始学习率")
-    augment_config: Optional[dict] = Field(None, description="数据增强配置")
+    augment_config: Optional[Dict[str, Any]] = Field(None, description="数据增强配置")
 
 
 class TrainingTaskResponse(BaseModel):
@@ -271,7 +255,7 @@ class TrainingTaskResponse(BaseModel):
     user_id: int
     scene_id: int
     scene_name: Optional[str] = None
-    task_uuid: str
+    task_uid: str
     status: str
     model_name: str
     epochs: int
@@ -285,9 +269,7 @@ class TrainingTaskResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class TrainingMetricResponse(BaseModel):
@@ -302,12 +284,10 @@ class TrainingMetricResponse(BaseModel):
     map50: Optional[float] = None
     map50_95: Optional[float] = None
     lr: Optional[float] = None
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
-# --- 模型版本 ---
+# ---- 模型版本 ----
 
 
 class ModelVersionBrief(BaseModel):
@@ -320,9 +300,7 @@ class ModelVersionBrief(BaseModel):
     map50: Optional[float] = None
     is_default: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ModelVersionResponse(BaseModel):
@@ -342,14 +320,12 @@ class ModelVersionResponse(BaseModel):
     map50_95: Optional[float] = None
     precision: Optional[float] = None
     recall: Optional[float] = None
-    per_class_ap: Optional[dict] = None
+    per_class_ap: Optional[Dict[str, float]] = None
     description: Optional[str] = None
     file_size: Optional[int] = None
     is_default: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ModelVersionCreate(BaseModel):
@@ -362,9 +338,9 @@ class ModelVersionCreate(BaseModel):
     description: Optional[str] = None
 
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 四、智能体对话
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
 
 class ChatSessionCreate(BaseModel):
@@ -377,22 +353,20 @@ class ChatSessionResponse(BaseModel):
     """对话会话响应"""
 
     id: int
-    session_uuid: str
+    session_uid: str
     title: Optional[str] = None
     status: str
     message_count: int
     last_message_at: Optional[datetime] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ChatMessageRequest(BaseModel):
     """发送消息请求"""
 
     session_id: Optional[int] = Field(
-        None, description="会话 ID（为空则自动创建新会话）"
+        None, description="会话ID（为空则自动创建新会话）"
     )
     content: str = Field(..., min_length=1, max_length=5000, description="消息内容")
 
@@ -405,26 +379,24 @@ class ChatMessageResponse(BaseModel):
     role: str
     content: str
     agent_used: Optional[str] = None
-    tool_calls: Optional[list] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
     tool_result: Optional[str] = None
     tokens_used: Optional[int] = None
     latency_ms: Optional[int] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ChatHistoryResponse(BaseModel):
     """对话历史响应（含会话信息和消息列表）"""
 
     session: ChatSessionResponse
-    messages: list[ChatMessageResponse] = []
+    messages: List[ChatMessageResponse] = []
 
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 五、系统运维
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
 
 class OperationLogResponse(BaseModel):
@@ -439,19 +411,15 @@ class OperationLogResponse(BaseModel):
     target_id: Optional[str] = None
     description: Optional[str] = None
     ip_address: Optional[str] = None
-    request_method: Optional[str] = None
-    request_path: Optional[str] = None
     status: str
     error_message: Optional[str] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 六、通用模型
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
 
 class ApiResponse(BaseModel):
@@ -459,7 +427,7 @@ class ApiResponse(BaseModel):
 
     code: int = 200
     message: str = "success"
-    data: Optional[dict | list] = None
+    data: Optional[Dict[str, Any] | List[Any]] = None
 
 
 class PageParams(BaseModel):
@@ -476,7 +444,7 @@ class PageResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
-    items: list
+    items: List[Any]
 
 
 class HealthResponse(BaseModel):
@@ -488,3 +456,11 @@ class HealthResponse(BaseModel):
     database: Optional[str] = None
     redis: Optional[str] = None
     minio: Optional[str] = None
+
+
+# ============================================================
+# 解决前向引用问题
+# ============================================================
+
+# 需要在类定义完成后解析 ModelVersionBrief 的前向引用
+SceneResponse.model_rebuild()
