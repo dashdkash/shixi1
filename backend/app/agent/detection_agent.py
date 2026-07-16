@@ -256,6 +256,7 @@ class DetectionAgent:
         user_id: int = 0,
         session_id: str = "default",
         image_path: Optional[str] = None,
+        video_path: Optional[str] = None,
     ) -> AsyncGenerator:
         """
         流式处理对话消息（增强版 SSE）
@@ -265,6 +266,7 @@ class DetectionAgent:
             user_id: 用户 ID
             session_id: 会话 ID
             image_path: 附带的图片路径（可选）
+            video_path: 附带的视频路径（可选）
 
         Yields:
             SSE 事件数据字典
@@ -274,6 +276,8 @@ class DetectionAgent:
 
         if image_path:
             message = f"{message}\n[附件图片路径: {image_path}]"
+        if video_path:
+            message = f"{message}\n[附件视频路径: {video_path}]"
 
         # ── Step 1: 加载对话历史 ──
         chat_history = []

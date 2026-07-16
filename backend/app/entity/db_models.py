@@ -359,6 +359,11 @@ class TrainingTask(Base):
     dataset_size = Column(Integer, nullable=True, comment="数据集图像数量")
     data_yaml = Column(String(500), nullable=True, comment="data.yaml 路径")
 
+    # 断点续训
+    source_task_id = Column(
+        Integer, nullable=True, comment="续训来源任务 ID（断点续训时关联上一个任务）"
+    )
+
     # 错误信息
     error_message = Column(Text, nullable=True, comment="失败错误信息")
 

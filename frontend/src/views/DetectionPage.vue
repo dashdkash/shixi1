@@ -1,80 +1,102 @@
 <template>
   <div class="detection-page">
-    <el-tabs v-model="activeTab" type="border-card" class="detection-tabs">
-      <!-- ══════════════════════════════════════════════════
-           Tab 1：图片 / 视频上传检测
-           ══════════════════════════════════════════════════ -->
+    <el-tabs v-model="activeTab" class="detection-tabs">
+      <!-- Tab 1: 图片/视频检测 -->
       <el-tab-pane label="图片/视频检测" name="upload">
-        <div class="upload-panel">
-          <!-- 上传区域 -->
+        <div class="upload-section">
           <el-upload
-            v-if="!result"
+            ref="uploadRef"
             class="upload-area"
             drag
             :auto-upload="false"
-            :show-file-list="false"
             :on-change="handleFileChange"
-            accept="image/*,video/mp4,video/avi,video/quicktime,video/x-msvideo"
+            :on-remove="handleFileRemove"
+            :file-list="fileList"
+            multiple
+            accept="image/*,.mp4,.avi,.mov,.mkv,.wmv,.flv"
           >
-            <el-icon class="upload-icon"><UploadFilled /></el-icon>
-            <div class="upload-text">上传图片或视频进行检测</div>
-            <div class="upload-hint">
-              支持 JPG、PNG、BMP、WebP、MP4、AVI、MOV 格式，可批量上传
+            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <div class="el-upload__text">
+              拖拽文件到此处，或<em>点击上传</em>
             </div>
+            <template #tip>
+              <div class="el-upload__tip">
+                支持图片（JPG/PNG/BMP/WebP）和视频（MP4/AVI/MOV/MKV/WMV/FLV），可批量上传
+              </div>
+            </template>
           </el-upload>
 
-          <!-- 检测结果 -->
-          <div v-if="result" class="result-area">
-            <div class="result-header">
-              <h3>检测结果</h3>
-              <el-button @click="resetUpload">重新检测</el-button>
-            </div>
-
-            <!-- 视频结果 -->
-            <div v-if="isVideoResult" class="video-result">
-              <video
-                v-if="annotatedVideoSrc"
-                :src="annotatedVideoSrc"
-                controls
-                class="result-video"
-              />
-              <DetectionResultCard
-                v-if="result"
-                :result="result"
-                :loading="false"
-              />
-            </div>
-
-            <!-- 图片结果 -->
-            <div v-else class="image-result">
-              <img
-                v-if="annotatedImageSrc"
-                :src="annotatedImageSrc"
-                class="result-image"
-              />
-              <DetectionResultCard
-                v-if="result"
-                :result="result"
-                :loading="false"
-              />
-            </div>
+          <div class="action-bar" v-if="fileList.length > 0">
+            <el-button type="primary" size="large" @click="handleDetect" :loading="detecting">
+              {{ detecting ? "检测中..." : "开始检测" }}
+            </el-button>
+            <el-button size="large" @click="fileList = []" :disabled="detecting">
+              清空文件
+            </el-button>
           </div>
 
-          <!-- 加载中 -->
-          <div v-if="uploading" class="loading-area">
-            <el-icon class="is-loading" :size="40"><Loading /></el-icon>
-            <p>正在检测中，请稍候...</p>
+          <!-- 检测结果 -->
+          <div v-if="detectResult" class="result-section">
+            <el-divider content-position="left">检测结果</el-divider>
+
+            <!-- 图片检测结果 -->
+            <div v-if="detectResult.type === 'image'" class="image-result">
+              <DetectionResultCard
+                :result="detectResult.data"
+                :image-url="detectResult.data.annotated_image_url"
+              />
+            </div>
+
+            <!-- 视频检测结果 -->
+            <div v-if="detectResult.type === 'video'" class="video-result">
+              <div v-if="detectResult.data.video_url" class="video-player-wrapper">
+                <video
+                  :src="detectResult.data.video_url"
+                  controls
+                  style="width: 100%; max-width: 600px; border-radius: 8px"
+                ></video>
+              </div>
+              <div class="video-stats">
+                <el-descriptions :column="2" border>
+                  <el-descriptions-item label="处理帧数">
+                    {{ detectResult.data.processed_frames || 0 }} 帧
+                  </el-descriptions-item>
+                  <el-descriptions-item label="检测目标">
+                    {{ detectResult.data.total_detections || 0 }} 个
+                  </el-descriptions-item>
+                </el-descriptions>
+                <div v-if="detectResult.data.class_stats" class="class-stats">
+                  <h4>类别统计：</h4>
+                  <div
+                    v-for="(count, name) in detectResult.data.class_stats"
+                    :key="name"
+                    class="class-stat-item"
+                  >
+                    <el-tag type="primary">{{ name }}</el-tag>
+                    <span>{{ count }} 个</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 批量检测结果 -->
+            <div v-if="detectResult.type === 'batch'" class="batch-result">
+              <div v-for="(item, idx) in detectResult.data.results" :key="idx" class="batch-item">
+                <h4>{{ item.filename }}</h4>
+                <DetectionResultCard
+                  :result="item"
+                  :image-url="item.annotated_image_url"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </el-tab-pane>
 
-      <!-- ═══════════════════════════════════════════════════
-           Tab 2：摄像头实时检测
-           ═══════════════════════════════════════════════════ -->
+      <!-- Tab 2: 摄像头实时检测 -->
       <el-tab-pane label="摄像头实时检测" name="camera">
-        <div class="camera-panel">
+        <div class="camera-section">
           <div class="page-header">
-            <h2>摄像头实时检测</h2>
             <el-tag :type="statusTagType" size="large">
               {{ statusText }}
             </el-tag>
@@ -236,98 +258,85 @@
 </template>
 
 <script setup>
-/**
- * DetectionPage.vue — 检测工作台
- *
- * Tab 1：图片/视频上传检测（单图、批量、视频）
- * Tab 2：摄像头实时检测
- */
-import { detectSingle, detectVideo } from "@/api/detection";
-import DetectionResultCard from "@/components/DetectionResultCard.vue";
 import { createCameraWs } from "@/utils/cameraWs";
-import { Loading, UploadFilled } from "@element-plus/icons-vue";
+import { detectSingle, detectBatch, detectVideo } from "@/api/detection";
+import DetectionResultCard from "@/components/DetectionResultCard.vue";
+import { UploadFilled } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { computed, onBeforeUnmount, ref } from "vue";
 
-// ════════════════════════════════════════════════════════════
 // Tab 切换
-// ════════════════════════════════════════════════════════════
 const activeTab = ref("upload");
 
-// ════════════════════════════════════════════════════════════
-// Tab 1：上传检测
-// ════════════════════════════════════════════════════════════
-const uploading = ref(false);
-const result = ref(null);
-const annotatedImageSrc = ref("");
-const annotatedVideoSrc = ref("");
-const isVideoResult = ref(false);
+// ========== 图片/视频检测 ==========
+const uploadRef = ref(null);
+const fileList = ref([]);
+const detecting = ref(false);
+const detectResult = ref(null);
 
-function isVideoFile(file) {
-  return file.name.match(/\.(mp4|avi|mov|mkv|wmv|flv)$/i);
+function handleFileChange(file, files) {
+  fileList.value = files;
 }
 
-async function handleFileChange(file) {
-  const raw = file.raw;
-  if (!raw) return;
+function handleFileRemove(file, files) {
+  fileList.value = files;
+}
 
-  // 文件大小限制 50MB
-  if (raw.size > 50 * 1024 * 1024) {
-    ElMessage.error("文件大小不能超过 50MB");
+async function handleDetect() {
+  if (fileList.value.length === 0) {
+    ElMessage.warning("请先选择文件");
     return;
   }
 
-  uploading.value = true;
-  result.value = null;
-  annotatedImageSrc.value = "";
-  annotatedVideoSrc.value = "";
+  detecting.value = true;
+  detectResult.value = null;
 
   try {
-    if (isVideoFile(file)) {
+    const files = fileList.value.map((f) => f.raw);
+    const hasVideo = files.some((f) =>
+      f.type.startsWith("video/") || /\.(mp4|avi|mov|mkv|wmv|flv)$/i.test(f.name)
+    );
+
+    if (hasVideo) {
       // 视频检测
-      isVideoResult.value = true;
       const formData = new FormData();
-      formData.append("file", raw);
-      formData.append("conf", 0.25);
-
+      formData.append("file", files[0]);
       const res = await detectVideo(formData);
-      result.value = res;
-      if (res.annotated_video_url) {
-        annotatedVideoSrc.value = res.annotated_video_url;
-      }
-    } else {
-      // 图片检测
-      isVideoResult.value = false;
+      detectResult.value = {
+        type: "video",
+        data: res.data || res,
+      };
+      ElMessage.success("视频检测完成");
+    } else if (files.length === 1) {
+      // 单图检测
       const formData = new FormData();
-      formData.append("file", raw);
-      formData.append("conf", 0.25);
-
+      formData.append("file", files[0]);
       const res = await detectSingle(formData);
-      result.value = res;
-      if (res.annotated_image_url) {
-        annotatedImageSrc.value = res.annotated_image_url;
-      } else if (res.annotated_image) {
-        annotatedImageSrc.value = `data:image/jpeg;base64,${res.annotated_image}`;
-      }
+      detectResult.value = {
+        type: "image",
+        data: res.data || res,
+      };
+      ElMessage.success("检测完成");
+    } else {
+      // 批量检测
+      const formData = new FormData();
+      files.forEach((f) => formData.append("files", f));
+      const res = await detectBatch(formData);
+      detectResult.value = {
+        type: "batch",
+        data: res.data || res,
+      };
+      ElMessage.success(`批量检测完成，共 ${files.length} 张图片`);
     }
   } catch (err) {
-    console.error("[检测失败]", err);
+    console.error("检测失败:", err);
     ElMessage.error(err.message || "检测失败");
   } finally {
-    uploading.value = false;
+    detecting.value = false;
   }
 }
 
-function resetUpload() {
-  result.value = null;
-  annotatedImageSrc.value = "";
-  annotatedVideoSrc.value = "";
-  isVideoResult.value = false;
-}
-
-// ════════════════════════════════════════════════════════════
-// Tab 2：摄像头检测
-// ════════════════════════════════════════════════════════════
+// ========== 摄像头检测 ==========
 const videoRef = ref(null);
 const canvasRef = ref(null);
 
@@ -510,108 +519,91 @@ onBeforeUnmount(() => {
 
 .detection-tabs {
   :deep(.el-tabs__content) {
-    padding: 20px;
+    padding-top: 10px;
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   Tab 1：上传检测
-   ════════════════════════════════════════════════════════════ */
-.upload-panel {
-  max-width: 900px;
+// ========== 上传检测区域 ==========
+.upload-section {
+  max-width: 800px;
   margin: 0 auto;
 }
 
 .upload-area {
   :deep(.el-upload-dragger) {
-    padding: 60px 20px;
-    border: 2px dashed #dcdfe6;
-    border-radius: 12px;
-    background: #fafafa;
-    transition: border-color 0.3s;
+    padding: 40px 20px;
+  }
+}
 
-    &:hover {
-      border-color: #409eff;
+.action-bar {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.result-section {
+  margin-top: 30px;
+}
+
+.image-result {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.video-result {
+  max-width: 700px;
+  margin: 0 auto;
+
+  .video-player-wrapper {
+    margin-bottom: 20px;
+    text-align: center;
+  }
+
+  .video-stats {
+    .class-stats {
+      margin-top: 16px;
+
+      h4 {
+        margin-bottom: 8px;
+        font-size: 14px;
+        color: #666;
+      }
+
+      .class-stat-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
     }
   }
 }
 
-.upload-icon {
-  font-size: 48px;
-  color: #409eff;
-  margin-bottom: 12px;
-}
+.batch-result {
+  .batch-item {
+    margin-bottom: 24px;
 
-.upload-text {
-  font-size: 18px;
-  font-weight: 600;
-  color: #303133;
-  margin-bottom: 8px;
-}
-
-.upload-hint {
-  font-size: 13px;
-  color: #909399;
-}
-
-.result-area {
-  .result-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-
-    h3 {
-      margin: 0;
+    h4 {
+      margin-bottom: 12px;
+      font-size: 14px;
+      color: #666;
     }
   }
 }
 
-.result-video {
-  width: 100%;
-  max-height: 500px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  background: #000;
-}
-
-.result-image {
-  max-width: 100%;
-  max-height: 500px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-}
-
-.loading-area {
-  text-align: center;
-  padding: 60px 20px;
-  color: #909399;
-
-  p {
-    margin-top: 16px;
-    font-size: 16px;
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
-   Tab 2：摄像头检测
-   ════════════════════════════════════════════════════════════ */
-.camera-panel {
+// ========== 摄像头检测区域 ==========
+.camera-section {
   .page-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-
-    h2 {
-      margin: 0;
-    }
+    justify-content: flex-end;
+    margin-bottom: 16px;
   }
 
   .main-content {
     display: flex;
     gap: 20px;
-    overflow: hidden;
+    min-height: 450px;
   }
 
   .preview-panel {
@@ -659,7 +651,6 @@ onBeforeUnmount(() => {
     flex-direction: column;
     gap: 12px;
     overflow-y: auto;
-    max-height: 600px;
   }
 
   .stats-grid {

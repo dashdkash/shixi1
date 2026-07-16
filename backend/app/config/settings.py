@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     # 通义千问（推荐，国内访问快）
     QWEN_API_KEY: str = "sk-your-qwen-api-key"
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    QWEN_MODEL: str = "qwen-plus"
+    QWEN_MODEL: str = "deepseek-v4-flash"
 
     # ── RAG 配置 ──────────────────────────────────────
     EMBEDDING_MODEL: str = "text-embedding-v3"

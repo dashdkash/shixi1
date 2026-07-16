@@ -227,10 +227,12 @@
 
       <el-row :gutter="16" style="margin-top: 16px">
         <el-col :span="12">
-          <div ref="lossChartRef" style="height: 350px"></div>
+          <div v-if="hasMetrics" ref="lossChartRef" style="height: 350px"></div>
+          <el-empty v-else description="等待训练数据..." :image-size="80" />
         </el-col>
         <el-col :span="12">
-          <div ref="mapChartRef" style="height: 350px"></div>
+          <div v-if="hasMetrics" ref="mapChartRef" style="height: 350px"></div>
+          <el-empty v-else description="等待训练数据..." :image-size="80" />
         </el-col>
       </el-row>
     </el-card>
@@ -603,6 +605,10 @@ const trainForm = ref({
   device: 'cpu',
   optimizer: 'SGD',
   lr0: 0.01,
+});
+
+const hasMetrics = computed(() => {
+  return selectedTask.value?.latest_metric != null;
 });
 
 const metricCards = computed(() => {
