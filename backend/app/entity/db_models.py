@@ -476,7 +476,7 @@ class ChatSession(Base):
     user_id = Column(
         Integer, ForeignKey("users.id"), nullable=False, index=True, comment="所属用户"
     )
-    session_uid = Column(
+    session_uuid = Column(
         String(100), unique=True, nullable=False, index=True, comment="会话唯一标识"
     )
     title = Column(String(200), nullable=True, comment="会话标题")

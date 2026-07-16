@@ -73,6 +73,7 @@ app.include_router(chat_router)  # Day 8 新增
 app.include_router(detection_router)  # Day 8 新增
 
 app.include_router(knowledge_router)
+app.include_router(history_router)
 
 # ===== 根路径 =====
 @app.get("/")

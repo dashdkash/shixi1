@@ -11,13 +11,11 @@
   用户消息 → 加载历史 → Agent（LLM + 8 工具）→ 调用工具 → SSE 流式返回
 """
 
-import json
 from typing import AsyncGenerator, Optional
 
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.tools import StructuredTool
 
 from app.agent.memory import conversation_memory
 from app.agent.prompts import DETECTION_AGENT_SYSTEM_PROMPT
@@ -72,46 +70,11 @@ def create_llm():
 # 常量
 # ══════════════════════════════════════════════════════════════
 
-# 工具输出传给 LLM 的最大字符数（防止上下文超限）
-MAX_TOOL_OUTPUT_CHARS = 2000
+# 工具输出截断逻辑复用 sub_agents 的 _wrap_tool
+from app.agent.sub_agents import _wrap_tool as _truncate_tool_output
+
 # 保存到对话记忆的 AI 回复最大字符数
 MAX_MEMORY_TEXT_CHARS = 1500
-
-
-def _truncate_tool_output(tool):
-    """
-    包装工具，截断其返回值，防止上下文超限
-
-    LLM 只能看到截断后的结果，前端通过 SSE 事件获取完整结果。
-    """
-    original_func = tool.func
-
-    def wrapped_func(*args, **kwargs):
-        result = original_func(*args, **kwargs)
-        result_str = str(result) if result is not None else ""
-        if len(result_str) > MAX_TOOL_OUTPUT_CHARS:
-            return result_str[:MAX_TOOL_OUTPUT_CHARS] + f"\n...[输出已截断，原始长度 {len(result_str)} 字符]"
-        return result_str
-
-    # 如果有 async func，也包装
-    original_afunc = getattr(tool, 'coroutine', None)
-    wrapped_afunc = None
-    if original_afunc:
-        async def async_wrapped_func(*args, **kwargs):
-            result = await original_afunc(*args, **kwargs)
-            result_str = str(result) if result is not None else ""
-            if len(result_str) > MAX_TOOL_OUTPUT_CHARS:
-                return result_str[:MAX_TOOL_OUTPUT_CHARS] + f"\n...[输出已截断，原始长度 {len(result_str)} 字符]"
-            return result_str
-        wrapped_afunc = async_wrapped_func
-
-    return StructuredTool(
-        name=tool.name,
-        description=tool.description,
-        func=wrapped_func,
-        coroutine=wrapped_afunc,
-        args_schema=tool.args_schema,
-    )
 
 
 # ══════════════════════════════════════════════════════════════

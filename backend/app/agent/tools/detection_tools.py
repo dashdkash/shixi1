@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 
 @tool
 def detect_single_image(image_path: str, conf: float = 0.25, iou: float = 0.45) -> str:
-    """检测单张遥感图片中的目标物体（飞机、油罐、立交桥、操场）。
+    """检测单张杂草图片中的目标物体。
 
     当用户上传了一张图片并要求检测、识别、分析图中的目标时使用此工具。
 
@@ -55,7 +55,7 @@ def detect_single_image(image_path: str, conf: float = 0.25, iou: float = 0.45) 
 
 @tool
 def detect_batch_images(image_paths: list[str], conf: float = 0.25) -> str:
-    """批量检测多张遥感图片中的目标物体。
+    """批量检测多张杂草图片中的目标物体。
 
     当用户一次上传了多张图片，或者要求"检测所有图片"时使用此工具。
 

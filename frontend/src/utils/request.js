@@ -32,6 +32,9 @@ request.interceptors.request.use(
 );
 
 // ── 响应拦截器 ──────────────────────────────────────
+// 防止多个请求同时 401 时重复跳转
+let isRedirectingToLogin = false;
+
 request.interceptors.response.use(
   (response) => {
     // 请求成功，直接返回响应数据
@@ -44,10 +47,15 @@ request.interceptors.response.use(
       switch (response.status) {
         case 401:
           // Token 过期或无效，清除用户信息并跳转登录页
-          ElMessage.error("登录已过期，请重新登录");
-          const userStore = useUserStore();
-          userStore.logout();
-          router.push("/login");
+          if (!isRedirectingToLogin) {
+            isRedirectingToLogin = true;
+            ElMessage.error("登录已过期，请重新登录");
+            const userStore = useUserStore();
+            userStore.logout();
+            router.push("/login").finally(() => {
+              isRedirectingToLogin = false;
+            });
+          }
           break;
 
         case 403:
