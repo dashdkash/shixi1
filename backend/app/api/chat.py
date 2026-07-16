@@ -352,7 +352,11 @@ async def chat_stream(
                 elif kind == "on_tool_end":
                     tool_name = event.get("name", "")
                     output = event.get("data", {}).get("output", "")
-                    result_str = str(output) if output else ""
+                    # output 可能是 ToolMessage 对象或纯字符串
+                    if hasattr(output, "content"):
+                        result_str = output.content
+                    else:
+                        result_str = str(output) if output else ""
                     logger.info("[Multi-Agent] 工具完成: %s (%d 字符)", tool_name, len(result_str))
                     yield (
                         f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'summary': result_str[:100], 'result': result_str}, ensure_ascii=False)}\n\n"

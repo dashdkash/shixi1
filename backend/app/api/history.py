@@ -85,9 +85,11 @@ async def get_detection_history(
         if task_results:
             preview_image_url = task_results[0].annotated_image_url
             first_result_id = task_results[0].id
-        # top_classes：去重取前 5 个中文名
+        # top_classes：去重取前 5 个中文名（过滤掉占位记录）
         class_names_cn = list(dict.fromkeys(
-            r.class_name_cn or r.class_name for r in task_results
+            r.class_name_cn or r.class_name
+            for r in task_results
+            if not (r.class_name == "no_detection" and r.class_id == -1)
         ))[:5]
         data.append({
             "id": task.id,
@@ -149,6 +151,9 @@ async def get_detection_detail(
                 "objects": [],
             }
             first_result_id_by_image[image_path] = result.id
+        # 跳过占位记录（no_detection），不在目标列表中显示
+        if result.class_name == "no_detection" and result.class_id == -1:
+            continue
         results_by_image[image_path]["objects"].append({
             "class_name": result.class_name,
             "class_name_cn": result.class_name_cn,

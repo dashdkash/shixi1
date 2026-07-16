@@ -67,17 +67,13 @@ def _wrap_tool(tool):
 
     def _trunc(*a, **kw):
         r = str(orig(*a, **kw) or "")
-        if len(r) > _MAX_TOOL_OUTPUT:
-            return r[:_MAX_TOOL_OUTPUT] + f"\n...[已截断 {len(r)} 字符]"
-        return r
+        return _smart_truncate(r)
 
     afunc = getattr(tool, "coroutine", None)
     if afunc:
         async def _atrunc(*a, **kw):
             r = str(await afunc(*a, **kw) or "")
-            if len(r) > _MAX_TOOL_OUTPUT:
-                return r[:_MAX_TOOL_OUTPUT] + f"\n...[已截断 {len(r)} 字符]"
-            return r
+            return _smart_truncate(r)
     else:
         _atrunc = None
 
