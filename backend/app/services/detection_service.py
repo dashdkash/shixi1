@@ -22,6 +22,7 @@
 """
 
 import base64
+import contextvars
 import os
 import shutil
 import subprocess
@@ -43,6 +44,10 @@ from app.entity.db_models import (
     ModelVersion,
 )
 from app.storage.minio_client import MinIOClient
+
+current_user_id: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+    "current_user_id", default=None
+)
 
 logger = get_logger(__name__)
 
@@ -293,6 +298,9 @@ class DetectionService:
                 "task_id": int,
             }
         """
+        # 从上下文变量获取 user_id（Agent 工具调用时未显式传递）
+        user_id = user_id or current_user_id.get()
+
         db = SessionLocal()
         try:
             # ── 确保默认场景存在 ──
@@ -413,6 +421,9 @@ class DetectionService:
         Returns:
             批量检测结果字典
         """
+        # 从上下文变量获取 user_id（Agent 工具调用时未显式传递）
+        user_id = user_id or current_user_id.get()
+
         db = SessionLocal()
         try:
             model = self._get_model(scene_id)
@@ -555,6 +566,9 @@ class DetectionService:
         Returns:
             ZIP 检测结果字典
         """
+        # 从上下文变量获取 user_id（Agent 工具调用时未显式传递）
+        user_id = user_id or current_user_id.get()
+
         temp_dir = None
         try:
             # ── 解压 ZIP 到临时目录 ──
@@ -648,6 +662,9 @@ class DetectionService:
                 "total_inference_time": float, # 总推理耗时（ms）
             }
         """
+        # 从上下文变量获取 user_id（Agent 工具调用时未显式传递）
+        user_id = user_id or current_user_id.get()
+
         db = SessionLocal()
         try:
             # ── 确保默认场景存在 ──

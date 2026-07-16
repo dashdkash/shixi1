@@ -17,7 +17,7 @@ import time
 import cv2
 import numpy as np
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi import WebSocket, WebSocketDisconnect
 from app.api.auth import get_current_user
 from app.core.logger import get_logger
@@ -28,6 +28,59 @@ from app.services.detection_service import detection_service, DetectionService
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/detection", tags=["快捷检测"])
+
+
+@router.get("/image/{task_id}", summary="获取检测标注图")
+async def get_annotated_image(
+    task_id: int,
+):
+    """
+    通过任务 ID 获取标注图片（MinIO 代理）
+
+    解决前端跨域/跨端口访问 MinIO 图片的问题。
+    """
+    from app.entity.db_models import DetectionResult
+
+    db = SessionLocal()
+    try:
+        result = (
+            db.query(DetectionResult)
+            .filter(DetectionResult.task_id == task_id)
+            .first()
+        )
+        if not result or not result.annotated_image_url:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "标注图不存在"},
+            )
+
+        # 从 MinIO URL 中提取 object_name
+        # URL 格式: http://localhost:9000/rsod-images/detections/14/xxx.jpg?X-Amz-...
+        from urllib.parse import urlparse, unquote
+        parsed = urlparse(result.annotated_image_url)
+        # path = /rsod-images/detections/14/xxx.jpg
+        path_parts = parsed.path.lstrip("/").split("/", 1)
+        if len(path_parts) < 2:
+            return JSONResponse(status_code=404, content={"error": "无效的 MinIO 路径"})
+        object_name = unquote(path_parts[1])
+
+        # 从 MinIO 下载图片
+        from app.storage.minio_client import MinIOClient
+        mc = MinIOClient()
+        data = mc.client.get_object(mc.bucket_name, object_name)
+        image_bytes = data.read()
+        data.close()
+
+        return Response(
+            content=image_bytes,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except Exception as e:
+        logger.error("获取标注图失败: %s", str(e), exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        db.close()
 
 
 @router.post("/upload", summary="批量上传图片检测")

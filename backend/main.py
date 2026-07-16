@@ -3,6 +3,7 @@ import os
 
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
+from app.api.dashboard import router as dashboard_router
 from app.api.detection import router as detection_router
 from app.api.health import router as health_router
 from app.api.history import router as history_router
@@ -79,6 +80,7 @@ app.mount("/detections", StaticFiles(directory=detections_dir), name="detections
 # ── 注册路由 ─────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(dashboard_router)
 app.include_router(detection_router)
 app.include_router(history_router)
 app.include_router(health_router)
@@ -100,6 +102,20 @@ register_exception_handlers(app)
 
 
 if __name__ == "__main__":
+    import socket
     import uvicorn
 
-    uvicorn.run("main:app", host="127.0.0.1", port=8200, reload=True)
+    def find_free_port(start: int = 8200, end: int = 8300) -> int:
+        """从 start 开始寻找可用端口"""
+        for port in range(start, end):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(("127.0.0.1", port))
+                    return port
+                except OSError:
+                    continue
+        raise RuntimeError(f"在 {start}-{end} 范围内未找到可用端口")
+
+    port = find_free_port()
+    print(f"启动服务: http://127.0.0.1:{port}")
+    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)

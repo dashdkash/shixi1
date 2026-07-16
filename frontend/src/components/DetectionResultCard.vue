@@ -29,7 +29,10 @@
         <img
           :src="annotatedImageSrc"
           alt="检测标注图"
-          @click="showFullImage = true"
+          @click="
+            previewSrc = annotatedImageSrc;
+            showFullImage = true;
+          "
         />
       </div>
 
@@ -154,8 +157,12 @@ const annotatedVideoSrc = computed(() => {
   return props.result.annotated_video_url || null;
 });
 
-/** 单图模式：标注图 URL（优先使用 MinIO URL，否则用 base64） */
+/** 单图模式：标注图 URL（优先使用后端代理，其次 MinIO URL，最后 base64） */
 const annotatedImageSrc = computed(() => {
+  // 优先使用后端代理接口（解决 MinIO 跨端口问题）
+  if (props.result.task_id) {
+    return `/api/detection/image/${props.result.task_id}`;
+  }
   if (props.result.annotated_image_url) {
     return props.result.annotated_image_url;
   }

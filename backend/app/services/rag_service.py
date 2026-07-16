@@ -24,6 +24,7 @@ from app.core.logger import get_logger
 from app.database.session import SessionLocal, get_psycopg2_conn
 from app.entity.db_models import KnowledgeChunk, KnowledgeDocument
 from app.services.embedding_service import embedding_service
+from app.services.reranker_service import reranker_service
 
 logger = get_logger(__name__)
 
@@ -209,6 +210,10 @@ class RAGService:
                 "知识库检索: query=%s, top_k=%d, 命中 %d 条",
                 query[:50], top_k, len(search_results),
             )
+
+            # 4. Reranker 重排
+            if settings.RAG_ENABLE_RERANK and search_results:
+                search_results = reranker_service.rerank(query, search_results)
 
             return search_results
 

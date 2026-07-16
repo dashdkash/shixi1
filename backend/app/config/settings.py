@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     RAG_CHUNK_SIZE: int = 500
     RAG_CHUNK_OVERLAP: int = 50
     RAG_TOP_K: int = 5
+    RERANKER_MODEL: str = "gte-rerank"  # DashScope 重排模型
+    RERANKER_TOP_N: int = 3  # 重排后保留的条数（<= RAG_TOP_K）
+    RAG_ENABLE_RERANK: bool = True  # 是否启用重排
 
     # ── 邮件配置 ──────────────────────────────────────
     SMTP_HOST: str = "smtp.example.com"

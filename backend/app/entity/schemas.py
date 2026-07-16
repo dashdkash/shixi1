@@ -162,6 +162,8 @@ class UserResponseWithStats(BaseModel):
 class RoleResponse(BaseModel):
     """角色响应"""
 
+    model_config = {"from_attributes": True}
+
     id: int
     name: str
     display_name: str
@@ -169,9 +171,6 @@ class RoleResponse(BaseModel):
     is_system: bool
     permissions: list[str] = []  # 权限编码列表
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class RoleCreate(BaseModel):
@@ -186,14 +185,13 @@ class RoleCreate(BaseModel):
 class PermissionResponse(BaseModel):
     """权限响应"""
 
+    model_config = {"from_attributes": True}
+
     id: int
     code: str
     name: str
     module: str
     description: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ══════════════════════════════════════════════════════════════
@@ -219,6 +217,8 @@ class SceneCreate(BaseModel):
 class SceneResponse(BaseModel):
     """检测场景响应"""
 
+    model_config = {"from_attributes": True}
+
     id: int
     name: str
     display_name: str
@@ -230,15 +230,14 @@ class SceneResponse(BaseModel):
     default_model: Optional["ModelVersionBrief"] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 # --- 检测任务 ---
 
 
 class DetectionTaskResponse(BaseModel):
     """检测任务响应"""
+
+    model_config = {"protected_namespaces": (), "from_attributes": True}
 
     id: int
     user_id: int
@@ -256,12 +255,11 @@ class DetectionTaskResponse(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
 
 class DetectionResultResponse(BaseModel):
     """单条检测结果响应"""
+
+    model_config = {"from_attributes": True}
 
     id: int
     task_id: int
@@ -276,9 +274,6 @@ class DetectionResultResponse(BaseModel):
     image_width: Optional[int] = None
     image_height: Optional[int] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class DetectionTaskDetail(BaseModel):
@@ -313,6 +308,8 @@ class DetectionStatistics(BaseModel):
 class TrainingTaskCreate(BaseModel):
     """创建训练任务"""
 
+    model_config = {"protected_namespaces": ()}
+
     scene_id: int = Field(..., description="关联场景 ID")
     model_name: str = Field(default="yolov11n", description="基础模型")
     epochs: int = Field(default=100, ge=10, le=500, description="训练轮数")
@@ -326,6 +323,8 @@ class TrainingTaskCreate(BaseModel):
 
 class TrainingTaskResponse(BaseModel):
     """训练任务响应"""
+
+    model_config = {"protected_namespaces": (), "from_attributes": True}
 
     id: int
     user_id: int
@@ -346,12 +345,11 @@ class TrainingTaskResponse(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
 
 class TrainingMetricResponse(BaseModel):
     """训练指标响应（单 epoch）"""
+
+    model_config = {"from_attributes": True}
 
     epoch: int
     box_loss: Optional[float] = None
@@ -363,15 +361,14 @@ class TrainingMetricResponse(BaseModel):
     map50_95: Optional[float] = None
     lr: Optional[float] = None
 
-    class Config:
-        from_attributes = True
-
 
 # --- 模型版本 ---
 
 
 class ModelVersionBrief(BaseModel):
     """模型版本简要信息"""
+
+    model_config = {"protected_namespaces": (), "from_attributes": True}
 
     id: int
     version: str
@@ -381,12 +378,11 @@ class ModelVersionBrief(BaseModel):
     is_default: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class ModelVersionResponse(BaseModel):
     """模型版本详情"""
+
+    model_config = {"protected_namespaces": (), "from_attributes": True}
 
     id: int
     scene_id: int
@@ -408,12 +404,11 @@ class ModelVersionResponse(BaseModel):
     is_default: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class ModelVersionCreate(BaseModel):
     """手动上传模型版本"""
+
+    model_config = {"protected_namespaces": ()}
 
     scene_id: int
     version: str = Field(..., description="版本号")
@@ -436,6 +431,8 @@ class ChatSessionCreate(BaseModel):
 class ChatSessionResponse(BaseModel):
     """对话会话响应"""
 
+    model_config = {"from_attributes": True}
+
     id: int
     session_uuid: str
     title: Optional[str] = None
@@ -443,9 +440,6 @@ class ChatSessionResponse(BaseModel):
     message_count: int
     last_message_at: Optional[datetime] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ChatMessageRequest(BaseModel):
@@ -460,6 +454,8 @@ class ChatMessageRequest(BaseModel):
 class ChatMessageResponse(BaseModel):
     """对话消息响应"""
 
+    model_config = {"from_attributes": True}
+
     id: int
     session_id: int
     role: str
@@ -470,9 +466,6 @@ class ChatMessageResponse(BaseModel):
     tokens_used: Optional[int] = None
     latency_ms: Optional[int] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ChatHistoryResponse(BaseModel):
@@ -490,6 +483,8 @@ class ChatHistoryResponse(BaseModel):
 class OperationLogResponse(BaseModel):
     """操作日志响应"""
 
+    model_config = {"from_attributes": True}
+
     id: int
     user_id: Optional[int] = None
     username: Optional[str] = None
@@ -504,9 +499,6 @@ class OperationLogResponse(BaseModel):
     status: str
     error_message: Optional[str] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ══════════════════════════════════════════════════════════════
