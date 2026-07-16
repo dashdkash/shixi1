@@ -1,12 +1,13 @@
+# backend/app/entity/db_models.py
 """
 数据库模型定义
 
 表结构总览：
-  用户权限：users, roles, permissions, user_roles, role_permissions
-  检测业务：detection_scenes, detection_tasks, detection_results
-  模型管理：training_tasks, training_metrics, model_versions
-  智能体：  chat_sessions, chat_messages
-  系统运维：operation_logs
+- 用户权限：users, roles, permissions, user_roles, role_permissions
+- 检测业务：detection_scenes, detection_tasks, detection_results
+- 模型管理：training_tasks, training_metrics, model_versions
+- 智能体：chat_sessions, chat_messages
+- 系统运维：operation_logs
 """
 
 from datetime import datetime
@@ -18,20 +19,18 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
-    Enum,
     Float,
     ForeignKey,
     Integer,
     String,
-    Table,
     Text,
 )
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 一、用户与权限（RBAC）
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
 
 class User(Base):
@@ -80,13 +79,13 @@ class Role(Base):
         String(50),
         unique=True,
         nullable=False,
-        comment="角色标识，如 admin/operator/viewer",
+        comment="角色标识,如admin/operator/viewer",
     )
     display_name = Column(
-        String(100), nullable=False, comment="角色显示名，如 管理员/操作员/访客"
+        String(100), nullable=False, comment="角色显示名,如管理员/操作员/访客"
     )
     description = Column(String(500), nullable=True, comment="角色描述")
-    is_system = Column(Boolean, default=False, comment="是否系统内置角色（不可删除）")
+    is_system = Column(Boolean, default=False, comment="是否系统内置角色(不可删除)")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
 
     # 关联
@@ -108,13 +107,13 @@ class Permission(Base):
         String(100),
         unique=True,
         nullable=False,
-        comment="权限编码，如 detection:task:create",
+        comment="权限编码,如detection:task:create",
     )
     name = Column(String(100), nullable=False, comment="权限名称")
     module = Column(
         String(50),
         nullable=False,
-        comment="所属模块：auth/detection/training/agent/system",
+        comment="所属模块: auth/detection/training/agent/system",
     )
     description = Column(String(500), nullable=True, comment="权限描述")
 
@@ -134,6 +133,7 @@ class UserRole(Base):
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.now)
 
+    # 关联
     user = relationship("User", back_populates="user_roles")
     role = relationship("Role", back_populates="user_roles")
 
@@ -149,41 +149,39 @@ class RolePermission(Base):
         Integer, ForeignKey("permissions.id"), nullable=False, index=True
     )
 
+    # 关联
     role = relationship("Role", back_populates="role_permissions")
     permission = relationship("Permission", back_populates="role_permissions")
 
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 二、检测业务
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
 
 class DetectionScene(Base):
-    """检测场景配置表
-    每个小组/业务方向一个场景，如：遥感检测、工业缺陷、农业病害等
-    场景决定了使用哪个模型、检测哪些类别
-    """
+    """检测场景配置表"""
 
     __tablename__ = "detection_scenes"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(
-        String(100), unique=True, nullable=False, comment="场景标识，如 remote_sensing"
+        String(100), unique=True, nullable=False, comment="场景标识,如 remote_sensing"
     )
     display_name = Column(
-        String(100), nullable=False, comment="场景显示名，如 遥感目标检测"
+        String(100), nullable=False, comment="场景显示名,如遥感目标检测"
     )
     description = Column(Text, nullable=True, comment="场景描述")
     category = Column(
         String(50),
         nullable=False,
-        comment="场景分类：agriculture/industry/remote_sensing/medical/traffic",
+        comment="场景分类: agriculture/industry/remote_sensing/medical/traffic",
     )
     class_names = Column(
-        JSON, nullable=False, comment='类别列表，如 ["airplane","storage-tank"]'
+        JSON, nullable=False, comment='类别列表,如 ["airplane","storage-tank"]'
     )
     class_names_cn = Column(
-        JSON, nullable=True, comment='类别中文名映射，如 {"airplane":"飞机"}'
+        JSON, nullable=True, comment='类别中文名映射,如 {"airplane":"飞机"}'
     )
     is_active = Column(Boolean, default=True, comment="是否启用")
     created_by = Column(
@@ -199,7 +197,7 @@ class DetectionScene(Base):
 
 
 class DetectionTask(Base):
-    """检测任务表 — 每次检测操作生成一条任务记录"""
+    """检测任务表"""
 
     __tablename__ = "detection_tasks"
 
@@ -221,18 +219,18 @@ class DetectionTask(Base):
         comment="使用的模型版本",
     )
     task_type = Column(
-        String(20), nullable=False, comment="检测类型：single/batch/folder/video/camera"
+        String(20), nullable=False, comment="检测类型: single/batch/folder/video/camera"
     )
     status = Column(
         String(20),
         default="pending",
-        comment="状态：pending/processing/completed/failed",
+        comment="状态: pending/processing/completed/failed",
     )
 
     # 检测统计
     total_images = Column(Integer, default=0, comment="处理图像总数")
     total_objects = Column(Integer, default=0, comment="检测到目标总数")
-    total_inference_time = Column(Float, default=0, comment="总推理耗时（ms）")
+    total_inference_time = Column(Float, default=0, comment="总推理耗时(ms)")
 
     # 检测参数
     conf_threshold = Column(Float, default=0.25, comment="置信度阈值")
@@ -242,11 +240,11 @@ class DetectionTask(Base):
     # 错误信息
     error_message = Column(Text, nullable=True, comment="失败时的错误信息")
 
-    # 分析与建议（AI 生成）
-    analysis_report = Column(Text, nullable=True, comment="分析报告（Markdown 格式）")
+    # 分析与建议（AI生成）
+    analysis_report = Column(Text, nullable=True, comment="分析报告(Markdown格式)")
     analysis_suggestion = Column(Text, nullable=True, comment="专业建议")
     risk_level = Column(
-        String(20), nullable=True, comment="风险等级：low/medium/high/critical"
+        String(20), nullable=True, comment="风险等级: low/medium/high/critical"
     )
     analyzed_at = Column(DateTime, nullable=True, comment="分析完成时间")
 
@@ -263,7 +261,7 @@ class DetectionTask(Base):
 
 
 class DetectionResult(Base):
-    """检测结果表 — 每张图像中每个检测到的目标一条记录"""
+    """检测结果表"""
 
     __tablename__ = "detection_results"
 
@@ -283,12 +281,12 @@ class DetectionResult(Base):
     # 单个目标信息
     class_name = Column(String(50), nullable=False, index=True, comment="类别名称")
     class_name_cn = Column(String(50), nullable=True, comment="类别中文名")
-    class_id = Column(Integer, nullable=False, comment="类别 ID")
-    confidence = Column(Float, nullable=False, comment="置信度 0~1")
-    bbox = Column(JSON, nullable=False, comment="边界框 [x1, y1, x2, y2]")
+    class_id = Column(Integer, nullable=False, comment="类别ID")
+    confidence = Column(Float, nullable=False, comment="置信度0-1")
+    bbox = Column(JSON, nullable=False, comment="边界框[x1,y1,x2,y2]")
 
-    # 图像级信息（冗余存储，方便查询）
-    inference_time = Column(Float, nullable=True, comment="该图推理耗时（ms）")
+    # 图像级信息（冗余存储）
+    inference_time = Column(Float, nullable=True, comment="该图推理耗时(ms)")
     image_width = Column(Integer, nullable=True, comment="图像宽度")
     image_height = Column(Integer, nullable=True, comment="图像高度")
 
@@ -298,9 +296,9 @@ class DetectionResult(Base):
     task = relationship("DetectionTask", back_populates="results")
 
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 三、模型管理
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
 
 class TrainingTask(Base):
@@ -319,30 +317,37 @@ class TrainingTask(Base):
         index=True,
         comment="关联场景",
     )
+    source_task_id = Column(
+        Integer,
+        ForeignKey("training_tasks.id"),
+        nullable=True,
+        index=True,
+        comment="续训来源任务ID",
+    )
     task_uuid = Column(
         String(100), unique=True, nullable=False, index=True, comment="任务唯一标识"
     )
     status = Column(
         String(20),
         default="pending",
-        comment="状态：pending/running/completed/failed/cancelled",
+        comment="状态: pending/running/completed/failed/cancelled",
     )
 
     # 训练配置
     model_name = Column(
-        String(50), default="yolov11n", comment="基础模型：yolov11n/s/m/l/x"
+        String(50), default="yolov11n", comment="基础模型: yolov11n/s/m/l/x"
     )
     epochs = Column(Integer, default=100, comment="训练轮数")
     img_size = Column(Integer, default=640, comment="图像尺寸")
     batch_size = Column(Integer, default=16, comment="批次大小")
-    device = Column(String(20), default="0", comment="训练设备：0/1/cpu")
-    optimizer = Column(String(20), default="SGD", comment="优化器：SGD/Adam/AdamW")
+    device = Column(String(20), default="0", comment="训练设备: 0/1/cpu")
+    optimizer = Column(String(20), default="SGD", comment="优化器: SGD/Adam/AdamW")
     lr0 = Column(Float, default=0.01, comment="初始学习率")
     augment_config = Column(JSON, nullable=True, comment="数据增强配置")
 
     # 训练进度
     current_epoch = Column(Integer, default=0, comment="当前轮数")
-    progress = Column(Integer, default=0, comment="进度百分比 0~100")
+    progress = Column(Integer, default=0, comment="进度百分比 0-100")
 
     # 数据集信息
     dataset_path = Column(String(500), nullable=True, comment="数据集路径")
@@ -362,6 +367,11 @@ class TrainingTask(Base):
     # 关联
     user = relationship("User", back_populates="training_tasks")
     scene = relationship("DetectionScene", back_populates="training_tasks")
+    source_task = relationship(
+        "TrainingTask",
+        remote_side=[id],
+        backref="child_tasks",
+    )
     metrics = relationship(
         "TrainingMetric", back_populates="task", cascade="all, delete-orphan"
     )
@@ -369,7 +379,7 @@ class TrainingTask(Base):
 
 
 class TrainingMetric(Base):
-    """训练指标表 — 每个 epoch 记录一条，用于绘制训练曲线"""
+    """训练指标表"""
 
     __tablename__ = "training_metrics"
 
@@ -386,7 +396,7 @@ class TrainingMetric(Base):
     # 损失值
     box_loss = Column(Float, nullable=True, comment="边界框损失")
     cls_loss = Column(Float, nullable=True, comment="分类损失")
-    dfl_loss = Column(Float, nullable=True, comment="DFL 损失")
+    dfl_loss = Column(Float, nullable=True, comment="DFL损失")
 
     # 评估指标
     precision = Column(Float, nullable=True, comment="精确率")
@@ -404,7 +414,7 @@ class TrainingMetric(Base):
 
 
 class ModelVersion(Base):
-    """模型版本管理表 — 每次训练产出或手动上传的模型版本"""
+    """模型版本管理表"""
 
     __tablename__ = "model_versions"
 
@@ -417,33 +427,27 @@ class ModelVersion(Base):
         comment="所属场景",
     )
     training_task_id = Column(
-        Integer,
-        ForeignKey("training_tasks.id"),
-        nullable=True,
-        comment="来源训练任务（可为空，支持手动上传）",
+        Integer, ForeignKey("training_tasks.id"), nullable=True, comment="来源训练任务"
     )
-
-    version = Column(String(50), nullable=False, comment="版本号，如 v1.0.0")
+    version = Column(String(50), nullable=False, comment="版本号，如v1.0.0")
     model_name = Column(String(100), nullable=False, comment="模型名称")
     model_type = Column(
-        String(50), default="yolov11n", comment="模型类型：yolov11n/s/m/l/x"
+        String(50), default="yolov11n", comment="模型类型: yolov11n/s/m/l/x"
     )
     status = Column(
-        String(20), default="active", comment="状态：active/archived/deleted"
+        String(20), default="active", comment="状态: active/archived/deleted"
     )
 
     # 模型文件
     model_path = Column(String(500), nullable=False, comment="本地模型文件路径")
-    minio_url = Column(String(500), nullable=True, comment="MinIO 存储 URL")
+    minio_url = Column(String(500), nullable=True, comment="MinIO存储URL")
 
-    # 评估指标（训练完成后写入）
+    # 评估指标
     map50 = Column(Float, nullable=True, comment="mAP@0.50")
     map50_95 = Column(Float, nullable=True, comment="mAP@0.50:0.95")
     precision = Column(Float, nullable=True, comment="精确率")
     recall = Column(Float, nullable=True, comment="召回率")
-    per_class_ap = Column(
-        JSON, nullable=True, comment='各类别 AP，如 {"airplane":0.85,"tank":0.72}'
-    )
+    per_class_ap = Column(JSON, nullable=True, comment="各类别AP")
 
     # 元信息
     description = Column(Text, nullable=True, comment="版本描述/变更说明")
@@ -458,13 +462,13 @@ class ModelVersion(Base):
     detection_tasks = relationship("DetectionTask", back_populates="model_version")
 
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 四、智能体对话
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
 
 class ChatSession(Base):
-    """对话会话表 — 每次对话创建一个会话"""
+    """对话会话表"""
 
     __tablename__ = "chat_sessions"
 
@@ -472,11 +476,11 @@ class ChatSession(Base):
     user_id = Column(
         Integer, ForeignKey("users.id"), nullable=False, index=True, comment="所属用户"
     )
-    session_uuid = Column(
+    session_uid = Column(
         String(100), unique=True, nullable=False, index=True, comment="会话唯一标识"
     )
-    title = Column(String(200), nullable=True, comment="会话标题（取第一条消息摘要）")
-    status = Column(String(20), default="active", comment="状态：active/archived")
+    title = Column(String(200), nullable=True, comment="会话标题")
+    status = Column(String(20), default="active", comment="状态: active/archived")
     message_count = Column(Integer, default=0, comment="消息数量")
     last_message_at = Column(DateTime, nullable=True, comment="最后消息时间")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
@@ -493,7 +497,7 @@ class ChatSession(Base):
 
 
 class ChatMessage(Base):
-    """对话消息表 — 每条消息（用户/AI/工具调用）一条记录"""
+    """对话消息表"""
 
     __tablename__ = "chat_messages"
 
@@ -506,7 +510,7 @@ class ChatMessage(Base):
         comment="所属会话",
     )
     role = Column(
-        String(20), nullable=False, comment="消息角色：user/assistant/tool/system"
+        String(20), nullable=False, comment="消息角色: user/assistant/tool/system"
     )
     content = Column(Text, nullable=False, comment="消息内容")
 
@@ -514,18 +518,14 @@ class ChatMessage(Base):
     agent_used = Column(
         String(50),
         nullable=True,
-        comment="处理的 Agent：supervisor/detection/analysis/qa",
+        comment="处理的Agent: supervisor/detection/analysis/qa",
     )
-    tool_calls = Column(
-        JSON,
-        nullable=True,
-        comment='工具调用记录，如 [{"tool":"detect_objects","args":{...}}]',
-    )
+    tool_calls = Column(JSON, nullable=True, comment="工具调用记录")
     tool_result = Column(Text, nullable=True, comment="工具调用返回结果")
 
     # 元信息
-    tokens_used = Column(Integer, nullable=True, comment="Token 消耗量")
-    latency_ms = Column(Integer, nullable=True, comment="响应耗时（毫秒）")
+    tokens_used = Column(Integer, nullable=True, comment="Token消耗量")
+    latency_ms = Column(Integer, nullable=True, comment="响应耗时(毫秒)")
 
     created_at = Column(DateTime, default=datetime.now, index=True, comment="创建时间")
 
@@ -533,52 +533,48 @@ class ChatMessage(Base):
     session = relationship("ChatSession", back_populates="messages")
 
 
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 # 五、系统运维
-# ══════════════════════════════════════════════════════════════
+# ============================================================
 
 
 class OperationLog(Base):
-    """操作审计日志表 — 记录用户关键操作"""
+    """操作审计日志表"""
 
     __tablename__ = "operation_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(
-        Integer,
-        ForeignKey("users.id"),
-        nullable=True,
-        index=True,
-        comment="操作用户（可为空表示系统操作）",
+        Integer, ForeignKey("users.id"), nullable=True, index=True, comment="操作用户"
     )
-    username = Column(String(50), nullable=True, comment="冗余用户名，方便查询")
+    username = Column(String(50), nullable=True, comment="冗余用户名")
 
     # 操作信息
     module = Column(
         String(50),
         nullable=False,
-        comment="操作模块：auth/detection/training/agent/system",
+        comment="操作模块: auth/detection/training/agent/system",
     )
     action = Column(
         String(50),
         nullable=False,
-        comment="操作类型：create/update/delete/login/export",
+        comment="操作类型: create/update/delete/login/export",
     )
     target_type = Column(
-        String(50), nullable=True, comment="操作对象类型：user/task/model/session"
+        String(50), nullable=True, comment="操作对象类型: user/task/model/session"
     )
-    target_id = Column(String(100), nullable=True, comment="操作对象 ID")
+    target_id = Column(String(100), nullable=True, comment="操作对象ID")
     description = Column(String(500), nullable=True, comment="操作描述")
 
     # 请求信息
-    ip_address = Column(String(50), nullable=True, comment="客户端 IP")
-    user_agent = Column(String(500), nullable=True, comment="客户端 User-Agent")
-    request_method = Column(String(10), nullable=True, comment="HTTP 方法")
+    ip_address = Column(String(50), nullable=True, comment="客户端IP")
+    user_agent = Column(String(500), nullable=True, comment="客户端User-Agent")
+    request_method = Column(String(10), nullable=True, comment="HTTP方法")
     request_path = Column(String(500), nullable=True, comment="请求路径")
 
     # 结果
-    status = Column(String(20), default="success", comment="操作结果：success/failure")
-    error_message = Column(Text, nullable=True, comment="失败时的错误信息")
+    status = Column(String(20), default="success", comment="操作结果: success/failure")
+    error_message = Column(String(500), nullable=True, comment="失败时的错误信息")
 
     created_at = Column(DateTime, default=datetime.now, index=True, comment="创建时间")
 
