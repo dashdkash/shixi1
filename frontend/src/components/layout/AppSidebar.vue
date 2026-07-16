@@ -8,45 +8,81 @@
       active-text-color="#409eff"
     >
       <el-menu-item
-        v-for="item in menuItems"
+        v-for="item in visibleMenuItems"
         :key="item.path"
         :index="item.path"
       >
         <el-icon>
           <component :is="item.icon" />
         </el-icon>
-        <span>{{ item.title }}</span>
+        <span>{{ $t(item.i18nKey) }}</span>
       </el-menu-item>
     </el-menu>
   </aside>
 </template>
 
 <script setup>
+import { isAdmin } from "@/utils/auth";
+import { useUserStore } from "@/stores/user";
 import {
   Camera,
   ChatDotRound,
   Clock,
   Cpu,
   DataAnalysis,
-} from '@element-plus/icons-vue'
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+} from "@element-plus/icons-vue";
+import { computed } from "vue";
+import { useRoute } from "vue-router";
 
-const route = useRoute()
+const route = useRoute();
+const userStore = useUserStore();
 
 /** 当前激活的菜单项 */
 const activeMenu = computed(() => {
-  return '/' + route.path.split('/')[1]
-})
+  return "/" + route.path.split("/")[1];
+});
 
 /** 侧边栏菜单配置 */
-const menuItems = [
-  { path: '/chat', title: '智能对话', icon: ChatDotRound },
-  { path: '/detection', title: '检测工作台', icon: Camera },
-  { path: '/training', title: '模型训练', icon: Cpu },
-  { path: '/history', title: '历史记录', icon: Clock },
-  { path: '/dashboard', title: '数据看板', icon: DataAnalysis },
-]
+const allMenuItems = [
+  {
+    path: "/chat",
+    i18nKey: "sidebar.chat",
+    icon: ChatDotRound,
+    requiresAdmin: false,
+  },
+  {
+    path: "/detection",
+    i18nKey: "sidebar.detection",
+    icon: Camera,
+    requiresAdmin: false,
+  },
+  {
+    path: "/training",
+    i18nKey: "sidebar.training",
+    icon: Cpu,
+    requiresAdmin: true,
+  },
+  {
+    path: "/history",
+    i18nKey: "sidebar.history",
+    icon: Clock,
+    requiresAdmin: false,
+  },
+  {
+    path: "/dashboard",
+    i18nKey: "sidebar.dashboard",
+    icon: DataAnalysis,
+    requiresAdmin: true,
+  },
+];
+
+/** 根据用户角色过滤菜单 */
+const visibleMenuItems = computed(() => {
+  if (isAdmin(userStore.user)) {
+    return allMenuItems;
+  }
+  return allMenuItems.filter((item) => !item.requiresAdmin);
+});
 </script>
 
 <style lang="scss" scoped>
@@ -56,12 +92,12 @@ const menuItems = [
   background: $sidebar-bg;
   overflow-y: auto;
 
-  :deep(.el-menu) {
+  .el-menu {
     border-right: none;
     height: 100%;
   }
 
-  :deep(.el-menu-item) {
+  .el-menu-item {
     height: 50px;
     line-height: 50px;
 
