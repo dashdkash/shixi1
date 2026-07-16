@@ -18,14 +18,16 @@ class Settings(BaseSettings):
     APP_NAME: str = "RSOD Agent Platform"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: str = "INFO"  # 已存在，保留
+    
+    SERVER_HOST: str = "http://localhost"
+    SERVER_PORT: int = 8200
 
-    # ---- 日志配置 ----
-    LOG_DIR: str = "logs"
-    LOG_MAX_BYTES: int = 10 * 1024 * 1024
-    LOG_BACKUP_COUNT: int = 5
+    # ── 日志文件配置（新增） ──────────────────────────
+    LOG_DIR: str = "logs"  # 日志目录（相对于 backend/）
+    LOG_MAX_BYTES: int = 10 * 1024 * 1024  # 单文件最大 10MB
+    LOG_BACKUP_COUNT: int = 5  # 保留 5 份历史日志
 
-    # ---- 数据库配置 ----
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
     DB_NAME: str = "rsod_agent"
@@ -103,7 +105,7 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
     
     # 前端地址（用于生成重置链接）
-    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_URL: str = "http://localhost:3000"
 
     @property
     def cors_origins_list(self) -> list[str]:

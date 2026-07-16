@@ -2,7 +2,7 @@
   <header class="app-header">
     <!-- 左侧：Logo + 平台名称 -->
     <div class="header-left">
-      <img src="/favicon.svg" alt="logo" class="header-logo" />
+      <img src="/logo.svg" alt="logo" class="header-logo" />
       <span class="header-title">{{ $t("app.title") }}</span>
     </div>
 

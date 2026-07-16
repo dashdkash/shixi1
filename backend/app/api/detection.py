@@ -14,6 +14,8 @@ import tempfile
 import threading
 import asyncio
 import time
+import cv2
+import numpy as np
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from fastapi.responses import JSONResponse, Response
 from fastapi import WebSocket, WebSocketDisconnect
@@ -21,7 +23,7 @@ from app.api.auth import get_current_user
 from app.core.logger import get_logger
 from app.database.session import SessionLocal
 from app.entity.db_models import DetectionTask
-from app.services.detection_service import detection_service
+from app.services.detection_service import detection_service, DetectionService
 
 logger = get_logger(__name__)
 
@@ -289,9 +291,10 @@ async def detect_video_api(
     # ── 先创建检测任务记录 ──
     db = SessionLocal()
     try:
+        scene_id = scene_id or DetectionService._ensure_default_scene()
         task = DetectionTask(
             user_id=current_user.id,
-            scene_id=scene_id or 1,
+            scene_id=scene_id,
             task_type="video",
             status="processing",
             conf_threshold=conf,
@@ -375,10 +378,14 @@ async def get_video_detection_status(
     progress_info = redis_client.get_json(f"video_task:{task_id}")
 
     if progress_info:
-        return {
+        result = {
             "task_id": task_id,
             **progress_info,
         }
+        # 展开 result 字段，方便前端直接访问
+        if "result" in result:
+            result.update(result.pop("result"))
+        return result
 
     # 回退：从数据库查询
     db = SessionLocal()
@@ -395,6 +402,7 @@ async def get_video_detection_status(
             "status": task.status,
             "task_type": task.task_type,
             "total_images": task.total_images,
+            "processed_frames": task.total_images,
             "total_objects": task.total_objects or 0,
         }
 
@@ -414,6 +422,7 @@ async def get_video_detection_status(
 
             result["class_counts"] = class_counts
             result["total_inference_time"] = task.total_inference_time
+            result["annotated_video_url"] = task.annotated_video_url
 
         return result
     finally:
@@ -470,11 +479,14 @@ async def camera_detection_ws(websocket: WebSocket):
                 iou = data.get("iou", 0.45)
                 scene_id = data.get("scene_id")
 
+                # 确保默认场景存在
+                if scene_id is None:
+                    scene_id = DetectionService._ensure_default_scene()
+
                 # 加载模型（指定设备）
                 device = "cpu" if mode == "cpu" else "0"
                 try:
-                    from app.services.detection_service import get_model
-                    model = get_model(scene_id)
+                    model = DetectionService._get_model(scene_id)
 
                     dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
                     model.predict(

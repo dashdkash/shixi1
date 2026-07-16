@@ -68,6 +68,19 @@ export default defineConfig(async ({ mode }) => {
         target: `http://localhost:${backendPort}`,
         changeOrigin: true,
       },
+      "/uploads": {
+        target: "http://localhost:8200",
+        changeOrigin: true,
+      },
+      "/detections": {
+        target: "http://localhost:8200",
+        changeOrigin: true,
+      },
+      "/api/detection/camera": {
+        target: "ws://localhost:8200",
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
 

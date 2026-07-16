@@ -69,25 +69,85 @@ class DetectionService:
     """目标检测服务 — 封装 YOLOv11 推理全流程"""
 
     @staticmethod
+    def _ensure_default_scene() -> int:
+        """
+        确保默认检测场景存在，如果不存在则创建
+        返回场景 ID
+        """
+        db = SessionLocal()
+        try:
+            scene = db.query(DetectionScene).first()
+            if scene:
+                return scene.id
+
+            new_scene = DetectionScene(
+                name="us_weeds",
+                display_name="杂草检测",
+                description="杂草检测场景，支持识别15种常见杂草",
+                category="agriculture",
+                class_names=[
+                    "carpetweeds", "crabgrass", "eclipta", "goosegrass",
+                    "morningglory", "nutsedge", "palmeramaranth", "pricklysida",
+                    "purslane", "ragweed", "sicklepod", "spottedspurge",
+                    "spurredanoda", "swinecress", "waterhemp"
+                ],
+                class_names_cn={
+                    "carpetweeds": "地毯草", "crabgrass": "马唐草",
+                    "eclipta": "鳢肠", "goosegrass": "牛筋草",
+                    "morningglory": "牵牛花", "nutsedge": "莎草",
+                    "palmeramaranth": "苋", "pricklysida": "刺蒺藜",
+                    "purslane": "马齿苋", "ragweed": "豚草",
+                    "sicklepod": "决明", "spottedspurge": "斑地锦",
+                    "spurredanoda": "田皂角", "swinecress": "臭荠",
+                    "waterhemp": "水麻"
+                },
+                is_active=True,
+            )
+            db.add(new_scene)
+            db.commit()
+            logger.info("已创建默认杂草检测场景: id=%d, name=%s", new_scene.id, new_scene.name)
+            return new_scene.id
+        finally:
+            db.close()
+
+    @staticmethod
+    def _get_backend_dir() -> str:
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    @staticmethod
+    def _resolve_model_path(model_path: str) -> str:
+        if os.path.isabs(model_path):
+            return model_path
+        backend_dir = DetectionService._get_backend_dir()
+        return os.path.join(backend_dir, model_path)
+
+    @staticmethod
     def _get_default_model_path() -> str:
         """
         获取默认模型权重路径
 
         查找顺序：
-          1. models/ 目录下 is_default=True 的模型
-          2. runs/train/ 目录下最新训练产出的 best.pt
-          3. 回退到预训练模型 yolov11n.pt
+          1. models/us_weeds_v3.0.0/best.pt（优先使用训练好的杂草检测模型）
+          2. models/ 目录下 is_default=True 的模型
+          3. runs/train/ 目录下最新训练产出的 best.pt
+          4. 回退到预训练模型 yolov11n.pt
         """
         db = SessionLocal()
+        backend_dir = DetectionService._get_backend_dir()
         try:
-            # 查找默认模型版本
+            # 优先使用训练好的杂草检测模型
+            trained_model_path = os.path.join(backend_dir, "models", "us_weeds_v3.0.0", "best.pt")
+            if os.path.exists(trained_model_path):
+                return trained_model_path
+
             default_model = (
                 db.query(ModelVersion).filter(ModelVersion.is_default == True).first()
             )
-            if default_model and os.path.exists(default_model.model_path):
-                return default_model.model_path
+            if default_model:
+                resolved_path = DetectionService._resolve_model_path(default_model.model_path)
+                if os.path.exists(resolved_path):
+                    return resolved_path
 
-            # 回退：查找最新训练的 best.pt
             from app.entity.db_models import TrainingTask
 
             latest_task = (
@@ -98,7 +158,7 @@ class DetectionService:
             )
             if latest_task:
                 weights_path = os.path.join(
-                    os.getcwd(),
+                    backend_dir,
                     settings.TRAIN_OUTPUT_DIR,
                     f"task_{latest_task.task_uuid}",
                     "weights",
@@ -109,8 +169,6 @@ class DetectionService:
         finally:
             db.close()
 
-        # 最终回退：预训练模型
-        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return os.path.join(backend_dir, "yolo11n.pt")
 
     @staticmethod
@@ -133,8 +191,10 @@ class DetectionService:
                     )
                     .first()
                 )
-                if default_model and os.path.exists(default_model.model_path):
-                    model_path = default_model.model_path
+                if default_model:
+                    resolved_path = DetectionService._resolve_model_path(default_model.model_path)
+                    if os.path.exists(resolved_path):
+                        model_path = resolved_path
             finally:
                 db.close()
 
@@ -243,11 +303,9 @@ class DetectionService:
 
         db = SessionLocal()
         try:
-            # 当 scene_id 为 None 时，自动查询第一个可用场景
-            if not scene_id:
-                default_scene = db.query(DetectionScene).first()
-                if default_scene:
-                    scene_id = default_scene.id
+            # ── 确保默认场景存在 ──
+            if scene_id is None:
+                scene_id = DetectionService._ensure_default_scene()
 
             # ── 加载模型 ──
             model = self._get_model(scene_id)
@@ -609,6 +667,10 @@ class DetectionService:
 
         db = SessionLocal()
         try:
+            # ── 确保默认场景存在 ──
+            if scene_id is None:
+                scene_id = DetectionService._ensure_default_scene()
+
             # ── 加载模型 ──
             model = self._get_model(scene_id)
 
@@ -635,18 +697,21 @@ class DetectionService:
 
             # ── 如果没有传入 task_id，创建检测任务 ──
             if not task_id:
-                task = DetectionTask(
-                    user_id=user_id or 0,
-                    scene_id=scene_id or 1,
-                    task_type="video",
-                    status="processing",
-                    total_images=0,  # 后续更新
-                    conf_threshold=conf,
-                    iou_threshold=iou,
-                )
-                db.add(task)
-                db.flush()
-                task_id = task.id
+                if user_id:
+                    task = DetectionTask(
+                        user_id=user_id,
+                        scene_id=scene_id,
+                        task_type="video",
+                        status="processing",
+                        total_images=0,
+                        conf_threshold=conf,
+                        iou_threshold=iou,
+                    )
+                    db.add(task)
+                    db.flush()
+                    task_id = task.id
+                else:
+                    task = None
             else:
                 task = (
                     db.query(DetectionTask).filter(DetectionTask.id == task_id).first()
@@ -705,14 +770,14 @@ class DetectionService:
                     )
                 return annotated
 
-            # 创建临时文件用于输出标注视频
+            # 创建临时文件用于输出标注视频（使用MJPG格式，浏览器兼容性更好）
             output_tmp = tempfile.NamedTemporaryFile(
-                suffix=".mp4", delete=False
+                suffix=".avi", delete=False
             )
             output_video_path = output_tmp.name
             output_tmp.close()
 
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            fourcc = cv2.VideoWriter_fourcc(*"MJPG")
             video_writer = cv2.VideoWriter(
                 output_video_path, fourcc, fps, (width, height)
             )
@@ -723,23 +788,24 @@ class DetectionService:
                 if not ret:
                     break
 
-                # 场景变化检测：比较当前帧与上一帧的差异
-                current_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                current_frame_gray = cv2.resize(current_frame_gray, (100, 100))
+                # 判断是否需要处理当前帧：采样帧或第一帧
+                should_process = frame_idx == 0 or frame_idx in sample_set
 
-                scene_changed = False
-                if last_frame is not None:
+                # 场景变化检测：比较当前帧与上一帧的差异（仅用于非采样帧的优化）
+                if not should_process and last_frame is not None:
+                    current_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    current_frame_gray = cv2.resize(current_frame_gray, (100, 100))
                     frame_diff = cv2.absdiff(last_frame, current_frame_gray)
                     diff_score = frame_diff.mean()
-                    if diff_score > 10:
-                        scene_changed = True
-                else:
-                    scene_changed = True
+                    should_process = diff_score > 10
+                    last_frame = current_frame_gray.copy()
+                elif frame_idx == 0:
+                    current_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    current_frame_gray = cv2.resize(current_frame_gray, (100, 100))
+                    last_frame = current_frame_gray.copy()
 
-                last_frame = current_frame_gray.copy()
-
-                # 场景变化时才执行检测和计数
-                if scene_changed:
+                # 采样帧或场景变化时执行检测
+                if should_process:
                     results = model.predict(
                         source=frame,
                         conf=conf,
@@ -804,18 +870,19 @@ class DetectionService:
                         }
                     )
 
-                    # 保存检测结果到数据库
-                    for det in frame_detections:
-                        db_result = DetectionResult(
-                            task_id=task_id,
-                            image_path=f"frame_{frame_idx}.jpg",
-                            class_name=det["class_name"],
-                            class_id=det["class_id"],
-                            confidence=det["confidence"],
-                            bbox=det["bbox"],
-                            inference_time=inference_time,
-                        )
-                        db.add(db_result)
+                    # 保存检测结果到数据库（仅当有 task_id 时）
+                    if task_id:
+                        for det in frame_detections:
+                            db_result = DetectionResult(
+                                task_id=task_id,
+                                image_path=f"frame_{frame_idx}.jpg",
+                                class_name=det["class_name"],
+                                class_id=det["class_id"],
+                                confidence=det["confidence"],
+                                bbox=det["bbox"],
+                                inference_time=inference_time,
+                            )
+                            db.add(db_result)
 
                     # 更新任务进度
                     if task:
@@ -842,12 +909,24 @@ class DetectionService:
             cap.release()
             video_writer.release()
 
-            # ── 使用 ffmpeg 转码为浏览器可播放的 H.264 ──
-            h264_video_path = output_video_path.replace(".mp4", "_h264.mp4")
+            # ── 尝试使用 ffmpeg 转码为浏览器可播放的 H.264 ──
+            final_video_path = output_video_path.replace(".avi", ".mp4")
+            # 查找 ffmpeg 可执行文件（优先 PATH，再尝试常见安装路径）
+            ffmpeg_path = shutil.which("ffmpeg")
+            if not ffmpeg_path:
+                common_paths = [
+                    r"D:\1\ffmpeg-8.1.2-essentials_build\bin\ffmpeg.exe",
+                    r"C:\ffmpeg\bin\ffmpeg.exe",
+                ]
+                for p in common_paths:
+                    if os.path.isfile(p):
+                        ffmpeg_path = p
+                        break
+            ffmpeg_path = ffmpeg_path or "ffmpeg"
             try:
                 subprocess.run(
                     [
-                        shutil.which("ffmpeg") or "ffmpeg",
+                        ffmpeg_path,
                         "-y",
                         "-i", output_video_path,
                         "-c:v", "libx264",
@@ -855,33 +934,38 @@ class DetectionService:
                         "-crf", "23",
                         "-pix_fmt", "yuv420p",
                         "-movflags", "+faststart",
-                        h264_video_path,
+                        final_video_path,
                     ],
                     capture_output=True,
                     timeout=300,
                     check=True,
                 )
-                # 替换原文件
-                os.replace(h264_video_path, output_video_path)
                 logger.info("视频已转码为 H.264 格式")
             except Exception as e:
-                logger.warning("ffmpeg 转码失败，使用原始 mp4v 视频: %s", str(e))
-                try:
-                    os.unlink(h264_video_path)
-                except Exception:
-                    pass
+                logger.warning("ffmpeg 转码失败，使用原始 MJPG 视频: %s", str(e))
+                final_video_path = output_video_path
 
-            # ── 上传标注视频到 MinIO ──
+            # ── 上传标注视频到 MinIO 或本地文件系统 ──
             annotated_video_url = None
             try:
                 minio_client = MinIOClient()
                 object_name = f"detections/{task_id}/annotated_video.mp4"
                 annotated_video_url = minio_client.upload_file(
-                    object_name, output_video_path
+                    object_name, final_video_path
                 )
-                logger.info("标注视频已上传: %s", object_name)
+                logger.info("标注视频已上传到 MinIO: %s", object_name)
             except Exception as e:
-                logger.warning("标注视频上传 MinIO 失败: %s", str(e))
+                logger.warning("标注视频上传 MinIO 失败，保存到本地: %s", str(e))
+                local_detections_dir = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                    "detections",
+                    str(task_id),
+                )
+                os.makedirs(local_detections_dir, exist_ok=True)
+                local_video_path = os.path.join(local_detections_dir, "annotated_video.mp4")
+                shutil.copy2(final_video_path, local_video_path)
+                annotated_video_url = f"/detections/{task_id}/annotated_video.mp4"
+                logger.info("标注视频已保存到本地: %s", annotated_video_url)
 
             # 清理临时视频文件
             try:
@@ -895,6 +979,7 @@ class DetectionService:
                 task.total_objects = total_objects
                 task.total_inference_time = total_inference_time
                 task.completed_at = datetime.now()
+                task.annotated_video_url = annotated_video_url
                 db.commit()
 
             logger.info(

@@ -17,7 +17,7 @@ from typing import AsyncGenerator, Optional
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.tools import StructuredTool
+from langchain_core.tools import StructuredTool, tool
 
 from app.agent.memory import conversation_memory
 from app.agent.prompts import DETECTION_AGENT_SYSTEM_PROMPT
@@ -31,7 +31,97 @@ logger = get_logger(__name__)
 
 
 # ══════════════════════════════════════════════════════════════
-# 一、创建 LLM 实例
+# 一、定义检测工具（Agent 可调用的 Tools）
+# ══════════════════════════════════════════════════════════════
+
+
+@tool
+def detect_single_image(image_path: str, conf: float = 0.25, iou: float = 0.45) -> str:
+    """
+    检测单张图片中的目标物体。
+
+    Args:
+        image_path: 图片文件路径或 URL
+        conf: 置信度阈值，默认 0.25
+        iou: NMS IoU 阈值，默认 0.45
+
+    Returns:
+        JSON 字符串，包含检测结果（目标数量、类别统计、标注图路径）
+    """
+    result = detection_service.detect_single(image_path, conf=conf, iou=iou)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@tool
+def detect_batch_images(image_paths: list[str], conf: float = 0.25) -> str:
+    """
+    批量检测多张图片中的目标物体。
+
+    Args:
+        image_paths: 图片文件路径列表
+        conf: 置信度阈值，默认 0.25
+
+    Returns:
+        JSON 字符串，包含每张图片的检测结果汇总
+    """
+    result = detection_service.detect_batch(image_paths, conf=conf)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@tool
+def detect_zip_images_file(zip_path: str, conf: float = 0.25) -> str:
+    """
+    解压 ZIP 文件并批量检测其中所有图片的目标物体。
+
+    Args:
+        zip_path: ZIP 文件路径
+        conf: 置信度阈值，默认 0.25
+
+    Returns:
+        JSON 字符串，包含 ZIP 内所有图片的检测结果汇总
+    """
+    result = detection_service.detect_zip(zip_path, conf=conf)
+    return json.dumps(result, ensure_ascii=False)
+
+@tool
+def detect_video_file(
+    video_path: str, conf: float = 0.25, frame_sample_rate: int = 5
+) -> str:
+    """
+    检测视频文件中的目标物体。对视频进行帧采样后逐帧检测。
+
+    Args:
+        video_path: 视频文件路径（mp4/avi/mov 等）
+        conf: 置信度阈值，默认 0.25
+        frame_sample_rate: 帧采样间隔，每 N 帧取 1 帧，默认 5
+
+    Returns:
+        JSON 字符串，包含视频检测结果（关键帧、目标统计、时长信息）
+    """
+    # Agent 调用时不传 user_id，使用 None 让后端自动处理
+    result = detection_service.detect_video(
+        video_path,
+        conf=conf,
+        frame_sample_rate=frame_sample_rate,
+        user_id=None,
+    )
+    # 返回时去掉 LLM 无法使用的大体积数据，但保留 annotated_video_url 供前端播放
+    if "key_frames" in result:
+        for frame in result["key_frames"]:
+            frame.pop("annotated_image_base64", None)
+    return json.dumps(result, ensure_ascii=False)
+
+# 工具列表（绑定到 Agent）
+DETECTION_TOOLS = [
+    detect_single_image,
+    detect_batch_images,
+    detect_zip_images_file,
+    detect_video_file,
+]
+
+
+# ══════════════════════════════════════════════════════════════
+# 二、创建 LLM 实例
 # ══════════════════════════════════════════════════════════════
 
 
@@ -288,6 +378,73 @@ class DetectionAgent:
                 "intermediate_steps": [],
             }
 
+    async def chat_stream(self, message: str, image_path: Optional[str] = None, video_path: Optional[str] = None) -> AsyncGenerator:
+        """
+        流式处理对话消息（用于 SSE）
+
+        逐个 yield Agent 的思考步骤和最终结果
+
+        Args:
+            message: 用户文本消息
+            image_path: 附带的图片路径（可选）
+            video_path: 附带的视频路径（可选）
+
+        Yields:
+            SSE 事件数据字典
+        """
+        if image_path:
+            message = f"{message}\n[附件图片路径: {image_path}]"
+        if video_path:
+            message = f"{message}\n[附件视频路径: {video_path}]"
+
+        try:
+            async for event in self.executor.astream_events(
+                {"input": message},
+                version="v2",
+            ):
+                event_kind = event["event"]
+
+                if event_kind == "on_chat_model_stream":
+                    chunk = event["data"]["chunk"]
+                    if hasattr(chunk, "content") and chunk.content:
+                        yield {
+                            "type": "text_chunk",
+                            "content": chunk.content,
+                        }
+
+                elif event_kind == "on_tool_start":
+                    tool_name = event["name"]
+                    tool_input = event["data"].get("input", {})
+                    logger.info("工具调用: %s, 输入: %s", tool_name, str(tool_input)[:200])
+                    yield {
+                        "type": "tool_call",
+                        "tool": tool_name,
+                        "input": tool_input,
+                    }
+
+                elif event_kind == "on_tool_end":
+                    tool_data = event.get("data", {})
+                    tool_output = tool_data.get("output", "")
+                    tool_name = event.get("name", "")
+                    logger.info(
+                        "工具完成: %s, output类型=%s, output长度=%d",
+                        tool_name,
+                        type(tool_output).__name__,
+                        len(str(tool_output)) if tool_output else 0,
+                    )
+                    logger.debug("on_tool_end data keys: %s", list(tool_data.keys()))
+                    yield {
+                        "type": "tool_result",
+                        "tool": tool_name,
+                        "result": str(tool_output) if tool_output else "",
+                    }
+
+        except Exception as e:
+            logger.error("Agent 流式执行异常: %s", str(e), exc_info=True)
+            yield {
+                "type": "error",
+                "content": f"处理出错：{str(e)}",
+            }
 
 # 创建全局单例
 detection_agent = DetectionAgent()

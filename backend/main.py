@@ -3,20 +3,23 @@
 FastAPI 应用入口
 """
 from contextlib import asynccontextmanager
+import os
 
 from app.api.auth import router as auth_router
-from app.api.chat import router as chat_router  # Day 8 新增
-from app.api.detection import router as detection_router  # Day 8 新增
+from app.api.chat import router as chat_router
+from app.api.dashboard import router as dashboard_router
+from app.api.detection import router as detection_router
 from app.api.health import router as health_router
 from app.api.training import router as training_router  # 新增：训练路由
 from app.api.history import router as history_router
 from app.api.knowledge import router as knowledge_router
+from app.api.training import router as training_router
 from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.middleware.request_logger import RequestLogMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi.staticfiles import StaticFiles
 
 def init_minio():
     """初始化 MinIO 存储桶（失败则记录警告，不阻止启动）"""
@@ -59,6 +62,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── 静态文件服务 ─────────────────────────────────────
+upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(upload_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
+
+# 检测结果文件服务
+detections_dir = os.path.join(os.path.dirname(__file__), "detections")
+os.makedirs(detections_dir, exist_ok=True)
+app.mount("/detections", StaticFiles(directory=detections_dir), name="detections")
 # 2. 请求日志中间件
 app.add_middleware(RequestLogMiddleware)
 
@@ -67,12 +80,17 @@ register_exception_handlers(app)
 
 # ===== 注册路由 =====
 app.include_router(auth_router)
+app.include_router(chat_router)
+app.include_router(dashboard_router)
+app.include_router(detection_router)
+app.include_router(history_router)
 app.include_router(health_router)
 app.include_router(training_router)  # 新增：注册训练路由
 app.include_router(chat_router)  # Day 8 新增
 app.include_router(detection_router)  # Day 8 新增
 
 app.include_router(knowledge_router)
+app.include_router(training_router)
 
 # ===== 根路径 =====
 @app.get("/")

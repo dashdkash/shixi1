@@ -115,7 +115,8 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     """重置密码请求"""
 
-    token: str = Field(..., description="重置令牌")
+    email: str = Field(..., description="注册邮箱")
+    code: str = Field(..., description="验证码")
     new_password: str = Field(..., min_length=6, max_length=100, description="新密码")
 
 

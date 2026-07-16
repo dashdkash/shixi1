@@ -20,6 +20,19 @@ const routes = [
     component: () => import('@/views/RegisterPage.vue'),
     meta: { title: '注册', requiresAuth: false },
   },
+  {
+    path: "/forgot-password",
+    name: "ForgotPassword",
+    component: () => import("@/views/ForgotPasswordPage.vue"),
+    meta: { titleKey: "forgotPassword.title", requiresAuth: false },
+  },
+  {
+    path: "/reset-password",
+    name: "ResetPassword",
+    component: () => import("@/views/ResetPasswordPage.vue"),
+    meta: { titleKey: "resetPassword.title", requiresAuth: false },
+  },
+
   // 需要登录的页面（使用 MainLayout 布局）
   {
     path: '/',

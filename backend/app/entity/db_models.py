@@ -53,6 +53,8 @@ class User(Base):
     verification_token_expires_at = Column(DateTime, nullable=True, comment="验证令牌过期时间")
     reset_token = Column(String(100), nullable=True, index=True, comment="密码重置令牌")
     reset_token_expires_at = Column(DateTime, nullable=True, comment="重置令牌过期时间")
+    reset_verification_code = Column(String(10), nullable=True, comment="密码重置验证码")
+    reset_verification_code_expires_at = Column(DateTime, nullable=True, comment="验证码过期时间")
     last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
     updated_at = Column(
@@ -243,6 +245,9 @@ class DetectionTask(Base):
     # 分析与建议（AI生成）
     analysis_report = Column(Text, nullable=True, comment="分析报告(Markdown格式)")
     analysis_suggestion = Column(Text, nullable=True, comment="专业建议")
+
+    # 视频检测结果
+    annotated_video_url = Column(String(500), nullable=True, comment="标注视频 URL")
     risk_level = Column(
         String(20), nullable=True, comment="风险等级: low/medium/high/critical"
     )

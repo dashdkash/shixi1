@@ -60,6 +60,7 @@ class ChatRequest(BaseModel):
     message: str
     stream: bool = True
     image_path: Optional[str] = None
+    video_path: Optional[str] = None
     session_id: Optional[int] = None  # 会话 ID，为空则自动创建新会话
 
 
@@ -292,6 +293,7 @@ async def chat_stream(
             user_id=user_id or 0,
             session_id=str(session_id),
             image_path=request.image_path,
+            video_path=request.video_path,
         ):
             if event.get("type") == "text_chunk":
                 full_content += event.get("content", "")
@@ -375,4 +377,8 @@ async def upload_chat_image(
     with open(save_path, "wb") as f:
         f.write(content)
 
+    # 根据文件类型返回不同字段
+    video_suffixes = {".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv"}
+    if suffix.lower() in video_suffixes:
+        return {"video_path": save_path, "filename": filename}
     return {"image_path": save_path, "filename": filename}
