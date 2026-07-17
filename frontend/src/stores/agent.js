@@ -73,5 +73,11 @@ export const useAgentStore = defineStore("agent", {
       this.sessions = [];
       this.abort();
     },
+
+    /** 加载历史会话 */
+    loadSession(sessionId, messages) {
+      this.currentSessionId = sessionId;
+      this.messages = messages;
+    },
   },
 });

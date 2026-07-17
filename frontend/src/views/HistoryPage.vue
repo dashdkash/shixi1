@@ -132,6 +132,15 @@
                   }}</span>
                 </div>
               </div>
+              <div class="chat-actions">
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click.stop="continueChat(session)"
+                >
+                  继续对话
+                </el-button>
+              </div>
               <div class="chat-arrow">
                 <el-icon><ArrowRight /></el-icon>
               </div>
@@ -275,6 +284,7 @@
 
 <script setup>
 import request from "@/utils/request";
+import { useAgentStore } from "@/stores/agent";
 import {
   ArrowRight,
   ChatDotRound,
@@ -284,6 +294,10 @@ import {
   User,
 } from "@element-plus/icons-vue";
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+
+const agentStore = useAgentStore();
+const router = useRouter();
 
 const activeTab = ref("detection");
 
@@ -395,6 +409,21 @@ const showChatDetail = async (session) => {
     showChatDialog.value = true;
   } catch (e) {
     console.error("获取对话详情失败", e);
+  }
+};
+
+const continueChat = async (session) => {
+  try {
+    const res = await request.get(`/history/chat/${session.id}`);
+    const formattedMessages = res.messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+      image: msg.image_path || null,
+    }));
+    agentStore.loadSession(session.id, formattedMessages);
+    router.push("/chat");
+  } catch (e) {
+    console.error("加载会话失败", e);
   }
 };
 
@@ -601,6 +630,10 @@ onMounted(() => {
     font-size: 12px;
     color: #909399;
   }
+}
+
+.chat-actions {
+  margin-right: 8px;
 }
 
 .chat-arrow {
