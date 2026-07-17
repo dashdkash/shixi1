@@ -227,6 +227,12 @@ const handlePaste = async (event) => {
 
 const addFiles = (files) => {
   const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+  const zipFiles = files.filter(
+    (f) =>
+      f.type === "application/zip" ||
+      f.type === "application/x-zip-compressed" ||
+      f.name.toLowerCase().endsWith(".zip"),
+  );
 
   imageFiles.forEach((file) => {
     const reader = new FileReader();
@@ -241,14 +247,31 @@ const addFiles = (files) => {
     reader.readAsDataURL(file);
   });
 
-  if (imageFiles.length > 0) {
-    ElMessage.success(`${imageFiles.length} ${$t("detection.filesAdded")}`);
+  zipFiles.forEach((file) => {
+    pendingFiles.value.push({
+      name: file.name,
+      size: file.size,
+      file: file,
+      isZip: true,
+      preview: null,
+    });
+  });
+
+  const total = imageFiles.length + zipFiles.length;
+  if (total > 0) {
+    ElMessage.success(`${total} ${$t("detection.filesAdded")}`);
   }
 
-  const nonImageFiles = files.filter((f) => !f.type.startsWith("image/"));
-  if (nonImageFiles.length > 0) {
+  const nonValidFiles = files.filter(
+    (f) =>
+      !f.type.startsWith("image/") &&
+      f.type !== "application/zip" &&
+      f.type !== "application/x-zip-compressed" &&
+      !f.name.toLowerCase().endsWith(".zip"),
+  );
+  if (nonValidFiles.length > 0) {
     ElMessage.warning(
-      `${nonImageFiles.length} ${$t("detection.invalidFiles")}`,
+      `${nonValidFiles.length} ${$t("detection.invalidFiles")}`,
     );
   }
 };
@@ -275,29 +298,7 @@ const startDetection = async () => {
       const response = await request.post("/api/detection/zip", formData, {
         timeout: 180000,
       });
-      if (response.annotated_images) {
-        detectionResults.value = response.annotated_images.map((img) => ({
-          filename: img.image_path,
-          success: true,
-          annotated_image_base64: img.annotated_image_base64,
-          objects: [],
-          inference_time: 0,
-          width: 0,
-          height: 0,
-        }));
-      } else {
-        detectionResults.value = [
-          {
-            filename: pendingFiles.value[0].name,
-            success: true,
-            annotated_image_base64: response.annotated_image_base64,
-            objects: [],
-            inference_time: response.inference_time || 0,
-            width: 0,
-            height: 0,
-          },
-        ];
-      }
+      detectionResults.value = buildResultsFromBatch(response);
     } else {
       pendingFiles.value.forEach((item) => {
         formData.append("files", item.file);
@@ -307,7 +308,7 @@ const startDetection = async () => {
           "Content-Type": "multipart/form-data",
         },
       });
-      detectionResults.value = response.results;
+      detectionResults.value = buildResultsFromBatch(response);
     }
 
     pendingFiles.value = [];
@@ -317,6 +318,74 @@ const startDetection = async () => {
   } finally {
     isProcessing.value = false;
   }
+};
+
+/**
+ * 将后端批量检测响应转换为前端结果卡片格式
+ */
+const buildResultsFromBatch = (response) => {
+  if (!response || response.error) {
+    return [
+      {
+        filename: "检测失败",
+        success: false,
+        error: response?.error || "检测失败",
+        objects: [],
+        inference_time: 0,
+        width: 0,
+        height: 0,
+      },
+    ];
+  }
+
+  // 按 image_path 分组 detections
+  const detsByImage = {};
+  for (const det of response.detections || []) {
+    const key = det.image_path || "unknown";
+    if (!detsByImage[key]) detsByImage[key] = [];
+    detsByImage[key].push(det);
+  }
+
+  const annotatedImages = response.annotated_images || [];
+
+  if (annotatedImages.length > 0) {
+    return annotatedImages.map((img) => {
+      const key = img.image_path || "unknown";
+      const objects = (detsByImage[key] || []).map((d) => ({
+        class_name: d.class_name,
+        class_name_cn: d.class_name_cn || d.class_name,
+        class_id: d.class_id,
+        confidence: d.confidence,
+        bbox: d.bbox,
+      }));
+      return {
+        filename: key,
+        success: true,
+        annotated_image_base64: img.annotated_image_base64,
+        objects,
+        inference_time: objects[0]?.inference_time || 0,
+        width: 0,
+        height: 0,
+      };
+    });
+  }
+
+  // 回退：只有 detections 时，按图片分组生成结果
+  return Object.entries(detsByImage).map(([imgPath, dets]) => ({
+    filename: imgPath,
+    success: true,
+    annotated_image_base64: null,
+    objects: dets.map((d) => ({
+      class_name: d.class_name,
+      class_name_cn: d.class_name_cn || d.class_name,
+      class_id: d.class_id,
+      confidence: d.confidence,
+      bbox: d.bbox,
+    })),
+    inference_time: dets[0]?.inference_time || 0,
+    width: 0,
+    height: 0,
+  }));
 };
 </script>
 

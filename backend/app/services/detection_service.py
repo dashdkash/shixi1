@@ -281,13 +281,25 @@ class DetectionService:
         # 从上下文变量获取 user_id（Agent 工具调用时未显式传递）
         user_id = user_id or current_user_id.get()
 
+        from app.config.settings import settings
+
         db = SessionLocal()
         try:
-            # 当 scene_id 为 None 时，自动查询第一个可用场景
+            # 当 scene_id 为 None 时，使用全局配置的默认场景
             if not scene_id:
+                scene_id = settings.DEFAULT_SCENE_ID
+
+            scene = db.query(DetectionScene).filter(DetectionScene.id == scene_id).first()
+            if not scene:
                 default_scene = db.query(DetectionScene).first()
                 if default_scene:
                     scene_id = default_scene.id
+                    scene = default_scene
+                else:
+                    db.close()
+                    return {"error": "数据库中没有可用的检测场景"}
+                    
+            class_names_cn = scene.class_names_cn if scene and scene.class_names_cn else {}
 
             # ── 加载模型 ──
             model = self._get_model(scene_id)
@@ -314,9 +326,17 @@ class DetectionService:
                     confidence = float(box.conf[0])
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
 
+                    class_name_cn = class_names_cn.get(cls_name)
+                    if not class_name_cn:
+                        if cls_name.endswith('s'):
+                            class_name_cn = class_names_cn.get(cls_name[:-1])
+                        if not class_name_cn:
+                            class_name_cn = cls_name
+
                     detections.append(
                         {
                             "class_name": cls_name,
+                            "class_name_cn": class_name_cn,
                             "class_id": cls_id,
                             "confidence": round(confidence, 4),
                             "bbox": [
@@ -339,7 +359,7 @@ class DetectionService:
             # ── 统计各类别数量 ──
             class_counts = {}
             for det in detections:
-                name = det["class_name"]
+                name = det.get("class_name_cn", det["class_name"])
                 class_counts[name] = class_counts.get(name, 0) + 1
 
             # ── 持久化到数据库 ──
@@ -406,17 +426,26 @@ class DetectionService:
         # 从上下文变量获取 user_id（Agent 工具调用时未显式传递）
         user_id = user_id or current_user_id.get()
 
+        from app.config.settings import settings
+
         db = SessionLocal()
         try:
-            model = self._get_model(scene_id)
-
-            # 当 scene_id 为 None 时，自动查询第一个可用场景
+            # 当 scene_id 为 None 时，使用全局配置的默认场景
             if not scene_id:
+                scene_id = settings.DEFAULT_SCENE_ID
+
+            scene = db.query(DetectionScene).filter(DetectionScene.id == scene_id).first()
+            if not scene:
                 default_scene = db.query(DetectionScene).first()
                 if default_scene:
                     scene_id = default_scene.id
+                    scene = default_scene
                 else:
                     return {"error": "数据库中没有可用的检测场景，请先创建检测场景"}
+                    
+            class_names_cn = scene.class_names_cn if scene and scene.class_names_cn else {}
+
+            model = self._get_model(scene_id)
 
             # ── 创建批量检测任务 ──
             task = DetectionTask(
@@ -449,17 +478,32 @@ class DetectionService:
                 result = results[0]
                 inference_time = float(result.speed.get("inference", 0))
                 total_inference_time += inference_time
+                image_basename = os.path.basename(image_path)
 
                 # 生成标注图 base64
                 annotated_img = result.plot()
                 _, buffer = cv2.imencode(
                     ".jpg", annotated_img, [cv2.IMWRITE_JPEG_QUALITY, 85]
                 )
+                annotated_b64 = base64.b64encode(buffer).decode("utf-8")
                 annotated_images.append({
-                    "image_path": os.path.basename(image_path),
-                    "annotated_image_base64": base64.b64encode(buffer).decode("utf-8"),
+                    "image_path": image_basename,
+                    "annotated_image_base64": annotated_b64,
                 })
 
+                # 上传标注图到 MinIO
+                annotated_image_url = None
+                try:
+                    minio_client = MinIOClient()
+                    object_name = f"detections/{task.id}/{image_basename}"
+                    annotated_image_url = minio_client.upload_bytes(
+                        object_name, buffer.tobytes(), "image/jpeg"
+                    )
+                except Exception as e:
+                    logger.warning("MinIO 上传失败（不影响检测结果）: %s", str(e))
+
+                # 收集当前图片的检测结果
+                image_detections = []
                 if result.boxes is not None and len(result.boxes) > 0:
                     for box in result.boxes:
                         cls_id = int(box.cls[0])
@@ -467,9 +511,17 @@ class DetectionService:
                         confidence = float(box.conf[0])
                         x1, y1, x2, y2 = box.xyxy[0].tolist()
 
+                        class_name_cn = class_names_cn.get(cls_name)
+                        if not class_name_cn:
+                            if cls_name.endswith('s'):
+                                class_name_cn = class_names_cn.get(cls_name[:-1])
+                            if not class_name_cn:
+                                class_name_cn = cls_name
+
                         det = {
-                            "image_path": image_path,
+                            "image_path": image_basename,
                             "class_name": cls_name,
+                            "class_name_cn": class_name_cn,
                             "class_id": cls_id,
                             "confidence": round(confidence, 4),
                             "bbox": [
@@ -481,24 +533,42 @@ class DetectionService:
                             "inference_time": inference_time,
                         }
                         all_detections.append(det)
+                        image_detections.append(det)
                         total_objects += 1
 
                         # 统计类别计数
-                        class_counts[cls_name] = class_counts.get(cls_name, 0) + 1
+                        class_name_cn = det.get("class_name_cn", cls_name)
+                        class_counts[class_name_cn] = class_counts.get(class_name_cn, 0) + 1
 
-                    # 保存检测结果到数据库
-                    for det in all_detections:
-                        if det["image_path"] == image_path:
-                            db_result = DetectionResult(
-                                task_id=task.id,
-                                image_path=image_path,
-                                class_name=det["class_name"],
-                                class_id=det["class_id"],
-                                confidence=det["confidence"],
-                                bbox=det["bbox"],
-                                inference_time=inference_time,
-                            )
-                            db.add(db_result)
+                # 保存当前图片的检测结果到数据库
+                if image_detections:
+                    for det in image_detections:
+                        db_result = DetectionResult(
+                            task_id=task.id,
+                            image_path=image_basename,
+                            annotated_image_url=annotated_image_url,
+                            class_name=det["class_name"],
+                            class_name_cn=det.get("class_name_cn"),
+                            class_id=det["class_id"],
+                            confidence=det["confidence"],
+                            bbox=det["bbox"],
+                            inference_time=inference_time,
+                        )
+                        db.add(db_result)
+                else:
+                    # 检测到 0 个目标时，创建占位记录以保留标注图 URL
+                    placeholder = DetectionResult(
+                        task_id=task.id,
+                        image_path=image_basename,
+                        annotated_image_url=annotated_image_url,
+                        class_name="no_detection",
+                        class_name_cn="未检测到目标",
+                        class_id=-1,
+                        confidence=0.0,
+                        bbox=[],
+                        inference_time=inference_time,
+                    )
+                    db.add(placeholder)
 
             task.status = "completed"
             task.total_objects = total_objects
@@ -647,8 +717,25 @@ class DetectionService:
         # 从上下文变量获取 user_id（Agent 工具调用时未显式传递）
         user_id = user_id or current_user_id.get()
 
+        from app.config.settings import settings
+
         db = SessionLocal()
         try:
+            # 当 scene_id 为 None 时，使用全局配置的默认场景
+            if not scene_id:
+                scene_id = settings.DEFAULT_SCENE_ID
+
+            scene = db.query(DetectionScene).filter(DetectionScene.id == scene_id).first()
+            if not scene:
+                default_scene = db.query(DetectionScene).first()
+                if default_scene:
+                    scene_id = default_scene.id
+                    scene = default_scene
+                else:
+                    return {"error": "数据库中没有可用的检测场景"}
+                    
+            class_names_cn = scene.class_names_cn if scene and scene.class_names_cn else {}
+
             # ── 加载模型 ──
             model = self._get_model(scene_id)
 
@@ -799,8 +886,16 @@ class DetectionService:
                             confidence = float(box.conf[0])
                             x1, y1, x2, y2 = box.xyxy[0].tolist()
 
+                            class_name_cn = class_names_cn.get(cls_name)
+                            if not class_name_cn:
+                                if cls_name.endswith('s'):
+                                    class_name_cn = class_names_cn.get(cls_name[:-1])
+                                if not class_name_cn:
+                                    class_name_cn = cls_name
+
                             det = {
                                 "class_name": cls_name,
+                                "class_name_cn": class_name_cn,
                                 "class_id": cls_id,
                                 "confidence": round(confidence, 4),
                                 "bbox": [
@@ -812,8 +907,9 @@ class DetectionService:
                             }
                             frame_detections.append(det)
                             total_objects += 1
-                            class_counts[cls_name] = (
-                                class_counts.get(cls_name, 0) + 1
+                            class_name_cn = det.get("class_name_cn", cls_name)
+                            class_counts[class_name_cn] = (
+                                class_counts.get(class_name_cn, 0) + 1
                             )
 
                     last_detections = frame_detections
@@ -850,6 +946,7 @@ class DetectionService:
                             task_id=task_id,
                             image_path=f"frame_{frame_idx}.jpg",
                             class_name=det["class_name"],
+                            class_name_cn=det.get("class_name_cn"),
                             class_id=det["class_id"],
                             confidence=det["confidence"],
                             bbox=det["bbox"],

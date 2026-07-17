@@ -45,20 +45,34 @@ class SupervisorAgent:
 
     def summarize(self, state: dict) -> dict:
         """汇总：整合各 Agent 结果，生成最终回复"""
-        context_parts = []
-        if state.get("detection_result"):
-            context_parts.append(f"检测结果：{state['detection_result']}")
-        if state.get("analysis_result"):
-            context_parts.append(f"分析结果：{state['analysis_result']}")
+        if state.get("detection_result") and isinstance(state["detection_result"], dict):
+            det_result = state["detection_result"]
+            if "error" in det_result:
+                return {"final_response": det_result["error"]}
+            
+            total_objects = det_result.get("total_objects", 0)
+            class_counts = det_result.get("class_counts", {})
+            inference_time = det_result.get("inference_time") or det_result.get("total_inference_time")
+            
+            parts = []
+            if total_objects > 0:
+                parts.append(f"检测完成！发现 {total_objects} 个目标。")
+                if class_counts:
+                    parts.append("各类别数量：")
+                    for cls, cnt in class_counts.items():
+                        parts.append(f"  - {cls}: {cnt}")
+                if inference_time:
+                    parts.append(f"推理耗时：{inference_time:.2f}ms")
+                parts.append("请查看标注图了解详细检测结果。")
+            else:
+                parts.append("检测完成！未发现目标。")
+            
+            return {"final_response": "\n".join(parts)}
+
         if state.get("qa_result"):
-            context_parts.append(f"问答结果：{state['qa_result']}")
+            return {"final_response": state["qa_result"]}
 
-        if not context_parts:
-            return {"final_response": "抱歉，我没有理解您的请求，请重新描述。"}
+        if state.get("analysis_result"):
+            return {"final_response": state["analysis_result"]}
 
-        summary_prompt = (
-            f"根据以下信息，生成一份简洁专业的中文回复：\n\n"
-            + "\n".join(context_parts)
-        )
-        response = self.llm.invoke([HumanMessage(content=summary_prompt)])
-        return {"final_response": response.content}
+        return {"final_response": "抱歉，我没有理解您的请求，请重新描述。"}
