@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     # 默认检测模型权重路径
     # 优先级最高：只要配置且文件存在，检测时优先使用该模型
     DEFAULT_MODEL_PATH: str = "models/us_weeds_v3.0.0/best.pt"
+    
+    # 默认检测场景ID
+    DEFAULT_SCENE_ID: int = 1
 
     # ---- Pydantic V2 配置 ----
     model_config = SettingsConfigDict(

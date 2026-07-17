@@ -12,7 +12,7 @@ from langchain_core.tools import tool
 
 from app.core.logger import get_logger
 from app.database.session import SessionLocal
-from app.entity.db_models import DetectionTask
+from app.entity.db_models import DetectionResult, DetectionTask
 
 logger = get_logger(__name__)
 
@@ -73,7 +73,7 @@ def query_detection_history(limit: int = 10) -> str:
         limit: 返回最近 N 条记录，默认 10 条
 
     Returns:
-        JSON 字符串，包含最近的检测任务列表（类型、状态、目标数、时间）
+        JSON 字符串，包含最近的检测任务列表（类型、状态、目标数、时间、类别统计）
     """
     try:
         db = SessionLocal()
@@ -85,14 +85,41 @@ def query_detection_history(limit: int = 10) -> str:
                 .all()
             )
 
+            task_ids = [t.id for t in tasks]
+            # 批量查询所有相关检测结果（过滤占位记录）
+            all_results = (
+                db.query(DetectionResult)
+                .filter(
+                    DetectionResult.task_id.in_(task_ids),
+                    ~(  # 排除占位记录
+                        (DetectionResult.class_name == "no_detection")
+                        & (DetectionResult.class_id == -1)
+                    ),
+                )
+                .all()
+            ) if task_ids else []
+
+            # 按 task_id 分组
+            results_map: dict = {}
+            for r in all_results:
+                results_map.setdefault(r.task_id, []).append(r)
+
             items = []
             for t in tasks:
+                task_results = results_map.get(t.id, [])
+                # 统计各类别数量
+                class_counts: dict = {}
+                for r in task_results:
+                    name = r.class_name_cn or r.class_name
+                    class_counts[name] = class_counts.get(name, 0) + 1
+
                 items.append({
                     "id": t.id,
                     "task_type": t.task_type,
                     "status": t.status,
                     "total_objects": t.total_objects or 0,
                     "total_images": t.total_images or 0,
+                    "class_counts": class_counts,
                     "created_at": t.created_at.isoformat() if t.created_at else None,
                 })
 
@@ -104,10 +131,81 @@ def query_detection_history(limit: int = 10) -> str:
         return json.dumps({"error": f"查询失败: {str(e)}"}, ensure_ascii=False)
 
 
+@tool
+def query_latest_detection() -> str:
+    """查询最近一次检测任务的详细结果。
+
+    当用户询问"最近一次检测了什么"、"上次检测的具体结果"、"最后一次检测的类别和数量"等问题时使用此工具。
+
+    Returns:
+        JSON 字符串，包含最近一次检测任务的完整详情：
+        - task_id, task_type, status, total_objects, total_images
+        - class_counts: 各类别目标数量
+        - detections: 每个目标的详细信息（类别名、置信度、边界框）
+        - created_at, completed_at
+    """
+    try:
+        db = SessionLocal()
+        try:
+            task = (
+                db.query(DetectionTask)
+                .order_by(DetectionTask.created_at.desc())
+                .first()
+            )
+            if not task:
+                return json.dumps({"error": "没有任何检测记录"}, ensure_ascii=False)
+
+            # 查询该任务的所有检测结果（排除占位记录）
+            results = (
+                db.query(DetectionResult)
+                .filter(
+                    DetectionResult.task_id == task.id,
+                    ~(
+                        (DetectionResult.class_name == "no_detection")
+                        & (DetectionResult.class_id == -1)
+                    ),
+                )
+                .all()
+            )
+
+            # 类别统计
+            class_counts: dict = {}
+            detections = []
+            for r in results:
+                name = r.class_name_cn or r.class_name
+                class_counts[name] = class_counts.get(name, 0) + 1
+                detections.append({
+                    "class_name": r.class_name,
+                    "class_name_cn": r.class_name_cn,
+                    "confidence": round(r.confidence, 4) if r.confidence else 0,
+                    "bbox": r.bbox,
+                    "image_path": r.image_path,
+                })
+
+            return json.dumps({
+                "task_id": task.id,
+                "task_type": task.task_type,
+                "status": task.status,
+                "total_objects": task.total_objects or 0,
+                "total_images": task.total_images or 0,
+                "total_inference_time": round(task.total_inference_time, 2) if task.total_inference_time else None,
+                "class_counts": class_counts,
+                "detections": detections[:50],  # 最多返回 50 条
+                "created_at": task.created_at.isoformat() if task.created_at else None,
+                "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            }, ensure_ascii=False)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error("查询最新检测失败: %s", str(e))
+        return json.dumps({"error": f"查询失败: {str(e)}"}, ensure_ascii=False)
+
+
 # 分析工具列表
 ANALYSIS_TOOLS = [
     query_detection_stats,
     query_detection_history,
+    query_latest_detection,
 ]
 
 @tool
