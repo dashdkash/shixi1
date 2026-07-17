@@ -86,7 +86,7 @@ def _wrap_tool(tool):
     )
 
 
-def _make_executor(llm, system_prompt, tools):
+def _make_executor(llm, system_prompt, tools, max_iterations=8):
     """构建 ReAct AgentExecutor"""
     wrapped = [_wrap_tool(t) for t in tools]
     prompt = ChatPromptTemplate.from_messages([
@@ -100,7 +100,7 @@ def _make_executor(llm, system_prompt, tools):
         agent=agent,
         tools=wrapped,
         verbose=True,
-        max_iterations=8,
+        max_iterations=max_iterations,
         return_intermediate_steps=True,
     )
 
@@ -128,15 +128,33 @@ def make_detection_node(llm):
 
     async def detection_agent_node(state: dict) -> dict:
         user_msg = state["messages"][-1]
-        chat_history = _load_chat_history(state)[:-1]  # 排除最后一条（当前消息）
+        chat_history = _load_chat_history(state)[:-1]
         try:
             result = await executor.ainvoke(
                 {"input": user_msg.content, "chat_history": chat_history}
             )
             output = result["output"]
+            
+            detection_result = None
+            for step in result.get("intermediate_steps", []):
+                if hasattr(step[0], "tool"):
+                    tool_name = step[0].tool
+                    tool_result = step[1]
+                    try:
+                        import json
+                        data = json.loads(tool_result)
+                        if "detections" in data or "class_counts" in data:
+                            detection_result = data
+                            break
+                    except (json.JSONDecodeError, TypeError):
+                        pass
         except Exception as e:
             logger.error("Detection Agent 执行失败: %s", e, exc_info=True)
             output = f"检测处理出错：{str(e)}"
+            detection_result = {"error": output}
+
+        if detection_result:
+            return {"detection_result": detection_result}
         return {"messages": [AIMessage(content=output)], "detection_result": {"output": output}}
 
     return detection_agent_node
@@ -165,7 +183,7 @@ def make_analysis_node(llm):
 
 def make_qa_node(llm):
     """问答子 Agent 节点（知识库检索 + 用户查询 2 个工具）"""
-    executor = _make_executor(llm, QA_SUB_AGENT_PROMPT, KNOWLEDGE_TOOLS)
+    executor = _make_executor(llm, QA_SUB_AGENT_PROMPT, KNOWLEDGE_TOOLS, max_iterations=3)
     logger.info("QA 子 Agent 初始化完成，工具: %d", len(KNOWLEDGE_TOOLS))
 
     async def qa_agent_node(state: dict) -> dict:
