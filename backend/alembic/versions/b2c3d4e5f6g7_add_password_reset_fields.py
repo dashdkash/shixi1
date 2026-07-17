@@ -1,7 +1,7 @@
 """add password reset fields to users
 
 Revision ID: b2c3d4e5f6g7
-Revises: 925104b8701f
+Revises: ed14438701a2
 Create Date: 2026-07-14 15:30:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'b2c3d4e5f6g7'
-down_revision: Union[str, Sequence[str], None] = '925104b8701f'
+down_revision: Union[str, Sequence[str], None] = 'ed14438701a2'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

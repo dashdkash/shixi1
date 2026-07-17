@@ -70,6 +70,12 @@ const routes = [
         component: () => import('@/views/DashboardPage.vue'),
         meta: { title: '数据看板', icon: 'DataAnalysis' },
       },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/ProfilePage.vue'),
+        meta: { title: '个人中心', icon: 'User' },
+      },
     ],
   },
   // 404 重定向

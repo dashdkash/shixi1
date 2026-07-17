@@ -742,7 +742,7 @@ async function resumeTask() {
       return;
     }
 
-    const res = await request.post(`/api/training/resume/${taskId}`, {
+    const res = await request.post(`/training/resume/${taskId}`, {
       scene_id: resumeSourceTask.value.scene_id,
       model_name: resumeSourceTask.value.model_name,
       epochs: resumeForm.value.epochs,
@@ -787,7 +787,7 @@ async function runPredict() {
     formData.append('conf', predictConf.value);
     formData.append('iou', predictIou.value);
 
-    const res = await request.post('/api/training/predict', formData, {
+    const res = await request.post('/training/predict', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     predictResult.value = res;
@@ -802,7 +802,7 @@ async function runPredict() {
 async function fetchTasks() {
   loadingTasks.value = true;
   try {
-    const res = await request.get("/api/training/tasks");
+    const res = await request.get("/training/tasks");
     taskList.value = res.data?.items || [];
   } catch (e) {
     console.error(t("training.fetchError"), e);
@@ -814,7 +814,7 @@ async function fetchTasks() {
 async function fetchModels() {
   loadingModels.value = true;
   try {
-    const res = await request.get("/api/training/models");
+    const res = await request.get("/training/models");
     modelList.value = res.data?.items || [];
   } catch (e) {
     console.error(t("training.fetchModelsError"), e);
@@ -825,7 +825,7 @@ async function fetchModels() {
 
 async function fetchScenes() {
   try {
-    const res = await request.get("/api/training/scenes");
+    const res = await request.get("/training/scenes");
     scenes.value = res.data?.items || [];
     if (scenes.value.length > 0 && !trainForm.value.scene_id) {
       trainForm.value.scene_id = scenes.value[0].id;
@@ -873,10 +873,10 @@ async function fetchMetrics() {
   if (!selectedTask.value) return;
   try {
     const taskId = selectedTask.value.id || selectedTask.value.task?.id;
-    const res = await request.get(`/api/training/metrics/${taskId}`);
+    const res = await request.get(`/training/metrics/${taskId}`);
     const metrics = res.data?.metrics || [];
 
-    const statusRes = await request.get(`/api/training/status/${taskId}`);
+    const statusRes = await request.get(`/training/status/${taskId}`);
     if (statusRes.data) {
       selectedTask.value = {
         ...selectedTask.value,
@@ -1012,7 +1012,7 @@ async function createTask() {
 
   creating.value = true;
   try {
-    const res = await request.post("/api/training/start", trainForm.value);
+    const res = await request.post("/training/start", trainForm.value);
     ElMessage.success(`${t("training.createSuccess")} ${res.data?.task_uuid}`);
     showCreateDialog.value = false;
     await fetchTasks();
@@ -1037,7 +1037,7 @@ async function stopTask(taskId) {
         type: "warning",
       },
     );
-    await request.post(`/api/training/stop/${taskId}`);
+    await request.post(`/training/stop/${taskId}`);
     ElMessage.success(t("training.stopSuccess"));
     await fetchTasks();
   } catch (e) {
@@ -1057,7 +1057,7 @@ async function validateModel(task) {
 
   validating.value = true;
   try {
-    const res = await request.post(`/api/training/validate/${taskId}`, {
+    const res = await request.post(`/training/validate/${taskId}`, {
       split: 'val',
       conf: 0.001,
       iou: 0.6,
@@ -1081,7 +1081,7 @@ async function exportModel(task) {
 
   exporting.value = true;
   try {
-    const res = await request.post(`/api/training/export/${taskId}`, {
+    const res = await request.post(`/training/export/${taskId}`, {
       version: '',
       description: `${t("training.exportFrom")} ${task.task_uuid}`,
       set_default: true,
@@ -1105,7 +1105,7 @@ async function downloadModel(task) {
   }
 
   try {
-    const response = await request.get(`/api/training/download/${taskId}`, {
+    const response = await request.get(`/training/download/${taskId}`, {
       responseType: "blob",
     });
     const blob = new Blob([response]);

@@ -1,7 +1,7 @@
 """add_knowledge_tables
 
 Revision ID: f1466777177b
-Revises: 925104b8701f
+Revises: ed14438701a2
 Create Date: 2026-07-14 16:07:28.029630
 
 """
@@ -14,7 +14,7 @@ import pgvector.sqlalchemy
 
 # revision identifiers, used by Alembic.
 revision: str = 'f1466777177b'
-down_revision: Union[str, Sequence[str], None] = '925104b8701f'
+down_revision: Union[str, Sequence[str], None] = 'ed14438701a2'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
