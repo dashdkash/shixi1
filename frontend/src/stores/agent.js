@@ -4,6 +4,22 @@
  */
 import { defineStore } from "pinia";
 
+const WELCOME_MESSAGE = {
+  role: "assistant",
+  content:
+  `🌿 你好！我是杂草识别智能助手。
+
+  我可以帮你：
+
+  📷 识别图片中的杂草种类和数量
+
+  📊 提供杂草分布统计分析
+
+  💡 给出专业的除草建议
+
+  上传一张农田或草坪的照片，我来帮你分析！`
+};
+
 export const useAgentStore = defineStore("agent", {
   state: () => ({
     // 当前会话 ID
@@ -60,10 +76,31 @@ export const useAgentStore = defineStore("agent", {
     },
 
     /** 新建对话 */
-    newChat() {
+    async newChat() {
       this.currentSessionId = null;
-      this.messages = [];
       this.abort();
+      
+      this.messages = [
+        {
+          role: "assistant",
+          loading: true,
+          content: "",
+          thinking: false,
+          toolCalls: [],
+        }
+      ];
+
+      const delay = 200 + Math.random() * 300;
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      this.messages = [
+        {
+        ...WELCOME_MESSAGE,
+        loading: false,
+        thinking: false,
+        toolCalls: [],
+        }
+      ];
     },
 
     /** 清除所有状态 */
@@ -72,6 +109,33 @@ export const useAgentStore = defineStore("agent", {
       this.messages = [];
       this.sessions = [];
       this.abort();
+    },
+    /** 获取会话列表 */
+    async fetchSessions() {
+      const { listSessionsApi } = await import("@/api/chat");
+      const res = await listSessionsApi();
+      this.sessions = res.data;
+    },
+
+    async switchSession(sessionId) {
+      console.log("switch session:", sessionId);
+
+      const { getSessionMessagesApi } = await import("@/api/chat");
+
+      const res = await getSessionMessagesApi(sessionId);
+      console.log("res =", res);
+
+      this.currentSessionId = sessionId;
+      this.messages = res.messages;
+    },
+    /** 删除指定会话 */
+    async deleteSession(sessionId) {
+      const { deleteSessionApi } = await import("@/api/chat");
+      await deleteSessionApi(sessionId);
+      this.sessions = this.sessions.filter((s) => s.id !== sessionId);
+      if (this.currentSessionId === sessionId) {
+        this.newChat();
+      }
     },
   },
 });

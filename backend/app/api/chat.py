@@ -158,7 +158,49 @@ async def list_sessions(
     finally:
         db.close()
 
+@router.get("/sessions/{session_id}/messages")
+async def get_session_messages(
+    session_id: int,
+    current_user=Depends(get_current_user),
+):
+    """
+    Get all messages for a session.
+    """
+    db = SessionLocal()
+    try:
+        session = (
+            db.query(ChatSession)
+            .filter(
+                ChatSession.id == session_id,
+                ChatSession.user_id == current_user["id"],
+            )
+            .first()
+        )
 
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        messages = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created_at.asc())
+            .all()
+        )
+
+        return {
+            "session_id": session_id,
+            "messages": [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "created_at": msg.created_at.isoformat(),
+                }
+                for msg in messages
+            ],
+        }
+
+    finally:
+        db.close()
 @router.delete("/sessions/{session_id}")
 async def delete_session(
     session_id: int,

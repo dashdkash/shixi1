@@ -158,22 +158,54 @@ async function handleLogin() {
 </script>
 
 <style lang="scss" scoped>
+// ── 杂草识别智能体 · 主题色 ──────────────────────
+// 背景基调（浅豆绿）  #e0f0c3
+// 卡片表面（暖白）    #fbfbf4
+// 主按钮（叶绿）      #a4c969
+// 按钮悬停（深叶绿）  #8fb355
+// 标题/强调（深林绿）  #3d6b24
+
 .login-page {
   width: 100%;
   height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-image:
+    radial-gradient(
+      circle at center,
+      rgba(224, 240, 195, 0.65) 30%,
+      rgba(52, 107, 61, 0.75) 100%
+    ),
+    url("/bg.png");
+    background-size: cover, 650px auto;
+  background-position: center, center top;
+  background-repeat: no-repeat, no-repeat;
 }
 
 .login-card {
   width: 420px;
   padding: 40px;
-  background: #fff;
+  background: #fbfbf4;
   border-radius: $border-radius-lg;
-  box-shadow: $shadow-lg;
+  box-shadow: 0 8px 32px rgba(61, 107, 36, 0.18);
   position: relative;
+  border: 1px solid rgba(164, 201, 105, 0.35);
+
+  // ── 淡入动画 ──
+  opacity: 0;
+  animation: fade-in-card 0.4s ease-out 0.2s forwards;
+}
+
+@keyframes fade-in-card {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .login-header {
@@ -195,7 +227,7 @@ async function handleLogin() {
 
   h2 {
     font-size: 22px;
-    color: $text-primary;
+    color: #3d6b24;
     margin-bottom: 8px;
   }
 
@@ -207,6 +239,14 @@ async function handleLogin() {
 
 .login-btn {
   width: 100%;
+  background-color: #a4c969;
+  border-color: #a4c969;
+
+  &:hover,
+  &:focus {
+    background-color: #8fb355;
+    border-color: #8fb355;
+  }
 }
 
 .login-footer {
@@ -218,10 +258,11 @@ async function handleLogin() {
   .forgot-link {
     float: left;
     margin-left: 0;
+    color: #3d6b24;
   }
 
   a {
-    color: $primary-color;
+    color: #3d6b24;
     margin-left: 4px;
 
     &:hover {

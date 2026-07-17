@@ -20,11 +20,11 @@ ollama==0.3.0  #本地 LLM 模型备选
 # ── 目标检测（YOLOv11）────────────────────────────────
 ultralytics==8.3.0   # Ultralytics YOLO框架（包含PyTorch）
 opencv-python==4.8.0.76 # OpenCV图像处理库
-Pillow==10.0.0   # Pillow图像处理库
+Pillow>=11.3.0   # Pillow图像处理库
 
 # ── 数据库（PostgreSQL + ORM）─────────────────────────
-sqlalchemy==2.0.0  # SQLAlchemy ORM框架
-psycopg2-binary==2.9.9  # Post greSQL数据库驱动
+sqlalchemy>=2.0.0  # SQLAlchemy ORM框架
+psycopg2-binary>=2.9.9  # Post greSQL数据库驱动
 pgvector==0.3.0   #PostgreSQL 向量存储扩展（RAG 用）
 langchain-text-splitters==0.3.0  # RAG 文本切片
 pypdf==5.0.0                     # RAG PDF 文档解析
@@ -43,7 +43,7 @@ python-jose[cryptography]==3.3.0 #JWT 用户认证
 passlib[bcrypt]==1.7.4 #密码哈希加密
 
 # ── 数据验证与配置 ────────────────────────────────────
-pydantic==2.8.0  # 请求/响应数据验证
+pydantic>=2.8.0  # 请求/响应数据验证
 pydantic-settings==2.4.0  # 配置管理
 
 # ── 工具库 ───────────────────────────────────────────
