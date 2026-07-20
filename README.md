@@ -13,6 +13,9 @@ cd backend
 alembic upgrade head
 ```
 抱歉数据库版本删掉了...
+首先请删掉alembic下除了我的版本以外的version
+
+清除pycache
 1. 确保 pgvector 扩展已安装（在新数据库中）
 docker exec -it rsod-postgres psql -U lujie -d lujie -c "CREATE EXTENSION IF NOT EXISTS vector;"
 2. 清除旧的 alembic 版本记录，让 alembic 认为数据库是全新的
