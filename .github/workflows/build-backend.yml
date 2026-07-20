@@ -10,6 +10,7 @@ on:
     branches: [main, output0.2]
     paths:
       - "backend/**"
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
