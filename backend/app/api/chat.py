@@ -91,7 +91,7 @@ async def create_session(
     try:
         session = ChatSession(
             user_id=current_user["id"],
-            session_uuid=str(uuid.uuid4()),
+            session_uid=str(uuid.uuid4()),
             title=request.title or "新对话",
             status="active",
             message_count=0,
@@ -104,7 +104,7 @@ async def create_session(
 
         return {
             "id": session.id,
-            "session_uuid": session.session_uuid,
+            "session_uuid": session.session_uid,
             "title": session.title,
             "status": session.status,
             "message_count": session.message_count,
@@ -147,7 +147,7 @@ async def list_sessions(
             "data": [
                 {
                     "id": s.id,
-                    "session_uuid": s.session_uuid,
+                    "session_uuid": s.session_uid,
                     "title": s.title or "未命名对话",
                     "status": s.status,
                     "message_count": s.message_count,
@@ -264,7 +264,7 @@ async def chat_stream(
         if not session:
             session = ChatSession(
                 user_id=user_id or 0,
-                session_uuid=str(uuid.uuid4()),
+                session_uid=str(uuid.uuid4()),
                 title=request.message[:50],  # 取前50个字符作为标题
                 status="active",
                 message_count=0,
@@ -308,10 +308,12 @@ async def chat_stream(
         except Exception as e:
             logger.warning("加载对话历史失败: %s", e)
 
-        # 将当前用户消息加入状态（附带图片路径）
+        # 将当前用户消息加入状态（附带图片/视频路径）
         user_text = request.message
         if request.image_path:
             user_text = f"{user_text}\n[附件图片路径: {request.image_path}]"
+        if request.video_path:
+            user_text = f"{user_text}\n[附件视频路径: {request.video_path}]"
         graph_messages.append(_HM(content=user_text))
 
         # 保存用户原始消息到 Redis（不含图片路径，防止下轮误触发）

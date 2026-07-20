@@ -152,8 +152,11 @@ const isBatch = computed(() => {
   );
 });
 
-/** 视频模式：标注视频 URL */
+/** 视频模式：标注视频 URL（优先使用后端代理，其次 MinIO URL） */
 const annotatedVideoSrc = computed(() => {
+  if (props.result.task_id) {
+    return `/api/detection/video/${props.result.task_id}`;
+  }
   return props.result.annotated_video_url || null;
 });
 

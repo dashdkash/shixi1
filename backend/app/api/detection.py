@@ -83,6 +83,78 @@ async def get_annotated_image(
         db.close()
 
 
+@router.get("/video/{task_id}", summary="获取检测标注视频")
+async def get_annotated_video(
+    task_id: int,
+):
+    """
+    通过任务 ID 获取标注视频（MinIO 代理 + 本地回退）
+
+    解决前端跨域/跨端口访问 MinIO 视频的问题。
+    支持 Range 请求，浏览器可拖动进度条。
+    """
+    db = SessionLocal()
+    try:
+        task = db.query(DetectionTask).filter(DetectionTask.id == task_id).first()
+        if not task or not task.annotated_video_url:
+            return JSONResponse(status_code=404, content={"error": "标注视频不存在"})
+
+        # 优先从本地回退目录读取
+        local_video = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "detections", str(task_id), "annotated_video.mp4",
+        )
+        if os.path.isfile(local_video):
+            file_size = os.path.getsize(local_video)
+            range_header = None  # 由 FastAPI 自动处理
+
+            def iterfile():
+                with open(local_video, "rb") as f:
+                    while chunk := f.read(1024 * 1024):
+                        yield chunk
+
+            from starlette.responses import StreamingResponse
+            return StreamingResponse(
+                iterfile(),
+                media_type="video/mp4",
+                headers={
+                    "Content-Length": str(file_size),
+                    "Accept-Ranges": "bytes",
+                    "Cache-Control": "public, max-age=86400",
+                },
+            )
+
+        # 本地不存在，从 MinIO 下载
+        from urllib.parse import urlparse, unquote
+        from app.storage.minio_client import MinIOClient
+
+        parsed = urlparse(task.annotated_video_url)
+        path_parts = parsed.path.lstrip("/").split("/", 1)
+        if len(path_parts) < 2:
+            return JSONResponse(status_code=404, content={"error": "无效的 MinIO 路径"})
+        object_name = unquote(path_parts[1])
+
+        mc = MinIOClient()
+        data = mc.client.get_object(mc.bucket_name, object_name)
+        video_bytes = data.read()
+        data.close()
+
+        from starlette.responses import Response
+        return Response(
+            content=video_bytes,
+            media_type="video/mp4",
+            headers={
+                "Content-Length": str(len(video_bytes)),
+                "Cache-Control": "public, max-age=86400",
+            },
+        )
+    except Exception as e:
+        logger.error("获取标注视频失败: %s", str(e), exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    finally:
+        db.close()
+
+
 @router.post("/upload", summary="批量上传图片检测")
 async def upload_and_detect_api(
     files: list[UploadFile] = File(..., description="多张图片"),

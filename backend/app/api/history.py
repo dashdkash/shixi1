@@ -278,7 +278,7 @@ async def get_chat_history(
         "data": [
             {
                 "id": session.id,
-                "session_uuid": session.session_uuid,
+                "session_uuid": session.session_uid,
                 "title": session.title or "未命名对话",
                 "message_count": session.message_count,
                 "status": session.status,
@@ -317,7 +317,7 @@ async def get_chat_detail(
 
     return {
         "id": session.id,
-        "session_uuid": session.session_uuid,
+        "session_uuid": session.session_uid,
         "title": session.title or "未命名对话",
         "status": session.status,
         "created_at": session.created_at.isoformat(),

@@ -431,7 +431,7 @@ class ChatSessionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     id: int
-    session_uuid: str
+    session_uid: str
     title: Optional[str] = None
     status: str
     message_count: int

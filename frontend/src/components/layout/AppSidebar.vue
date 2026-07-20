@@ -31,8 +31,10 @@ import {
 } from '@element-plus/icons-vue'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
+const userStore = useUserStore()
 
 /** 当前激活的菜单项 */
 const activeMenu = computed(() => {
@@ -40,13 +42,21 @@ const activeMenu = computed(() => {
 })
 
 /** 侧边栏菜单配置 */
-const menuItems = [
-  { path: '/chat', title: '智能对话', icon: ChatDotRound },
-  { path: '/detection', title: '检测工作台', icon: Camera },
-  { path: '/training', title: '模型训练', icon: Cpu },
-  { path: '/history', title: '历史记录', icon: Clock },
-  { path: '/dashboard', title: '数据看板', icon: DataAnalysis },
+const allMenuItems = [
+  { path: '/chat', title: '智能对话', icon: ChatDotRound, adminOnly: false },
+  { path: '/detection', title: '检测工作台', icon: Camera, adminOnly: false },
+  { path: '/training', title: '模型训练', icon: Cpu, adminOnly: true },
+  { path: '/history', title: '历史记录', icon: Clock, adminOnly: false },
+  { path: '/dashboard', title: '数据看板', icon: DataAnalysis, adminOnly: true },
 ]
+
+/** 根据用户角色过滤菜单项 */
+const menuItems = computed(() => {
+  if (userStore.isSuperuser) {
+    return allMenuItems
+  }
+  return allMenuItems.filter(item => !item.adminOnly)
+})
 </script>
 
 <style lang="scss" scoped>

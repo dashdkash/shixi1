@@ -957,7 +957,7 @@ class DetectionService:
             ffmpeg_path = shutil.which("ffmpeg")
             if not ffmpeg_path:
                 common_paths = [
-                    r"D:\1\ffmpeg-8.1.2-essentials_build\bin\ffmpeg.exe",
+                    r"D:\ffmpeg-8.1.2-essentials_build\bin\ffmpeg.exe",
                     r"C:\ffmpeg\bin\ffmpeg.exe",
                 ]
                 for p in common_paths:
@@ -965,6 +965,8 @@ class DetectionService:
                         ffmpeg_path = p
                         break
             ffmpeg_path = ffmpeg_path or "ffmpeg"
+            # 先写到系统临时目录，避免 detections 目录被 StaticFiles 锁定导致权限问题
+            temp_transcoded = os.path.join(tempfile.gettempdir(), f"transcoded_{task_id or 'video'}.mp4")
             try:
                 subprocess.run(
                     [
@@ -976,16 +978,25 @@ class DetectionService:
                         "-crf", "23",
                         "-pix_fmt", "yuv420p",
                         "-movflags", "+faststart",
-                        final_video_path,
+                        temp_transcoded,
                     ],
                     capture_output=True,
                     timeout=300,
                     check=True,
                 )
+                # 转码成功后复制到目标位置
+                shutil.copy2(temp_transcoded, final_video_path)
                 logger.info("视频已转码为 H.264 格式")
             except Exception as e:
                 logger.warning("ffmpeg 转码失败，使用原始 MJPG 视频: %s", str(e))
                 final_video_path = output_video_path
+            finally:
+                # 清理临时转码文件
+                try:
+                    if os.path.isfile(temp_transcoded):
+                        os.unlink(temp_transcoded)
+                except Exception:
+                    pass
 
             # ── 上传标注视频到 MinIO 或本地文件系统 ──
             annotated_video_url = None

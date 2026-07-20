@@ -121,11 +121,10 @@ def detect_video_file(video_path: str, conf: float = 0.25, frame_sample_rate: in
         result = detection_service.detect_video(
             video_path, conf=conf, frame_sample_rate=frame_sample_rate
         )
-        # 移除 LLM 无法使用的大体积数据
+        # 移除 LLM 无法使用的大体积数据，但保留 annotated_video_url 供前端播放
         if "key_frames" in result:
             for frame in result["key_frames"]:
                 frame.pop("annotated_image_base64", None)
-        result.pop("annotated_video_url", None)
         logger.info("视频检测完成: %s", video_path)
         return json.dumps(result, ensure_ascii=False)
     except Exception as e:
