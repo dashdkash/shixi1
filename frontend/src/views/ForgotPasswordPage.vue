@@ -1,7 +1,115 @@
 <template>
-  <div class="forgot-password-page">
-    <div class="forgot-card">
-      <div class="forgot-header">
+  <div class="forgot-page">
+    <div class="forgot-container">
+      <!-- 左侧：找回密码表单 -->
+      <div class="forgot-card">
+        <div class="forgot-header">
+          <h2>{{ $t("forgotPassword.title") }}</h2>
+          <p class="forgot-desc">{{ $t("forgotPassword.description") }}</p>
+        </div>
+
+        <div v-if="step === 1">
+          <el-form
+            :model="forgotForm"
+            ref="formRef"
+            :rules="forgotRules"
+            label-width="0"
+            size="large"
+            @submit.prevent="handleForgot"
+          >
+            <el-form-item prop="email">
+              <el-input
+                v-model="forgotForm.email"
+                :placeholder="$t('forgotPassword.email')"
+                prefix-icon="Message"
+              />
+            </el-form-item>
+
+            <el-form-item>
+              <el-button
+                type="primary"
+                class="forgot-btn"
+                :loading="loading"
+                @click="handleForgot"
+              >
+                {{ $t("forgotPassword.sendCode") }}
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+
+        <div v-else-if="step === 2">
+          <div class="code-section">
+            <el-alert type="info" :closable="false" show-icon>
+              <p>{{ $t("forgotPassword.codeSent") }}</p>
+            </el-alert>
+
+            <el-form
+              :model="codeForm"
+              ref="codeFormRef"
+              :rules="codeRules"
+              label-width="0"
+              size="large"
+              @submit.prevent="handleVerifyCode"
+            >
+              <el-form-item prop="code">
+                <el-input
+                  v-model="codeForm.code"
+                  :placeholder="$t('forgotPassword.enterCode')"
+                  prefix-icon="Key"
+                  maxlength="6"
+                />
+              </el-form-item>
+
+              <div class="code-actions">
+                <el-button
+                  type="text"
+                  class="resend-btn"
+                  :disabled="countdown > 0"
+                  @click="handleResendCode"
+                >
+                  {{
+                    countdown > 0
+                      ? $t("forgotPassword.resendCountdown", {
+                          seconds: countdown,
+                        })
+                      : $t("forgotPassword.resend")
+                  }}
+                </el-button>
+              </div>
+
+              <el-form-item>
+                <el-button
+                  type="primary"
+                  class="forgot-btn"
+                  :loading="verifying"
+                  @click="handleVerifyCode"
+                >
+                  {{ $t("forgotPassword.verify") }}
+                </el-button>
+              </el-form-item>
+            </el-form>
+
+            <el-button type="text" class="back-btn" @click="step = 1">
+              {{ $t("forgotPassword.changeEmail") }}
+            </el-button>
+          </div>
+        </div>
+
+        <div class="forgot-footer">
+          <router-link to="/login">{{
+            $t("forgotPassword.backToLogin")
+          }}</router-link>
+        </div>
+      </div>
+
+      <!-- 右侧：品牌展示 -->
+      <div class="brand-panel">
+        <div class="brand-content">
+          <img src="/logo.svg" alt="logo" class="brand-logo" />
+          <h1 class="brand-title">智慧农业</h1>
+          <p class="brand-subtitle">农田杂草智能检测平台</p>
+        </div>
         <el-select
           v-model="currentLang"
           class="lang-select"
@@ -11,103 +119,6 @@
           <el-option :label="$t('lang.zh')" value="zh" />
           <el-option :label="$t('lang.en')" value="en" />
         </el-select>
-        <img src="/logo.svg" alt="logo" class="forgot-logo" />
-        <h2>{{ $t("forgotPassword.title") }}</h2>
-        <p>{{ $t("forgotPassword.description") }}</p>
-      </div>
-
-      <div v-if="step === 1">
-        <el-form
-          :model="forgotForm"
-          ref="formRef"
-          :rules="forgotRules"
-          label-width="0"
-          size="large"
-          @submit.prevent="handleForgot"
-        >
-          <el-form-item prop="email">
-            <el-input
-              v-model="forgotForm.email"
-              :placeholder="$t('forgotPassword.email')"
-              prefix-icon="Message"
-            />
-          </el-form-item>
-
-          <el-form-item>
-            <el-button
-              type="primary"
-              class="forgot-btn"
-              :loading="loading"
-              @click="handleForgot"
-            >
-              {{ $t("forgotPassword.sendCode") }}
-            </el-button>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <div v-else-if="step === 2">
-        <div class="code-section">
-          <el-alert type="info" :closable="false" show-icon>
-            <p>{{ $t("forgotPassword.codeSent") }}</p>
-          </el-alert>
-
-          <el-form
-            :model="codeForm"
-            ref="codeFormRef"
-            :rules="codeRules"
-            label-width="0"
-            size="large"
-            @submit.prevent="handleVerifyCode"
-          >
-            <el-form-item prop="code">
-              <el-input
-                v-model="codeForm.code"
-                :placeholder="$t('forgotPassword.enterCode')"
-                prefix-icon="Key"
-                maxlength="6"
-              />
-            </el-form-item>
-
-            <div class="code-actions">
-              <el-button
-                type="text"
-                class="resend-btn"
-                :disabled="countdown > 0"
-                @click="handleResendCode"
-              >
-                {{
-                  countdown > 0
-                    ? $t("forgotPassword.resendCountdown", {
-                        seconds: countdown,
-                      })
-                    : $t("forgotPassword.resend")
-                }}
-              </el-button>
-            </div>
-
-            <el-form-item>
-              <el-button
-                type="primary"
-                class="verify-btn"
-                :loading="verifying"
-                @click="handleVerifyCode"
-              >
-                {{ $t("forgotPassword.verify") }}
-              </el-button>
-            </el-form-item>
-          </el-form>
-
-          <el-button type="text" class="back-btn" @click="step = 1">
-            {{ $t("forgotPassword.changeEmail") }}
-          </el-button>
-        </div>
-      </div>
-
-      <div class="forgot-footer">
-        <router-link to="/login">{{
-          $t("forgotPassword.backToLogin")
-        }}</router-link>
       </div>
     </div>
   </div>
@@ -203,7 +214,6 @@ async function handleForgot() {
   try {
     const response = await forgotPasswordApi({ email: forgotForm.email });
     if (response.email_exists) {
-      // 开发环境：如果后端返回了验证码，直接显示方便测试
       if (response.code) {
         ElMessage.success({
           message: `${response.message}，验证码：${response.code}`,
@@ -272,50 +282,60 @@ async function handleVerifyCode() {
 </script>
 
 <style lang="scss" scoped>
-.forgot-password-page {
+.forgot-page {
   width: 100%;
   height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: url("/grass.jpg") no-repeat center center;
+  background-size: cover;
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 0;
+  }
 }
 
+.forgot-container {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 880px;
+  min-height: 520px;
+  border-radius: $border-radius-lg;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* ── 左侧找回密码表单 ── */
 .forgot-card {
   width: 420px;
-  padding: 40px;
+  padding: 48px 40px 36px;
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .forgot-header {
-  text-align: center;
-  margin-bottom: 32px;
-
-  .lang-select {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    width: 80px;
-  }
-
-  .forgot-logo {
-    width: 48px;
-    height: 48px;
-    margin-bottom: 12px;
-  }
+  margin-bottom: 28px;
 
   h2 {
     font-size: 22px;
-    color: #303133;
-    margin-bottom: 8px;
+    font-weight: 700;
+    color: #1e1e1e;
+    font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+    letter-spacing: 4px;
   }
 
-  p {
+  .forgot-desc {
     font-size: 13px;
-    color: #909399;
+    color: $text-secondary;
+    margin-top: 8px;
   }
 }
 
@@ -335,9 +355,18 @@ async function handleVerifyCode() {
   }
 }
 
-.forgot-btn,
-.verify-btn {
+.forgot-btn {
   width: 100%;
+  background: #1e1e1e;
+  border-color: #1e1e1e;
+  color: #fff;
+
+  &:hover,
+  &:focus {
+    background: #333;
+    border-color: #333;
+    color: #fff;
+  }
 }
 
 .back-btn {
@@ -350,15 +379,70 @@ async function handleVerifyCode() {
 
 .forgot-footer {
   text-align: center;
-  margin-top: 24px;
+  font-size: 13px;
+  color: $text-secondary;
+  margin-top: auto;
+  padding-top: 16px;
 
   a {
-    color: #1e1e1e;
-    font-size: 14px;
+    color: $primary-color;
+    margin-left: 4px;
 
     &:hover {
       text-decoration: underline;
     }
   }
+}
+
+/* ── 右侧品牌展示 ── */
+.brand-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(4px);
+
+  .lang-select {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 80px;
+  }
+}
+
+.brand-content {
+  text-align: center;
+  color: #fff;
+  margin-top: -60px;
+}
+
+.brand-logo {
+  width: 120px;
+  height: auto;
+  margin-bottom: 32px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.brand-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  margin-bottom: 12px;
+  font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.brand-subtitle {
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 4px;
+  opacity: 0.95;
+  font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 </style>
