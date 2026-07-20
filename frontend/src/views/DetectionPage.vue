@@ -27,10 +27,19 @@
           </el-upload>
 
           <div class="action-bar" v-if="fileList.length > 0">
-            <el-button type="primary" size="large" @click="handleDetect" :loading="detecting">
+            <el-button
+              type="primary"
+              size="large"
+              @click="handleDetect"
+              :loading="detecting"
+            >
               {{ detecting ? "检测中..." : "开始检测" }}
             </el-button>
-            <el-button size="large" @click="fileList = []" :disabled="detecting">
+            <el-button
+              size="large"
+              @click="fileList = []"
+              :disabled="detecting"
+            >
               清空文件
             </el-button>
           </div>
@@ -49,7 +58,10 @@
 
             <!-- 视频检测结果 -->
             <div v-if="detectResult.type === 'video'" class="video-result">
-              <div v-if="detectResult.data.video_url" class="video-player-wrapper">
+              <div
+                v-if="detectResult.data.video_url"
+                class="video-player-wrapper"
+              >
                 <video
                   :src="detectResult.data.video_url"
                   controls
@@ -81,7 +93,11 @@
 
             <!-- 批量检测结果 -->
             <div v-if="detectResult.type === 'batch'" class="batch-result">
-              <div v-for="(item, idx) in detectResult.data.results" :key="idx" class="batch-item">
+              <div
+                v-for="(item, idx) in detectResult.data.results"
+                :key="idx"
+                class="batch-item"
+              >
                 <h4>{{ item.filename }}</h4>
                 <DetectionResultCard
                   :result="item"
@@ -258,9 +274,9 @@
 </template>
 
 <script setup>
-import { createCameraWs } from "@/utils/cameraWs";
-import { detectSingle, detectBatch, detectVideo } from "@/api/detection";
+import { detectBatch, detectSingle, detectVideo } from "@/api/detection";
 import DetectionResultCard from "@/components/DetectionResultCard.vue";
+import { createCameraWs } from "@/utils/cameraWs";
 import { UploadFilled } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { computed, onBeforeUnmount, ref } from "vue";
@@ -293,8 +309,10 @@ async function handleDetect() {
 
   try {
     const files = fileList.value.map((f) => f.raw);
-    const hasVideo = files.some((f) =>
-      f.type.startsWith("video/") || /\.(mp4|avi|mov|mkv|wmv|flv)$/i.test(f.name)
+    const hasVideo = files.some(
+      (f) =>
+        f.type.startsWith("video/") ||
+        /\.(mp4|avi|mov|mkv|wmv|flv)$/i.test(f.name),
     );
 
     if (hasVideo) {
