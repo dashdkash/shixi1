@@ -66,6 +66,9 @@ function reportError(errorInfo) {
 export function setupErrorReporting(app) {
   // ── 1. Vue 组件错误 ────────────────────────────────
   app.config.errorHandler = (err, instance, info) => {
+    // 过滤浏览器无害警告
+    if (err?.message?.includes("ResizeObserver loop")) return;
+
     reportError({
       type: "vue_error",
       message: err.message,
