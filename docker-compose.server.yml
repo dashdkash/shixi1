@@ -48,6 +48,7 @@ services:
       - ./uploads:/app/uploads
       - ./detections:/app/detections
       - ./logs:/app/logs
+      - ./models:/app/models
     networks:
       - rsod-network
 
