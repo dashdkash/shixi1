@@ -1,155 +1,98 @@
 <template>
   <div class="history-page">
-    <!-- 标签页切换 -->
-    <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-      <el-tab-pane :label="$t('history.detection.title')" name="detection">
-        <!-- 检测历史列表 -->
-        <div class="history-list">
-          <div class="list-header">
-            <span>{{ $t("history.detection.title") }}</span>
-          </div>
+    <!-- 检测记录列表 -->
+    <div class="page-header">
+      <h2>检测记录</h2>
+    </div>
 
-          <div v-if="detectionList.length === 0" class="empty-state">
-            <el-icon class="empty-icon"><Search /></el-icon>
-            <p>{{ $t("history.empty") }}</p>
-          </div>
+    <div class="history-list">
+      <div v-if="detectionList.length === 0" class="empty-state">
+        <el-icon class="empty-icon"><Search /></el-icon>
+        <p>{{ $t("history.empty") }}</p>
+      </div>
 
-          <div v-else class="record-grid">
-            <div
-              v-for="record in detectionList"
-              :key="record.id"
-              class="record-card"
-              @click="showDetectionDetail(record)"
-            >
-              <!-- 预览图 -->
-              <div class="record-preview">
-                <img
-                  v-if="record.first_result_id"
-                  :src="`/api/history/image-proxy/${record.first_result_id}?thumb=true`"
-                  alt="检测预览图"
-                  loading="lazy"
-                  @error="handleImgError"
-                />
-                <div v-else class="preview-placeholder">
-                  <el-icon :size="32"><Picture /></el-icon>
-                </div>
-              </div>
-
-              <div class="record-header">
-                <span class="record-id"
-                  >{{ $t("history.id") }}: {{ record.id }}</span
-                >
-                <el-tag :type="getStatusType(record.status)" size="small">
-                  {{ getStatusText(record.status) }}
-                </el-tag>
-              </div>
-              <div class="record-body">
-                <div class="record-info">
-                  <span
-                    >{{ $t("history.totalImages") }}:
-                    {{ record.total_images }}</span
-                  >
-                  <span
-                    >{{ $t("history.totalObjects") }}:
-                    {{ record.total_objects }}</span
-                  >
-                  <span
-                    >{{ $t("history.inferenceTime") }}:
-                    {{ formatInferenceTime(record.total_inference_time) }}ms</span
-                  >
-                </div>
-                <!-- 检测物体标签 -->
-                <div
-                  v-if="record.top_classes && record.top_classes.length"
-                  class="record-classes"
-                >
-                  <el-tag
-                    v-for="cls in record.top_classes"
-                    :key="cls"
-                    size="small"
-                    type="success"
-                    class="class-tag"
-                  >
-                    {{ cls }}
-                  </el-tag>
-                </div>
-              </div>
-              <div class="record-footer">
-                <span class="record-time">{{
-                  formatTime(record.created_at)
-                }}</span>
-                <el-button type="text" class="view-btn">
-                  {{ $t("history.viewDetail") }}
-                  <el-icon><ArrowRight /></el-icon>
-                </el-button>
-              </div>
+      <div v-else class="record-grid">
+        <div
+          v-for="record in detectionList"
+          :key="record.id"
+          class="record-card"
+          @click="showDetectionDetail(record)"
+        >
+          <!-- 预览图 -->
+          <div class="record-preview">
+            <img
+              v-if="record.first_result_id"
+              :src="`/api/history/image-proxy/${record.first_result_id}?thumb=true`"
+              alt="检测预览图"
+              loading="lazy"
+              @error="handleImgError"
+            />
+            <div v-else class="preview-placeholder">
+              <el-icon :size="32"><Picture /></el-icon>
             </div>
           </div>
 
-          <el-pagination
-            v-if="detectionTotal > detectionPageSize"
-            class="pagination"
-            :current-page="detectionPage"
-            :page-size="detectionPageSize"
-            :total="detectionTotal"
-            @current-change="fetchDetectionHistory"
-            layout="total, prev, pager, next"
-          />
-        </div>
-      </el-tab-pane>
-
-      <el-tab-pane :label="$t('history.chat.title')" name="chat">
-        <!-- 对话历史列表 -->
-        <div class="history-list">
-          <div class="list-header">
-            <span>{{ $t("history.chat.title") }}</span>
-          </div>
-
-          <div v-if="chatList.length === 0" class="empty-state">
-            <el-icon class="empty-icon"><ChatDotRound /></el-icon>
-            <p>{{ $t("history.empty") }}</p>
-          </div>
-
-          <div v-else class="record-list">
-            <div
-              v-for="session in chatList"
-              :key="session.id"
-              class="chat-card"
-              @click="showChatDetail(session)"
+          <div class="record-header">
+            <span class="record-id"
+              >{{ $t("history.id") }}: {{ record.id }}</span
             >
-              <div class="chat-icon">
-                <el-icon><ChatDotRound /></el-icon>
-              </div>
-              <div class="chat-content">
-                <div class="chat-title">{{ session.title }}</div>
-                <div class="chat-meta">
-                  <span
-                    >{{ session.message_count }}
-                    {{ $t("history.messages") }}</span
-                  >
-                  <span>{{
-                    formatTime(session.last_message_at || session.created_at)
-                  }}</span>
-                </div>
-              </div>
-              <div class="chat-arrow">
-                <el-icon><ArrowRight /></el-icon>
-              </div>
+            <el-tag :type="getStatusType(record.status)" size="small">
+              {{ getStatusText(record.status) }}
+            </el-tag>
+          </div>
+          <div class="record-body">
+            <div class="record-info">
+              <span
+                >{{ $t("history.totalImages") }}:
+                {{ record.total_images }}</span
+              >
+              <span
+                >{{ $t("history.totalObjects") }}:
+                {{ record.total_objects }}</span
+              >
+              <span
+                >{{ $t("history.inferenceTime") }}:
+                {{ formatInferenceTime(record.total_inference_time) }}ms</span
+              >
+            </div>
+            <!-- 检测物体标签 -->
+            <div
+              v-if="record.top_classes && record.top_classes.length"
+              class="record-classes"
+            >
+              <el-tag
+                v-for="cls in record.top_classes"
+                :key="cls"
+                size="small"
+                type="success"
+                class="class-tag"
+              >
+                {{ cls }}
+              </el-tag>
             </div>
           </div>
-
-          <el-pagination
-            v-if="chatTotal > chatPageSize"
-            class="pagination"
-            :current-page="chatPage"
-            :page-size="chatPageSize"
-            :total="chatTotal"
-            @current-change="fetchChatHistory"
-            layout="total, prev, pager, next"
-          />
+          <div class="record-footer">
+            <span class="record-time">{{
+              formatTime(record.created_at)
+            }}</span>
+            <el-button type="text" class="view-btn">
+              {{ $t("history.viewDetail") }}
+              <el-icon><ArrowRight /></el-icon>
+            </el-button>
+          </div>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+      </div>
+
+      <el-pagination
+        v-if="detectionTotal > detectionPageSize"
+        class="pagination"
+        :current-page="detectionPage"
+        :page-size="detectionPageSize"
+        :total="detectionTotal"
+        @current-change="fetchDetectionHistory"
+        layout="total, prev, pager, next"
+      />
+    </div>
 
     <!-- 检测详情弹窗 -->
     <el-dialog
@@ -243,33 +186,6 @@
         </div>
       </div>
     </el-dialog>
-
-    <!-- 对话详情弹窗 -->
-    <el-dialog
-      v-model="showChatDialog"
-      :title="currentChat?.title || $t('history.chat.detail')"
-      width="700px"
-      :close-on-click-modal="false"
-    >
-      <div v-if="currentChat" class="chat-detail">
-        <div class="chat-messages">
-          <div
-            v-for="msg in currentChat.messages"
-            :key="msg.id"
-            :class="['message-item', msg.role]"
-          >
-            <div class="message-avatar">
-              <el-icon v-if="msg.role === 'user'"><User /></el-icon>
-              <el-icon v-else><ChatLineRound /></el-icon>
-            </div>
-            <div class="message-content">
-              <div class="message-text">{{ msg.content }}</div>
-              <div class="message-time">{{ formatTime(msg.created_at) }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
@@ -277,31 +193,18 @@
 import request from "@/utils/request";
 import {
   ArrowRight,
-  ChatDotRound,
-  ChatLineRound,
   Picture,
   Search,
-  User,
 } from "@element-plus/icons-vue";
 import { onMounted, ref } from "vue";
-
-const activeTab = ref("detection");
 
 const detectionList = ref([]);
 const detectionPage = ref(1);
 const detectionPageSize = ref(10);
 const detectionTotal = ref(0);
 
-const chatList = ref([]);
-const chatPage = ref(1);
-const chatPageSize = ref(10);
-const chatTotal = ref(0);
-
 const showDetectionDialog = ref(false);
 const currentDetection = ref(null);
-
-const showChatDialog = ref(false);
-const currentChat = ref(null);
 
 const formatTime = (timeStr) => {
   if (!timeStr) return "";
@@ -357,27 +260,6 @@ const fetchDetectionHistory = async (page = 1) => {
   }
 };
 
-const fetchChatHistory = async (page = 1) => {
-  try {
-    const res = await request.get("/history/chat", {
-      params: { page, page_size: chatPageSize.value },
-    });
-    chatList.value = res.data || [];
-    chatTotal.value = res.total || 0;
-    chatPage.value = page;
-  } catch (e) {
-    console.error("获取对话历史失败", e);
-  }
-};
-
-const handleTabChange = (tab) => {
-  if (tab === "detection") {
-    fetchDetectionHistory();
-  } else {
-    fetchChatHistory();
-  }
-};
-
 const showDetectionDetail = async (record) => {
   try {
     const res = await request.get(`/history/detection/${record.id}`);
@@ -385,16 +267,6 @@ const showDetectionDetail = async (record) => {
     showDetectionDialog.value = true;
   } catch (e) {
     console.error("获取检测详情失败", e);
-  }
-};
-
-const showChatDetail = async (session) => {
-  try {
-    const res = await request.get(`/history/chat/${session.id}`);
-    currentChat.value = res;
-    showChatDialog.value = true;
-  } catch (e) {
-    console.error("获取对话详情失败", e);
   }
 };
 
@@ -406,6 +278,17 @@ onMounted(() => {
 <style lang="scss" scoped>
 .history-page {
   padding: 20px;
+}
+
+.page-header {
+  margin-bottom: 24px;
+
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #1e1e1e;
+  }
 }
 
 .list-header {
@@ -454,8 +337,8 @@ onMounted(() => {
   overflow: hidden;
 
   &:hover {
-    border-color: #409eff;
-    box-shadow: 0 2px 12px rgba(64, 158, 255, 0.15);
+    border-color: #1e1e1e;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   }
 }
 
@@ -542,7 +425,7 @@ onMounted(() => {
   .view-btn {
     font-size: 12px;
     padding: 0;
-    color: #409eff;
+    color: #1e1e1e;
   }
 }
 
@@ -564,8 +447,8 @@ onMounted(() => {
   transition: all 0.3s ease;
 
   &:hover {
-    border-color: #409eff;
-    background: #f5faff;
+    border-color: #1e1e1e;
+    background: #f5f5f5;
   }
 }
 
@@ -573,12 +456,12 @@ onMounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #f0f9ff;
+  background: #f5f5f5;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #409eff;
+  color: #1e1e1e;
 }
 
 .chat-content {
@@ -729,7 +612,7 @@ onMounted(() => {
         background: #fff;
         border-radius: 4px;
         font-size: 12px;
-        color: #409eff;
+        color: #1e1e1e;
         border: 1px solid #e4e7ed;
       }
     }
@@ -751,13 +634,13 @@ onMounted(() => {
       flex-direction: row-reverse;
 
       .message-content {
-        background: #409eff;
+        background: #1e1e1e;
         color: #fff;
         border-radius: 8px 8px 0 8px;
       }
 
       .message-avatar {
-        background: #409eff;
+        background: #1e1e1e;
         color: #fff;
       }
     }
@@ -803,6 +686,30 @@ onMounted(() => {
       font-size: 11px;
       opacity: 0.7;
       margin-top: 4px;
+    }
+
+    .detection-result-link {
+      margin-top: 8px;
+      padding: 8px;
+      background: #fff;
+      border: 1px solid #e4e7ed;
+      border-radius: 8px;
+
+      .result-preview {
+        width: 100%;
+        max-height: 200px;
+        overflow: hidden;
+        border-radius: 6px;
+        margin-bottom: 8px;
+
+        img {
+          width: 100%;
+          height: auto;
+          display: block;
+          object-fit: contain;
+          max-height: 200px;
+        }
+      }
     }
   }
 }

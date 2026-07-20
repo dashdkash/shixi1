@@ -211,6 +211,89 @@ async def clear_session(
     return {"message": f"会话 {session_id} 的对话记忆已清空"}
 
 
+class SaveMessagesRequest(BaseModel):
+    """保存快捷检测消息到会话"""
+    session_id: Optional[int] = None
+    user_content: str
+    assistant_content: str
+    title: Optional[str] = None
+    task_id: Optional[int] = None  # 关联的检测任务 ID
+
+
+@router.post("/save-messages")
+async def save_messages_to_session(
+    request: SaveMessagesRequest,
+    current_user=Depends(get_current_user),
+):
+    """
+    保存快捷检测的用户消息和 AI 回复到会话中
+
+    如果 session_id 为空，自动创建新会话。
+    用于快捷检测按钮的结果存入聊天记录。
+    """
+    user_id = current_user["id"]
+    db = SessionLocal()
+    try:
+        # 获取或创建会话
+        session = None
+        if request.session_id:
+            session = db.query(ChatSession).filter(
+                ChatSession.id == request.session_id,
+                ChatSession.user_id == user_id,
+            ).first()
+
+        if not session:
+            session = ChatSession(
+                user_id=user_id,
+                session_uuid=str(uuid.uuid4()),
+                title=request.title or request.user_content[:50],
+                status="active",
+                message_count=0,
+            )
+            db.add(session)
+            db.commit()
+            db.refresh(session)
+
+        # 保存用户消息
+        user_msg = ChatMessage(
+            session_id=session.id,
+            role="user",
+            content=request.user_content,
+            agent_used="quick_detect",
+        )
+        db.add(user_msg)
+
+        # 保存 AI 回复
+        ai_msg = ChatMessage(
+            session_id=session.id,
+            role="assistant",
+            content=request.assistant_content,
+            agent_used="quick_detect",
+            # 将检测任务 ID 存入 tool_result，供历史记录查看标注图
+            tool_result=f'{{"task_id": {request.task_id}}}' if request.task_id else None,
+        )
+        db.add(ai_msg)
+
+        session.message_count += 2
+        session.last_message_at = datetime.now()
+        db.commit()
+
+        logger.info(
+            "快捷检测消息已保存: session_id=%d, user_id=%d",
+            session.id, user_id,
+        )
+
+        return {
+            "session_id": session.id,
+            "message_count": session.message_count,
+        }
+    except Exception as e:
+        logger.error("保存快捷检测消息失败: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="保存消息失败")
+    finally:
+        db.close()
+
+
 # ══════════════════════════════════════════════════════════════
 # 对话消息接口
 # ══════════════════════════════════════════════════════════════
@@ -287,7 +370,8 @@ async def chat_stream(
 
     async def event_stream():
         # 设置用户上下文变量，让 detection_service 能获取到 user_id
-        user_id_ctx.set(user_id)
+        from app.agent.sub_agents import set_current_user
+        set_current_user(user_id)
 
         # 先发送 session_id，让前端知道当前会话
         yield f"data: {json.dumps({'type': 'session_id', 'session_id': session_id})}\n\n"

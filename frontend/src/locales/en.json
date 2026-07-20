@@ -29,7 +29,15 @@
     "detection": "Detection",
     "training": "Training",
     "history": "History",
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+    "newChat": "New Chat",
+    "historyTitle": "Chat History",
+    "noHistory": "No chat history",
+    "loadMore": "Load more",
+    "loading": "Loading...",
+    "appName": "Smart Agriculture",
+    "profile": "Profile",
+    "logout": "Logout"
   },
   "page": {
     "chat": {
@@ -50,7 +58,15 @@
     },
     "dashboard": {
       "title": "Dashboard",
-      "description": "Day 10: Implement ECharts Data Visualization"
+      "description": "View detection statistics and quick actions",
+      "quickActions": "Quick Actions",
+      "chat": "Smart Chat",
+      "detection": "Detection Workbench",
+      "history": "History"
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "Manage your account information"
     }
   },
   "lang": {
@@ -58,8 +74,22 @@
     "en": "English"
   },
   "chat": {
-    "inputPlaceholder": "Enter message...",
-    "error": "Send failed"
+    "inputPlaceholder": "Enter message, or drag images/ZIP here...",
+    "error": "Send failed",
+    "attachedImage": "Image attached",
+    "send": "Send",
+    "stop": "Stop",
+    "quickActions": {
+      "single": "📷 Single Image",
+      "batch": "📁 Batch/ZIP",
+      "video": "🎬 Video",
+      "camera": "📹 Camera"
+    },
+    "welcome": "🌿 Hello! I'm your Weed Detection Assistant.\n\nI can help you with:\n- 📷 Identify weed species and count in images\n- 📊 Provide weed distribution analysis\n- 💡 Give professional weed control suggestions\n\nUpload a photo of farmland or lawn, and I'll analyze it for you!",
+    "toolCall": "🔧 Tool: {tool}",
+    "batchDetecting": "Batch detecting...",
+    "batchComplete": "Batch detection complete! Total {count} objects found.",
+    "batchFailed": "Batch detection failed: {error}"
   },
   "header": {
     "profile": "Profile",
@@ -123,6 +153,94 @@
     "filesAdded": "files added",
     "invalidFiles": "invalid files ignored",
     "detectionComplete": "Detection completed",
-    "detectionFailed": "Detection failed"
+    "detectionFailed": "Detection failed",
+    "fileTab": "File Detection",
+    "cameraTab": "Camera Detection",
+    "resultCard": {
+      "title": "Detection Result",
+      "objects": "objects",
+      "inferenceTime": "Inference Time",
+      "detectedObjects": "Detected Objects",
+      "imageCount": "Images",
+      "className": "Class",
+      "count": "Count",
+      "previewTitle": "Detection Annotation"
+    }
+  },
+  "camera": {
+    "noCamera": "No camera detected",
+    "ready": "Camera ready, click to start detection",
+    "connecting": "Initializing detection model, please wait...",
+    "start": "Start Detection",
+    "stop": "Stop Detection",
+    "fps": "FPS",
+    "objects": "Objects",
+    "inference": "Inference",
+    "frame": "Frames",
+    "config": "Detection Config",
+    "mode": "Mode",
+    "confidence": "Confidence Threshold",
+    "iou": "IoU Threshold",
+    "detections": "Detections",
+    "connectionError": "Connection failed, check network",
+    "cameraError": "Cannot access camera, check permissions",
+    "stopped": "Detection stopped",
+    "started": "Detection started"
+  },
+  "forgotPassword": {
+    "title": "Forgot Password",
+    "description": "Enter your registered email to receive a verification code",
+    "email": "Enter email",
+    "sendCode": "Send Verification Code",
+    "codeSent": "Verification code has been sent to your email, please use it within 5 minutes",
+    "enterCode": "Enter 6-digit verification code",
+    "codeRequired": "Please enter verification code",
+    "codeFormat": "Invalid code format, please enter 6 digits",
+    "invalidCode": "Verification code is invalid or expired",
+    "verify": "Verify",
+    "resend": "Resend",
+    "resendCountdown": "Resend ({seconds}s)",
+    "codeResent": "Verification code has been resent",
+    "changeEmail": "Change Email",
+    "error": "Operation failed, please try again",
+    "backToLogin": "Back to Login"
+  },
+  "resetPassword": {
+    "title": "Reset Password",
+    "description": "Set your new password",
+    "newPassword": "Enter new password",
+    "confirmPassword": "Confirm new password",
+    "submit": "Reset Password",
+    "success": "Password reset successful, please login",
+    "error": "Reset failed, check if verification code is valid",
+    "notMatch": "Passwords do not match",
+    "invalidToken": "Reset token is invalid or expired",
+    "invalidLink": "Link is invalid or expired, please request again",
+    "goToForgot": "Back to Forgot Password",
+    "backToLogin": "Back to Login",
+    "forgotPassword": "Forgot Password",
+    "goToLogin": "Login Now"
+  },
+  "profile": {
+    "userInfo": "User Info",
+    "username": "Username",
+    "email": "Email",
+    "phone": "Phone",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "role": "Role",
+    "admin": "Admin",
+    "normal": "Normal User",
+    "createdAt": "Created At",
+    "lastLogin": "Last Login",
+    "changePassword": "Change Password",
+    "savePassword": "Save Password",
+    "editInfo": "Edit Info",
+    "saveProfile": "Save Info",
+    "stats": "Detection Stats",
+    "totalDetections": "Total Detections",
+    "totalImages": "Total Images",
+    "totalObjects": "Total Objects"
   }
 }

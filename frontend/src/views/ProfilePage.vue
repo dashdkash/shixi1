@@ -39,32 +39,44 @@
               <span>{{ userStore.user?.email || "-" }}</span>
             </div>
             <div class="info-item">
-              <label>{{ $t("profile.status") }}</label>
-              <span :class="userStore.user?.is_active ? 'active' : 'inactive'">
-                {{
-                  userStore.user?.is_active
-                    ? $t("profile.active")
-                    : $t("profile.inactive")
-                }}
-              </span>
-            </div>
-            <div class="info-item">
-              <label>{{ $t("profile.role") }}</label>
-              <span>{{
-                userStore.isSuperuser
-                  ? $t("profile.admin")
-                  : $t("profile.normal")
-              }}</span>
-            </div>
-            <div class="info-item">
-              <label>{{ $t("profile.createdAt") }}</label>
-              <span>{{ formatDate(userStore.user?.created_at) }}</span>
-            </div>
-            <div class="info-item">
-              <label>{{ $t("profile.lastLogin") }}</label>
-              <span>{{ formatDate(userStore.user?.last_login_at) }}</span>
+              <label>{{ $t("profile.phone") }}</label>
+              <span>{{ userStore.user?.phone || "-" }}</span>
             </div>
           </div>
+        </div>
+
+        <div class="section">
+          <h3 class="section-title">
+            <el-icon><User /></el-icon>
+            {{ $t("profile.editInfo") }}
+          </h3>
+          <el-form
+            :model="profileForm"
+            ref="profileFormRef"
+            label-width="120px"
+          >
+            <el-form-item :label="$t('profile.email')" prop="email">
+              <el-input
+                v-model="profileForm.email"
+                :placeholder="$t('profile.email')"
+              />
+            </el-form-item>
+            <el-form-item :label="$t('profile.phone')" prop="phone">
+              <el-input
+                v-model="profileForm.phone"
+                :placeholder="$t('profile.phone')"
+              />
+            </el-form-item>
+            <el-form-item>
+              <el-button
+                type="primary"
+                @click="handleUpdateProfile"
+                :loading="isUpdatingProfile"
+              >
+                {{ $t("profile.saveProfile") }}
+              </el-button>
+            </el-form-item>
+          </el-form>
         </div>
 
         <div class="section">
@@ -118,19 +130,24 @@
 </template>
 
 <script setup>
+import {
+  changePasswordApi,
+  getProfileApi,
+  updateProfileApi,
+  uploadAvatarApi,
+} from "@/api/auth";
 import { useUserStore } from "@/stores/user";
-import request from "@/utils/request";
 import { Camera, Lock, User } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { reactive, ref } from "vue";
-import { useRouter } from "vue-router";
+import { onMounted, reactive, ref } from "vue";
 
-const router = useRouter();
 const userStore = useUserStore();
 
 const avatarInput = ref(null);
 const passwordFormRef = ref(null);
+const profileFormRef = ref(null);
 const isChanging = ref(false);
+const isUpdatingProfile = ref(false);
 
 const showOldPassword = ref(false);
 const showNewPassword = ref(false);
@@ -142,10 +159,10 @@ const passwordForm = reactive({
   confirmPassword: "",
 });
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return "-";
-  return new Date(dateStr).toLocaleString("zh-CN");
-};
+const profileForm = reactive({
+  email: "",
+  phone: "",
+});
 
 const triggerAvatarUpload = () => {
   avatarInput.value?.click();
@@ -159,15 +176,10 @@ const handleAvatarUpload = async (event) => {
   formData.append("file", file);
 
   try {
-    const response = await request.post("/api/auth/avatar", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    const response = await uploadAvatarApi(formData);
 
-    if (response.avatar) {
-      userStore.user.avatar = response.avatar;
-      localStorage.setItem("rsod_user", JSON.stringify(userStore.user));
+    if (response.avatar_url) {
+      userStore.updateAvatar(response.avatar_url);
       ElMessage.success("头像上传成功");
     }
   } catch (error) {
@@ -180,40 +192,70 @@ const handleAvatarUpload = async (event) => {
 const handleChangePassword = async () => {
   if (!passwordFormRef.value) return;
 
-  await passwordFormRef.value.validate((valid) => {
-    if (!valid) return;
+  const valid = await passwordFormRef.value.validate().catch(() => false);
+  if (!valid) return;
 
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      ElMessage.error("两次输入的密码不一致");
-      return;
-    }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    ElMessage.error("两次输入的密码不一致");
+    return;
+  }
 
-    if (passwordForm.newPassword.length < 6) {
-      ElMessage.error("新密码长度至少6位");
-      return;
-    }
+  if (passwordForm.newPassword.length < 6) {
+    ElMessage.error("新密码长度至少6位");
+    return;
+  }
 
-    isChanging.value = true;
+  isChanging.value = true;
 
-    request
-      .post("/api/auth/change-password", {
-        old_password: passwordForm.oldPassword,
-        new_password: passwordForm.newPassword,
-      })
-      .then(() => {
-        ElMessage.success("密码修改成功");
-        passwordForm.oldPassword = "";
-        passwordForm.newPassword = "";
-        passwordForm.confirmPassword = "";
-      })
-      .catch((error) => {
-        ElMessage.error(error.response?.data?.detail || "密码修改失败");
-      })
-      .finally(() => {
-        isChanging.value = false;
-      });
-  });
+  try {
+    await changePasswordApi({
+      old_password: passwordForm.oldPassword,
+      new_password: passwordForm.newPassword,
+    });
+    ElMessage.success("密码修改成功");
+    passwordForm.oldPassword = "";
+    passwordForm.newPassword = "";
+    passwordForm.confirmPassword = "";
+  } catch (error) {
+    ElMessage.error("密码修改失败");
+  } finally {
+    isChanging.value = false;
+  }
 };
+
+const handleUpdateProfile = async () => {
+  if (!profileFormRef.value) return;
+
+  const valid = await profileFormRef.value.validate().catch(() => false);
+  if (!valid) return;
+
+  isUpdatingProfile.value = true;
+
+  try {
+    const response = await updateProfileApi({
+      email: profileForm.email,
+      phone: profileForm.phone,
+    });
+    userStore.user.email = response.email;
+    userStore.user.phone = response.phone;
+    localStorage.setItem("rsod_user", JSON.stringify(userStore.user));
+    ElMessage.success("个人信息更新成功");
+  } catch (error) {
+    ElMessage.error("个人信息更新失败");
+  } finally {
+    isUpdatingProfile.value = false;
+  }
+};
+
+onMounted(async () => {
+  try {
+    const profile = await getProfileApi();
+    profileForm.email = profile.email || "";
+    profileForm.phone = profile.phone || "";
+  } catch (error) {
+    console.error("获取个人信息失败", error);
+  }
+});
 </script>
 
 <style lang="scss" scoped>
@@ -231,7 +273,7 @@ const handleChangePassword = async () => {
 }
 
 .profile-header {
-  background: linear-gradient(135deg, #5b8def 0%, #409eff 100%);
+  background: linear-gradient(135deg, #333 0%, #1e1e1e 100%);
   padding: 40px;
   text-align: center;
 }
@@ -312,7 +354,7 @@ const handleChangePassword = async () => {
   color: #303133;
   margin-bottom: 20px;
   padding-left: 8px;
-  border-left: 4px solid #409eff;
+  border-left: 4px solid #1e1e1e;
 }
 
 .info-grid {

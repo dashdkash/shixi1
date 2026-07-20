@@ -30,6 +30,7 @@ export function setLanguage(lang) {
   if (["zh", "en"].includes(lang)) {
     i18n.global.locale.value = lang;
     localStorage.setItem(STORAGE_KEY, lang);
+    window.location.reload();
   }
 }
 

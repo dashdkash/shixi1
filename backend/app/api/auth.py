@@ -4,6 +4,7 @@
 - POST /api/auth/login             用户登录
 - GET  /api/auth/me                获取当前用户信息
 - POST /api/auth/forgot-password   忘记密码
+- POST /api/auth/verify-reset-code 验证重置验证码
 - POST /api/auth/reset-password    重置密码
 - GET  /api/auth/profile           获取个人信息（含检测统计）
 - PUT  /api/auth/profile           修改个人信息
@@ -190,40 +191,75 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     - 生成一次性重置令牌（1h 有效）
     - 发送重置邮件到用户邮箱
     """
-    token = user_service.generate_reset_token(db, request.email)
+    # 生成验证码
+    code = user_service.generate_reset_verification_code(db, request.email)
 
-    # 如果用户存在，发送邮件
-    if token:
+    if code:
         # 生产环境发送邮件
-        email_sent = send_password_reset_email(request.email, token)
-        
-        # 开发环境下如果发送失败，返回 token 便于测试
+        email_sent = send_password_reset_email(request.email, code)
+
+        # 开发环境下如果发送失败，返回 code 便于测试
         if not email_sent and settings.DEBUG:
             return {
-                "message": "重置令牌已生成（邮件发送失败，开发环境直接返回）",
-                "reset_url": f"/reset-password?token={token}",
-                "token": token,
+                "message": "验证码已生成（邮件发送失败，开发环境直接返回）",
+                "email_exists": True,
+                "code": code,
             }
 
-    # 无论邮箱是否存在都返回成功，防止邮箱枚举攻击
+        return {
+            "message": "如果该邮箱已注册，验证码将发送至您的邮箱",
+            "email_exists": True,
+        }
+
+    # 邮箱不存在
     return {
-        "message": "如果该邮箱已注册，重置链接将发送至您的邮箱"
+        "message": "该邮箱未注册",
+        "email_exists": False,
+    }
+
+
+@router.post("/verify-reset-code")
+async def verify_reset_code(request: dict, db: Session = Depends(get_db)):
+    """
+    验证密码重置验证码
+    """
+    email = request.get("email")
+    code = request.get("code")
+
+    if not email or not code:
+        raise HTTPException(status_code=400, detail="邮箱和验证码不能为空")
+
+    is_valid = user_service.verify_reset_code(db, email, code)
+
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="验证码无效或已过期")
+
+    return {
+        "message": "验证码验证成功",
+        "valid": True,
     }
 
 
 @router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
-    重置密码
-
-    - 验证令牌并更新密码
-    - 令牌使用后自动失效
+    重置密码（支持令牌和验证码两种方式）
     """
-    success = user_service.reset_password(db, request.token, request.new_password)
+    # 支持验证码方式
+    if request.email and request.code:
+        success = user_service.reset_password_with_code(
+            db, request.email, request.code, request.new_password
+        )
+        if not success:
+            raise HTTPException(status_code=400, detail="验证码无效或已过期")
+        return {"message": "密码重置成功"}
 
+    # 令牌方式（原有逻辑）
+    if not request.token:
+        raise HTTPException(status_code=400, detail="请提供令牌或邮箱+验证码")
+    success = user_service.reset_password(db, request.token, request.new_password)
     if not success:
         raise HTTPException(status_code=400, detail="重置令牌无效或已过期")
-
     return {"message": "密码重置成功"}
 
 

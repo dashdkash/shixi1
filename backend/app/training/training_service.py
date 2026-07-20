@@ -388,40 +388,105 @@ class TrainingService:
                 }
 
             # 注册训练回调：每个 epoch 结束时更新数据库
+            _batch_count = [0]  # 使用列表避免闭包问题
+            _total_steps_est = [0]
+
+            def on_train_epoch_start(trainer):
+                """每个 epoch 开始时重置 batch 计数器"""
+                _batch_count[0] = 0
+                # 尝试获取实际的 batches per epoch
+                if hasattr(trainer, 'nb') and trainer.nb > 0:
+                    _total_steps_est[0] = trainer.nb
+
+            def on_train_batch_end(trainer):
+                """每个 batch 结束后更新进度（更细粒度）"""
+                try:
+                    _batch_count[0] += 1
+                    # 每 10 个 batch 更新一次，避免过频写入数据库
+                    if _batch_count[0] % 10 != 0:
+                        return
+                    # 估算总步数：如果还没确定，用已知数据集大小
+                    if _total_steps_est[0] == 0:
+                        # 尝试从 trainer 获取总步数
+                        if hasattr(trainer, 'nb') and trainer.nb > 0:
+                            _total_steps_est[0] = trainer.nb
+                        else:
+                            _total_steps_est[0] = 1128  # 默认估算
+
+                    total_epochs = config.get("epochs", 50)
+                    current_epoch = trainer.epoch + epoch_offset
+                    total_steps = total_epochs * _total_steps_est[0]
+                    current_step = current_epoch * _total_steps_est[0] + _batch_count[0]
+
+                    progress = min(int((current_step / total_steps) * 100), 99)
+                    task.progress = progress  # type: ignore
+                    task.current_epoch = current_epoch + 1  # type: ignore
+                    db.commit()
+                except Exception as e:
+                    logger.warning("batch 进度回调异常: %s", str(e))
+                    db.rollback()
+
             def on_train_epoch_end(trainer):
+                """仅用于日志，不写 metrics（验证还没跑）"""
+                logger.info(
+                    "Epoch %d/%d 训练完成，等待验证...",
+                    trainer.epoch + 1 + epoch_offset,
+                    config.get("epochs", 50),
+                )
+
+            def on_fit_epoch_end(trainer):
+                """验证结束后触发，此时 trainer.metrics 包含验证指标"""
                 try:
                     epoch = trainer.epoch + 1 + epoch_offset
                     metrics = trainer.metrics or {}
 
+                    # YOLO metrics key 格式: "metrics/mAP50(B)", "metrics/precision(B)" 等
+                    # 训练 loss 在 trainer.loss 中（如果有）
+                    box_loss = 0.0
+                    cls_loss = 0.0
+                    dfl_loss = 0.0
+                    if hasattr(trainer, 'loss') and trainer.loss is not None:
+                        try:
+                            loss_items = trainer.loss.detach().cpu().numpy()
+                            if len(loss_items) >= 3:
+                                box_loss = float(loss_items[0])
+                                cls_loss = float(loss_items[1])
+                                dfl_loss = float(loss_items[2])
+                        except Exception:
+                            pass
+
                     metric_record = TrainingMetric(
                         task_id=task_id,
                         epoch=epoch,
-                        box_loss=float(metrics.get("box_loss", 0.0)),
-                        cls_loss=float(metrics.get("cls_loss", 0.0)),
-                        dfl_loss=float(metrics.get("dfl_loss", 0.0)),
-                        precision=float(metrics.get("precision", 0.0)),
-                        recall=float(metrics.get("recall", 0.0)),
-                        map50=float(metrics.get("mAP50", 0.0)),
-                        map50_95=float(metrics.get("mAP50-95", 0.0)),
+                        box_loss=box_loss,
+                        cls_loss=cls_loss,
+                        dfl_loss=dfl_loss,
+                        precision=float(metrics.get("metrics/precision(B)", 0.0)),
+                        recall=float(metrics.get("metrics/recall(B)", 0.0)),
+                        map50=float(metrics.get("metrics/mAP50(B)", 0.0)),
+                        map50_95=float(metrics.get("metrics/mAP50-95(B)", 0.0)),
                     )
                     db.add(metric_record)
 
                     total_epochs = config.get("epochs", 50)
                     task.current_epoch = epoch  # type: ignore
-                    task.progress = int((epoch / total_epochs) * 100)  # type: ignore
+                    task.progress = min(int((epoch / total_epochs) * 100), 99)  # type: ignore
                     db.commit()
 
-                    logger.debug(
-                        "训练进度: task=%s epoch=%d/%d",
+                    logger.info(
+                        "训练进度: task=%s epoch=%d/%d mAP50=%.4f",
                         task_uuid,
                         epoch,
                         total_epochs,
+                        metric_record.map50,
                     )
                 except Exception as e:
                     logger.warning("训练回调异常（不影响训练）: %s", str(e))
                     db.rollback()
 
-            model.add_callback("on_train_epoch_end", on_train_epoch_end)
+            model.add_callback("on_train_epoch_start", on_train_epoch_start)
+            model.add_callback("on_train_batch_end", on_train_batch_end)
+            model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
 
             # 开始训练（阻塞直到完成）
             logger.info(
@@ -570,18 +635,13 @@ class TrainingService:
 
         # 如果状态是 running 但实际没有运行中，尝试自动修复
         if task.status == "running" and not is_running:
-            best_model_path = os.path.join(
-                settings.TRAIN_OUTPUT_DIR,
-                f"task_{task.task_uuid}",
-                "weights",
-                "best.pt",
-            )
+            output_dir = os.path.join(BACKEND_DIR, settings.TRAIN_OUTPUT_DIR)
+            task_output = os.path.join(output_dir, f"task_{task.task_uuid}")
+            best_model_path = os.path.join(task_output, "weights", "best.pt")
+            results_csv = os.path.join(task_output, "results.csv")
+
             if os.path.exists(best_model_path):
-                results_csv = os.path.join(
-                    settings.TRAIN_OUTPUT_DIR,
-                    f"task_{task.task_uuid}",
-                    "results.csv",
-                )
+                # 训练完成但状态没更新（可能是 uvicorn reload 杀了线程）
                 if os.path.exists(results_csv):
                     try:
                         with open(results_csv, "r", encoding="utf-8") as f:
@@ -593,17 +653,45 @@ class TrainingService:
                             last_epoch = max(epochs) if epochs else task.current_epoch
                             task.current_epoch = last_epoch
                             task.progress = int((last_epoch / task.epochs) * 100)
+
+                        # 补充 metrics 到数据库
+                        TrainingService._parse_final_results(
+                            db, task.id, task.task_uuid,
+                            {"epochs": task.epochs}, output_dir, 0
+                        )
                     except Exception:
                         pass
 
-                if task.current_epoch >= task.epochs:
-                    task.status = "completed"
-                    task.progress = 100
-                else:
-                    task.status = "completed"
+                task.status = "completed"
+                task.progress = 100
                 task.completed_at = datetime.now()
                 db.commit()
-                logger.info(f"自动修复任务状态: task_id={task.id}, status=completed")
+                logger.info("自动修复任务状态: task_id=%d, status=completed", task.id)
+
+            elif os.path.exists(results_csv):
+                # 部分训练完成（best.pt 不存在但有 results.csv）
+                try:
+                    with open(results_csv, "r", encoding="utf-8") as f:
+                        reader = csv.DictReader(f)
+                        epochs = [int(row.get("epoch", 0)) + 1 for row in reader]
+                    if epochs:
+                        task.current_epoch = max(epochs)
+                        task.progress = int((max(epochs) / task.epochs) * 100)
+                except Exception:
+                    pass
+                task.status = "failed"
+                task.error_message = "训练进程被意外终止（可能是服务器重启）"
+                task.completed_at = datetime.now()
+                db.commit()
+                logger.info("自动修复任务状态: task_id=%d, status=failed (部分完成)", task.id)
+
+            else:
+                # 训练根本没开始就被杀了
+                task.status = "failed"
+                task.error_message = "训练进程被意外终止，未产生任何结果"
+                task.completed_at = datetime.now()
+                db.commit()
+                logger.info("自动修复任务状态: task_id=%d, status=failed (无结果)", task.id)
 
         return {
             "task": {

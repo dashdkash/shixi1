@@ -23,8 +23,19 @@ from app.agent.tools.analysis_tool import ANALYSIS_TOOLS
 from app.agent.tools.detection_tools import DETECTION_TOOLS
 from app.agent.tools.knowledge_tool import KNOWLEDGE_TOOLS
 from app.core.logger import get_logger
+from app.services.detection_service import current_user_id as _user_id_ctx
 
 logger = get_logger(__name__)
+
+# 模块级 fallback user_id，当 contextvar 不传播时使用
+_fallback_user_id = None
+
+
+def set_current_user(user_id: int):
+    """设置当前用户 ID（同时设置 contextvar 和 fallback 变量）"""
+    global _fallback_user_id
+    _fallback_user_id = user_id
+    _user_id_ctx.set(user_id)
 
 
 # 工具输出截断阈值（字符数）
@@ -32,24 +43,31 @@ _MAX_TOOL_OUTPUT = 8000
 
 
 def _smart_truncate(text: str, max_len: int = _MAX_TOOL_OUTPUT) -> str:
-    """智能截断：如果是 JSON，优先精简 detections 数组而非暴力截断"""
+    """智能截断：移除 LLM 不需要的大体积数据（base64图片、视频 URL），精简 detections 数组"""
     if len(text) <= max_len:
+        # 即使不超长，也要剥离 LLM 无法使用的 base64 数据
+        try:
+            import json
+            data = json.loads(text)
+            if isinstance(data, dict):
+                _strip_large_fields(data)
+                return json.dumps(data, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            pass
         return text
 
-    # 尝试作为 JSON 处理：保留结构，精简 detections 数组
+    # 尝试作为 JSON 处理
     try:
         import json
         data = json.loads(text)
-        if isinstance(data, dict) and "detections" in data:
-            # 只保留前 5 条检测结果
-            data["detections"] = data["detections"][:5]
-            data["_truncated_note"] = f"已精简，原始 {len(text)} 字符"
-            return json.dumps(data, ensure_ascii=False)
-        if isinstance(data, dict) and "annotated_images" in data:
-            # 批量检测：每张图片只保留前 3 条
-            for img in data["annotated_images"]:
-                if "detections" in img:
-                    img["detections"] = img["detections"][:3]
+        if isinstance(data, dict):
+            # 剥离 LLM 无法使用的大体积字段
+            _strip_large_fields(data)
+            # 精简 detections 数组
+            if "detections" in data:
+                data["detections"] = data["detections"][:5]
+            if "annotated_images" in data:
+                data["annotated_images"] = data["annotated_images"][:5]
             data["_truncated_note"] = f"已精简，原始 {len(text)} 字符"
             return json.dumps(data, ensure_ascii=False)
     except (json.JSONDecodeError, TypeError, KeyError):
@@ -59,8 +77,25 @@ def _smart_truncate(text: str, max_len: int = _MAX_TOOL_OUTPUT) -> str:
     return text[:max_len] + f"\n...[已截断 {len(text)} 字符]"
 
 
+def _strip_large_fields(data: dict):
+    """移除检测结果中 LLM 无法使用的大体积字段"""
+    # 单图检测
+    data.pop("annotated_image_base64", None)
+    data.pop("annotated_video_url", None)
+    # 批量检测
+    for img in data.get("annotated_images", []):
+        if isinstance(img, dict):
+            img.pop("annotated_image_base64", None)
+            if "detections" in img:
+                img["detections"] = img["detections"][:3]
+    # 视频检测
+    for frame in data.get("key_frames", []):
+        if isinstance(frame, dict):
+            frame.pop("annotated_image_base64", None)
+
+
 def _wrap_tool(tool):
-    """包装工具：截断超长返回值，防止 LLM 上下文超限"""
+    """包装工具：截断超长返回值 + 确保 user_id 上下文传播"""
     from langchain_core.tools import StructuredTool
 
     orig = tool.func
@@ -72,6 +107,11 @@ def _wrap_tool(tool):
     afunc = getattr(tool, "coroutine", None)
     if afunc:
         async def _atrunc(*a, **kw):
+            # 确保 current_user_id 上下文变量在工具执行时可用
+            # （防御性措施：若 LangGraph astream_events 中 contextvar 未传播，
+            #   通过模块级变量作为 fallback）
+            if _user_id_ctx.get(None) is None and _fallback_user_id is not None:
+                _user_id_ctx.set(_fallback_user_id)
             r = str(await afunc(*a, **kw) or "")
             return _smart_truncate(r)
     else:

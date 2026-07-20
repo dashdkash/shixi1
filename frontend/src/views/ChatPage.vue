@@ -31,6 +31,14 @@
                 alt="附件图片"
               />
             </div>
+            <div v-if="msg.videoUrl" class="message-video-attachment">
+              <video
+                :src="msg.videoUrl"
+                controls
+                preload="metadata"
+                class="message-video"
+              ></video>
+            </div>
           </div>
         </div>
 
@@ -38,9 +46,11 @@
           v-else-if="msg.role === 'assistant'"
           class="message-content-wrapper"
         >
-          <el-avatar :size="36" class="message-avatar assistant-avatar">
-            <span></span>
-          </el-avatar>
+          <el-avatar
+            :size="36"
+            class="message-avatar assistant-avatar"
+            src="/head.svg"
+          ></el-avatar>
           <div class="message-bubble assistant-bubble">
             <!-- thinking 指示器 -->
             <div v-if="msg.thinking" class="thinking-indicator">
@@ -93,16 +103,26 @@
         @click="handleQuickDetect('single')"
         :disabled="agentStore.isLoading"
       >
-        📷 单图检测
+        {{ $t("chat.quickActions.single") }}
       </el-button>
       <el-button
         @click="handleQuickDetect('batch')"
         :disabled="agentStore.isLoading"
       >
-         批量/ZIP
+        {{ $t("chat.quickActions.batch") }}
       </el-button>
-      <el-button disabled>🎬 视频</el-button>
-      <el-button disabled> 摄像头</el-button>
+      <el-button
+        @click="handleQuickDetect('video')"
+        :disabled="agentStore.isLoading"
+      >
+        {{ $t("chat.quickActions.video") }}
+      </el-button>
+      <el-button
+        @click="handleQuickDetect('camera')"
+        :disabled="agentStore.isLoading"
+      >
+        {{ $t("chat.quickActions.camera") }}
+      </el-button>
     </div>
 
     <!-- ── 输入区域 ── -->
@@ -133,15 +153,17 @@
       />
 
       <!-- 发送/停止按钮 -->
-      <el-button
+      <button
         v-if="!agentStore.isLoading"
-        type="primary"
+        class="send-btn"
         @click="sendMessage"
         :disabled="!inputText.trim() && !selectedFile"
       >
-        发送
+        <el-icon :size="18"><Top /></el-icon>
+      </button>
+      <el-button v-else type="danger" circle @click="handleStop">
+        <span style="font-size:12px">II</span>
       </el-button>
-      <el-button v-else type="danger" @click="handleStop"> 停止 </el-button>
     </div>
   </div>
 </template>
@@ -158,7 +180,7 @@
  *   - 快捷操作栏（单图/批量/视频/摄像头）
  *   - 中断当前对话
  */
-import { detectBatch, detectSingle, detectZip } from "@/api/detection";
+import { detectBatch, detectSingle, detectVideo, getVideoStatus, detectZip } from "@/api/detection";
 import DetectionResultCard from "@/components/DetectionResultCard.vue";
 import { useAgentStore } from "@/stores/agent";
 import { useUserStore } from "@/stores/user";
@@ -166,7 +188,9 @@ import { renderMarkdown } from "@/utils/markdown";
 import request from "@/utils/request";
 import { streamChat, TOOL_NAME_MAP } from "@/utils/stream";
 import { ElMessage } from "element-plus";
-import { computed, nextTick, onMounted, ref } from "vue";
+import { Top } from "@element-plus/icons-vue";
+import { computed, nextTick, onActivated, onMounted, ref } from "vue";
+import { useRouter, useRoute } from "vue-router";
 
 /** 工具名称中文映射 */
 function getToolName(toolName) {
@@ -176,6 +200,8 @@ function getToolName(toolName) {
 // ── Store ──
 const agentStore = useAgentStore();
 const userStore = useUserStore();
+const router = useRouter();
+const route = useRoute();
 
 // ── 响应式状态 ──
 const inputText = ref("");
@@ -187,6 +213,62 @@ const fileInputRef = ref(null);
 const canSend = computed(() => {
   return inputText.value.trim() || selectedFile.value;
 });
+
+// ── 快捷检测消息持久化 ──
+
+/**
+ * 将快捷检测的用户消息和 AI 回复保存到数据库会话中
+ * 如果当前没有会话，自动创建新会话
+ */
+async function saveQuickDetectToHistory(userContent, assistantContent, taskId) {
+  try {
+    const res = await request.post("/chat/save-messages", {
+      session_id: agentStore.currentSessionId || undefined,
+      user_content: userContent,
+      assistant_content: assistantContent,
+      title: userContent,
+      task_id: taskId || undefined,
+    });
+    if (res && res.session_id) {
+      agentStore.currentSessionId = res.session_id;
+      agentStore.notifySessionsChanged();
+    }
+  } catch (err) {
+    console.warn("[快捷检测] 保存到历史记录失败:", err);
+  }
+}
+
+/**
+ * 构建数据看板报告生成的提示词
+ * 引导 Agent 调用 query_detection_stats + search_knowledge_base 生成报告与防治建议
+ */
+function buildReportPrompt(days) {
+  return `请根据近 ${days} 天的检测数据，为我生成一份完整的《杂草检测报告与防治建议》。
+
+请按以下结构输出：
+
+## 📝 杂草检测报告（近 ${days} 天）
+
+### 一、检测概况
+调用 query_detection_stats(days=${days}) 获取数据，包括：
+- 检测任务总数、检测图片总数、检测目标总数、平均推理耗时
+
+### 二、杂草种类分布
+根据上述工具返回的 class_distribution 数据，分析：
+- 各类杂草的检测次数及占比
+- 哪些杂草种类出现最频繁，哪些是主要威胁
+
+### 三、趋势分析
+分析检测趋势的变化特点，是否存在某段时间检测量突增的情况
+
+### 四、防治建议
+调用 search_knowledge_base 搜索知识库中关于上述高频杂草的防治方法，给出：
+- 针对主要杂草种类的化学防治方案
+- 物理/生物防治建议
+- 施药时间与注意事项
+
+请用专业但易懂的语言输出，确保报告具有实际参考价值。`;
+}
 
 // ── 方法 ──
 
@@ -260,6 +342,8 @@ async function sendMessage() {
       if (data.type === "session_id") {
         // 后端返回当前会话 ID，保存到 store
         agentStore.currentSessionId = data.session_id;
+        // 通知侧栏刷新会话列表
+        agentStore.notifySessionsChanged();
         console.log("[会话ID]", data.session_id);
       } else if (data.type === "thinking") {
         // Agent 正在思考 — 显示 thinking 指示器
@@ -427,9 +511,12 @@ async function handleQuickDetect(type) {
       try {
         const result = await detectSingle(formData);
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-        lastMsg.content = `检测完成！发现 ${result.total_objects} 个目标。`;
+        const aiContent = `检测完成！发现 ${result.total_objects} 个目标。`;
+        lastMsg.content = aiContent;
         lastMsg.loading = false;
         lastMsg.detectionResult = result;
+        // 保存到历史记录
+        saveQuickDetectToHistory(`[快捷检测] ${file.name}`, aiContent, result.task_id);
       } catch (err) {
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
         lastMsg.content = "检测失败，请重试";
@@ -488,10 +575,16 @@ async function handleQuickDetect(type) {
         }
 
         const totalObjects = result.total_objects ?? 0;
-        lastMsg.content = `批量检测完成！共 ${totalObjects} 个目标。`;
+        const aiContent = `批量检测完成！共 ${totalObjects} 个目标。`;
+        lastMsg.content = aiContent;
         lastMsg.loading = false;
         lastMsg.detectionResult = result;
         console.log("[批量检测结果]", result);
+        // 保存到历史记录
+        const userContent = isZip
+          ? `[快捷检测] ZIP: ${files[0].name}`
+          : `[快捷检测] ${files.length} 张图片`;
+        saveQuickDetectToHistory(userContent, aiContent, result.task_id);
       } catch (err) {
         console.error("[批量检测异常]", err);
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
@@ -501,12 +594,110 @@ async function handleQuickDetect(type) {
       }
     };
     input.click();
+  } else if (type === "video") {
+    // 视频检测
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/mp4,video/avi,video/quicktime,video/x-msvideo,video/x-matroska";
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      agentStore.addMessage({
+        role: "user",
+        content: `[快捷检测] 视频: ${file.name}`,
+      });
+
+      agentStore.addMessage({
+        role: "assistant",
+        content: "视频已上传，正在后台检测中，请稍候...",
+        loading: true,
+      });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const res = await detectVideo(formData);
+        if (res.task_id) {
+          // 轮询视频检测结果
+          const result = await pollVideoTask(res.task_id);
+          const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+          if (result) {
+            const aiContent = `视频检测完成！共发现 ${result.total_objects || 0} 个目标，处理了 ${result.processed_frames || 0} 帧。`;
+            lastMsg.content = aiContent;
+            lastMsg.loading = false;
+            lastMsg.detectionResult = result;
+            // 保存到历史记录
+            saveQuickDetectToHistory(`[快捷检测] 视频: ${file.name}`, aiContent, res.task_id);
+          } else {
+            const aiContent = "视频检测超时，请稍后在历史记录中查看结果。";
+            lastMsg.content = aiContent;
+            lastMsg.loading = false;
+            saveQuickDetectToHistory(`[快捷检测] 视频: ${file.name}`, aiContent, res.task_id);
+          }
+        }
+      } catch (err) {
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        lastMsg.content = `视频检测失败：${err.response?.data?.detail || err.message}`;
+        lastMsg.loading = false;
+      }
+    };
+    input.click();
+  } else if (type === "camera") {
+    // 摄像头检测 - 跳转到检测页面的摄像头 Tab
+    router.push({ name: "Detection", query: { tab: "camera" } });
   }
 }
 
-onMounted(() => {
-  // 页面加载时显示欢迎消息
-  if (agentStore.messages.length === 0) {
+/**
+ * 轮询视频检测任务（每2秒，最多5分钟）
+ */
+async function pollVideoTask(taskId) {
+  const maxAttempts = 150;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const res = await getVideoStatus(taskId);
+      if (res.status === "completed") {
+        return res.result || res;
+      } else if (res.status === "failed") {
+        return null;
+      }
+    } catch {
+      // 继续轮询
+    }
+  }
+  return null;
+}
+
+onMounted(async () => {
+  // 检查是否从数据看板跳转生成报告
+  if (route.query.report === "1") {
+    const days = Number(route.query.days) || 30;
+    // 清除 query 参数，避免刷新时重复触发
+    router.replace({ path: "/chat" });
+    // 新建会话，发送报告生成请求
+    agentStore.newChat();
+    await nextTick();
+    inputText.value = buildReportPrompt(days);
+    await nextTick();
+    sendMessage();
+    return;
+  }
+  // 页面加载时显示欢迎消息（仅当消息为空且无会话时）
+  if (agentStore.messages.length === 0 && !agentStore.currentSessionId) {
+    agentStore.addMessage({
+      role: "assistant",
+      content:
+        "🌿 你好！我是杂草识别智能助手。\n\n我可以帮你：\n- 📷 识别图片中的杂草种类和数量\n- 📊 提供杂草分布统计分析\n- 💡 给出专业的除草建议\n\n上传一张农田或草坪的照片，我来帮你分析！",
+    });
+  }
+});
+
+// 当从其他页面返回对话页时，确保欢迎消息存在
+onActivated(() => {
+  if (agentStore.messages.length === 0 && !agentStore.currentSessionId) {
     agentStore.addMessage({
       role: "assistant",
       content:
@@ -521,7 +712,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: linear-gradient(180deg, #f0f9ff 0%, #f5f7fa 100%);
+  background: transparent;
 }
 
 /* ── 消息列表 ── */
@@ -575,8 +766,8 @@ onMounted(() => {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 
   &.assistant-avatar {
-    background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
-    border-color: #67c23a;
+    background: transparent;
+    border-color: #e4e7ed;
   }
 }
 
@@ -590,9 +781,9 @@ onMounted(() => {
 }
 
 .user-bubble {
-  background: linear-gradient(135deg, #5b8def 0%, #409eff 100%);
+  background: linear-gradient(135deg, #333 0%, #1e1e1e 100%);
   color: #fff;
-  box-shadow: 0 2px 10px rgba(64, 158, 255, 0.3);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 .assistant-bubble {
@@ -655,9 +846,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   padding: 10px 20px;
-  border-top: 1px solid #e4e7ed;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
+  background: transparent;
 
   .el-button {
     border-radius: 20px;
@@ -669,23 +858,56 @@ onMounted(() => {
 .input-area {
   display: flex;
   gap: 10px;
-  padding: 12px 20px;
-  border-top: 1px solid #e4e7ed;
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(10px);
+  padding: 14px 20px;
+  margin: 12px 20px 16px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s;
+
+  &:focus-within {
+    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+  }
 
   .el-input {
     flex: 1;
 
     :deep(.el-input__wrapper) {
       border-radius: 24px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      box-shadow: none;
+      background: #f8f8f8;
     }
   }
 
   .el-button {
     border-radius: 24px;
     padding: 0 24px;
+  }
+}
+
+.send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #1e1e1e;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  transition: all 0.2s;
+  flex-shrink: 0;
+
+  &:hover {
+    background: #333;
+    transform: scale(1.05);
+  }
+
+  &:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
   }
 }
 
@@ -716,14 +938,25 @@ onMounted(() => {
   }
 }
 
+.message-video-attachment {
+  margin-top: 8px;
+
+  .message-video {
+    max-width: 280px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+}
+
 .tool-call-info {
   margin-top: 8px;
   padding: 6px 10px;
-  background: #f0f9ff;
+  background: #f5f5f5;
   border-radius: 6px;
   font-size: 12px;
-  color: #409eff;
-  border: 1px solid #e3f2fd;
+  color: #1e1e1e;
+  border: 1px solid #e0e0e0;
 }
 
 /* ── Thinking 指示器 ── */
@@ -736,7 +969,7 @@ onMounted(() => {
   .thinking-dot {
     width: 8px;
     height: 8px;
-    background: #409eff;
+    background: #1e1e1e;
     border-radius: 50%;
     animation: thinking-pulse 1.4s infinite ease-in-out;
   }
@@ -765,8 +998,8 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: #f0f9ff;
-  border: 1px solid #d9ecff;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
   border-radius: 8px;
   font-size: 12px;
   transition: all 0.3s;
@@ -830,8 +1063,8 @@ onMounted(() => {
   transition: all 0.2s;
 
   &:hover {
-    background: #f0f9ff;
-    border-color: #409eff;
+    background: #f5f5f5;
+    border-color: #1e1e1e;
     transform: scale(1.05);
   }
 }

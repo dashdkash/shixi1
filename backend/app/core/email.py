@@ -16,14 +16,14 @@ def send_password_reset_email(to_email: str, reset_token: str) -> bool:
 
     Args:
         to_email: 收件人邮箱
-        reset_token: 重置令牌
+        reset_token: 重置验证码
 
     Returns:
         bool: 是否发送成功
     """
     try:
-        # 构建重置链接
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+        # 构建重置链接（携带 email 和 code 参数）
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?email={to_email}&code={reset_token}"
 
         # 创建邮件对象
         msg = MIMEMultipart()

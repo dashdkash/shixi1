@@ -2,7 +2,7 @@
  * 用户状态管理
  * 管理用户登录信息、Token、角色等
  */
-import { getUserInfoApi, loginApi } from "@/api/auth";
+import { getUserInfoApi, loginApi, updateProfileApi } from "@/api/auth";
 import { defineStore } from "pinia";
 
 const TOKEN_KEY = "rsod_token";
@@ -83,6 +83,26 @@ export const useUserStore = defineStore("user", {
       } catch {
         this.logout();
       }
+    },
+
+    /**
+     * 更新个人信息
+     * @param {Object} data - { email, phone }
+     */
+    async updateProfile(data) {
+      const user = await updateProfileApi(data);
+      this.user = { ...this.user, ...user };
+      localStorage.setItem(USER_KEY, JSON.stringify(this.user));
+      return user;
+    },
+
+    /**
+     * 更新头像
+     * @param {string} avatar - 头像URL
+     */
+    updateAvatar(avatar) {
+      this.user = { ...this.user, avatar };
+      localStorage.setItem(USER_KEY, JSON.stringify(this.user));
     },
 
     /**

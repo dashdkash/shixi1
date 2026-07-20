@@ -103,7 +103,7 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
     
     # 前端地址（用于生成重置链接）
-    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_URL: str = "http://localhost:3000"
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     # 默认检测模型权重路径
     # 优先级最高：只要配置且文件存在，检测时优先使用该模型
     DEFAULT_MODEL_PATH: str = "models/us_weeds_v3.0.0/best.pt"
+    
+    # 默认检测场景名称（按 name 查找，不依赖自增 ID）
+    DEFAULT_SCENE_NAME: str = "weeds"
 
     # ---- Pydantic V2 配置 ----
     model_config = SettingsConfigDict(

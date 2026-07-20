@@ -869,6 +869,15 @@ async function fetchMetrics() {
         task: statusRes.task || selectedTask.value.task,
         latest_metric: statusRes.latest_metric || selectedTask.value.latest_metric,
       }
+
+      // 任务已结束，停止指标轮询（任务列表继续刷新）
+      const status = statusRes.task?.status || selectedTask.value.status
+      if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+        if (pollTimer) {
+          clearInterval(pollTimer)
+          pollTimer = null
+        }
+      }
     }
 
     // 获取所有指标
@@ -946,8 +955,8 @@ function updateCharts(metrics) {
           type: 'line',
           data: metrics.map((m) => m.map50),
           smooth: true,
-          lineStyle: { width: 2, color: '#409eff' },
-          itemStyle: { color: '#409eff' },
+          lineStyle: { width: 2, color: '#1e1e1e' },
+          itemStyle: { color: '#1e1e1e' },
         },
         {
           name: 'mAP@50-95',
@@ -979,12 +988,19 @@ function updateCharts(metrics) {
 }
 
 // ========== 轮询监控 ==========
+let taskListTimer = null
+
 function startPolling() {
   stopPolling()
+  // 每 3 秒刷新选中任务的指标和状态
   pollTimer = setInterval(() => {
     if (selectedTask.value) {
       fetchMetrics()
     }
+  }, 3000)
+  // 每 5 秒刷新任务列表（更新进度条）
+  taskListTimer = setInterval(() => {
+    fetchTasks()
   }, 5000)
 }
 
@@ -992,6 +1008,10 @@ function stopPolling() {
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
+  }
+  if (taskListTimer) {
+    clearInterval(taskListTimer)
+    taskListTimer = null
   }
 }
 
@@ -1118,11 +1138,27 @@ async function downloadModel(task) {
 }
 
 // ========== 生命周期 ==========
-onMounted(() => {
-  fetchScenes()
-  fetchTasks()
-  fetchModels()
+onMounted(async () => {
+  await fetchScenes()
+  await fetchTasks()
+  await fetchModels()
+
+  // 自动选中正在运行的任务
+  const runningTask = taskList.value.find(t => t.status === 'running' || t.status === 'pending')
+  if (runningTask) {
+    selectTask(runningTask)
+  } else {
+    // 没有运行中的任务，也启动任务列表定时刷新
+    startTaskListPolling()
+  }
 })
+
+function startTaskListPolling() {
+  if (taskListTimer) return
+  taskListTimer = setInterval(() => {
+    fetchTasks()
+  }, 5000)
+}
 
 onBeforeUnmount(() => {
   stopPolling()

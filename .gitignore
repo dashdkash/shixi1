@@ -82,14 +82,13 @@ backend/datasets/
 # 图片/视频（根据项目需要调整）
 images/
 videos/
-*.jpg
 *.jpeg
-*.png
 *.gif
 *.bmp
 *.mp4
 *.avi
 *.mov
+backend/uploads/
 
 # ── Docker ──────────────────────────────────────────
 .docker/
