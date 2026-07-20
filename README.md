@@ -48,11 +48,16 @@ python tools/init_scenes.py
 cd backend
 python add_knowledge.py "防治手册.md"
 ```
-将防治手册导入 RAG 知识库，Agent 才能回答防治建议类问题。知识库中还有 `yolo_basics.md`、`evaluation_metrics.md`、`remote_sensing.md` 可选导入。
+将防治手册导入 RAG 知识库，Agent 才能回答防治建议类问题。
 
 ### 6. 放置检测模型（必须）
 确保 `models/us_weeds_v3.0.0/` 下有训练好的权重文件（`best.pt`），以及根目录下的 `yolo11n.pt`（预训练模型，用于训练功能）。
-设置settings.py : DEFAULT_MODEL_PATH: str = "models/us_weeds_v3.0.0/best.pt"
+
+或者你可以设置设置settings.py : DEFAULT_MODEL_PATH: str = "models/us_weeds_v3.0.0/best.pt" （到自己的模型目录）
+
+检测模型选择我使用了这个setting的地址作为第一优先级，可以增加检测模型选择功能
 
 ### 7. 配置环境变量
 复制 `.env.example` 为 `.env`，填入 API Key、数据库连接等配置。
+
+好吧其实我还没有同步，不知道`.env.example`对不对...你们看着配，等我改
