@@ -10,12 +10,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.database.session import Base
 from app.entity import db_models
 
+import os
+
 config = context.config
 
-# 强制覆盖关键配置，忽略 alembic.ini 中的设置
-config.set_main_option(
-    "sqlalchemy.url", "postgresql://lujie:lujie@localhost:5432/lujie"
+# 从环境变量读取数据库地址，Docker 环境中 DB_HOST=postgres，本地开发时 DB_HOST=localhost
+db_host = os.getenv("DB_HOST", "localhost")
+db_port = os.getenv("DB_PORT", "5432")
+db_name = os.getenv("DB_NAME", "lujie")
+db_user = os.getenv("DB_USER", "lujie")
+db_password = os.getenv("DB_PASSWORD", "lujie")
+database_url = os.getenv(
+    "DATABASE_URL",
+    f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}",
 )
+
+# 强制覆盖关键配置，忽略 alembic.ini 中的设置
+config.set_main_option("sqlalchemy.url", database_url)
 config.set_main_option("script_location", "alembic")
 
 if config.config_file_name is not None:
