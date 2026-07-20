@@ -7,9 +7,9 @@ name: CI
 
 on:
   push:
-    branches: [main, 合并测试]
+    branches: [main, output0.2]
   pull_request:
-    branches: [main, 合并测试]
+    branches: [main, output0.2]
 
 jobs:
   # ── 前端构建检查 ────────────────────────────────────
