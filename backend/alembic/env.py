@@ -48,8 +48,11 @@ def run_migrations_offline():
 
 
 def run_migrations_online():
+    section = config.get_section(config.config_ini_section, {})
+    # 强制覆盖数据库地址（get_section 不受 set_main_option 影响）
+    section["sqlalchemy.url"] = database_url
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
