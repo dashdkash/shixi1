@@ -1,0 +1,236 @@
+@use "./variables.scss" as *;
+
+// =============================
+// Page Layout
+// =============================
+
+.page-container {
+  padding: $spacing-lg;
+  min-height: calc(100vh - $header-height);
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: $spacing-md;
+}
+
+.page-header-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+}
+
+.page-title {
+  font-size: 30px;
+  font-weight: 700;
+  color: $text-primary;
+  line-height: 1.2;
+}
+
+.page-subtitle {
+  margin-top: 6px;
+  font-size: 15px;
+  color: $text-secondary;
+}
+
+.page-section {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+// =============================
+// Statistics
+// =============================
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: $spacing-md;
+}
+
+.stats-card {
+  background: white;
+  border-radius: $border-radius-lg;
+  padding: $spacing-lg;
+  box-shadow: $shadow-sm;
+  cursor: default;
+  transition: all 0.25s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: $shadow-md;
+  }
+}
+
+.stats-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.stats-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stats-content {
+  flex: 1;
+}
+
+.stats-value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: $primary-color;
+}
+
+.unit {
+  font-size: 14px;
+  color: $text-secondary;
+}
+
+.stats-label {
+  margin-top: 4px;
+  font-size: 14px;
+  color: $text-secondary;
+}
+
+.stats-growth {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.growth-up {
+  color: #22c55e;
+}
+
+.growth-down {
+  color: #ef4444;
+}
+
+.growth-flat {
+  color: $text-secondary;
+}
+
+// =============================
+// Generic Card
+// =============================
+
+.card-container {
+  background: white;
+  border-radius: $border-radius-lg;
+  padding: $spacing-lg;
+  box-shadow: $shadow-sm;
+  transition: all 0.25s ease;
+
+  &:hover {
+    box-shadow: $shadow-md;
+  }
+}
+
+// =============================
+// Empty State
+// =============================
+
+.empty-state {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: $spacing-sm;
+  text-align: center;
+  color: $text-secondary;
+}
+
+.empty-icon {
+  font-size: 54px;
+  margin-bottom: 16px;
+}
+
+.empty-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.empty-description {
+  margin-top: 8px;
+  max-width: 360px;
+  color: $text-secondary;
+}
+
+.empty-action {
+  margin-top: 24px;
+}
+
+// =============================
+// Responsive
+// =============================
+
+@media (max-width: 992px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+//section
+.section-card {
+  border: none;
+}
+
+.section-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.section-card-extra {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.section-card-content {
+  width: 100%;
+}

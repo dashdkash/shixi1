@@ -185,22 +185,57 @@ async function handleReset() {
 </script>
 
 <style lang="scss" scoped>
+// ── 杂草识别智能体 · 主题色（与登录/注册页一致） ──
+// 强调色（聚焦态·土壤棕） #8b5e34
+
+:global(html),
+:global(body) {
+  height: 100%;
+  margin: 0;
+}
+
 .reset-password-page {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #346b3d;
+  background-image:
+    radial-gradient(
+      circle at center,
+      rgba(224, 240, 195, 0.65) 30%,
+      rgba(52, 107, 61, 0.75) 100%
+    ),
+    url("/bg.png");
+  background-size: cover, 650px auto;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
 }
 
 .reset-card {
   width: 420px;
   padding: 40px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  background: #fbfbf4;
+  border-radius: $border-radius-lg;
+  box-shadow: 0 8px 32px rgba(61, 107, 36, 0.18);
   position: relative;
+  border: 1px solid rgba(164, 201, 105, 0.35);
+
+  // ── 淡入动画 ──
+  opacity: 0;
+  animation: fade-in-card 0.4s ease-out 0.2s forwards;
+}
+
+@keyframes fade-in-card {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .reset-header {
@@ -222,27 +257,29 @@ async function handleReset() {
 
   h2 {
     font-size: 22px;
-    color: #303133;
+    color: #3d6b24;
     margin-bottom: 8px;
   }
 
   p {
     font-size: 13px;
-    color: #909399;
+    color: $text-secondary;
   }
 }
 
+// el-alert 的 error/success 语义色保持默认，不参与主题染色
+// 仅将链接色调整为品牌绿，使其与页面其余部分呼应
 .no-params {
   .forgot-link {
     display: inline-block;
     margin-top: 8px;
-    color: #409eff;
+    color: #3d6b24;
     font-weight: 500;
-  }
-}
 
-.reset-btn {
-  width: 100%;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 .success-info {
@@ -251,8 +288,39 @@ async function handleReset() {
   .login-link {
     display: inline-block;
     margin-top: 8px;
-    color: #409eff;
+    color: #3d6b24;
     font-weight: 500;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+// 输入框聚焦时使用土壤棕作为强调色，失焦后恢复默认
+:deep(.el-input__wrapper) {
+  transition: box-shadow 0.15s ease;
+  box-shadow: 0 0 0 1px transparent inset;
+
+  &.is-focus {
+    box-shadow: 0 0 0 1px #8b5e34 inset !important;
+  }
+}
+
+.reset-btn {
+  width: 100%;
+  background-color: #a4c969;
+  border-color: #a4c969;
+
+  &:hover,
+  &:focus-visible {
+    background-color: #8fb355;
+    border-color: #8fb355;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #8b5e34;
+    outline-offset: 2px;
   }
 }
 
@@ -260,10 +328,10 @@ async function handleReset() {
   text-align: center;
   margin-top: 24px;
   font-size: 14px;
-  color: #909399;
+  color: $text-secondary;
 
   a {
-    color: #409eff;
+    color: #3d6b24;
 
     &:hover {
       text-decoration: underline;
@@ -272,7 +340,7 @@ async function handleReset() {
 
   span {
     margin: 0 8px;
-    color: #c0c4cc;
+    color: $text-secondary;
   }
 }
 </style>

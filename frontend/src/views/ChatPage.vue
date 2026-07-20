@@ -158,6 +158,7 @@
         <el-button
           v-if="!agentStore.isLoading"
           type="primary"
+          class="send-btn"
           @click="sendMessage"
           :disabled="!inputText.trim() && !selectedFile"
         >
@@ -316,6 +317,7 @@ async function sendMessage() {
           tool: data.tool,
           status: "loading",
           input: data.input,
+          status:"running",
           summary: "",
         });
         // 兼容旧格式
@@ -546,6 +548,16 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
+// ── 主题色（浓琥珀 / 铁锈色系）───────────────────
+// 主强调（琥珀锈）      #c2410c
+// 强调悬停（深锈）      #9a3412
+// 浅色底纹（暖米）      #fdead9
+// 浅色边框              #f3d5b5
+// 页面背景（暖白到米）  #fdf6ee → #f7f3ec
+// 正文次要色（暖灰棕）  #8a7a6d
+// 正文主色（暖炭）      #4a3728
+// 用户气泡保持蓝色不变，作为与 AI 消息的对比色
+
 .chat-page-layout {
   display: flex;
   height: 100%;
@@ -555,15 +567,21 @@ onMounted(() => {
   width: 220px;
   flex-shrink: 0;
   background: #fff;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid #ece2d4;
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: 20px;
 }
 
 .new-chat-btn {
   width: 100%;
   margin-bottom: 12px;
+
+  &:hover,
+  &:focus-visible {
+    color: #c2410c;
+    border-color: #c2410c;
+  }
 }
 
 .session-list {
@@ -582,11 +600,11 @@ onMounted(() => {
   margin-bottom: 4px;
 
   &:hover {
-    background: #f5f7fa;
+    background: #faf3ea;
   }
   &.active {
-    background: #ecf5ff;
-    color: #409eff;
+    background: #fdead9;
+    color: #c2410c;
   }
 }
 
@@ -611,7 +629,7 @@ onMounted(() => {
   height: 100%;
   flex: 1;
   min-width: 0;
-  background: linear-gradient(180deg, #f0f9ff 0%, #f5f7fa 100%);
+  background: linear-gradient(180deg, #fdf6ee 0%, #f7f3ec 100%);
 }
 
 /* ── 消息列表 ── */
@@ -661,12 +679,13 @@ onMounted(() => {
 
 .message-avatar {
   flex-shrink: 0;
-  border: 2px solid #e4e7ed;
+  border: 2px solid #ece2d4;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 
+  // 助手头像改为琥珀-锈渐变，脱离绿色系
   &.assistant-avatar {
-    background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
-    border-color: #67c23a;
+    background: linear-gradient(135deg, #c2410c 0%, #ea7c2c 100%);
+    border-color: #c2410c;
   }
 }
 
@@ -679,6 +698,7 @@ onMounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
+// 用户气泡保持蓝色，与暖色调 AI 消息形成对比
 .user-bubble {
   background: linear-gradient(135deg, #5b8def 0%, #409eff 100%);
   color: #fff;
@@ -687,7 +707,7 @@ onMounted(() => {
 
 .assistant-bubble {
   background: #fff;
-  border: 1px solid #e4e7ed;
+  border: 1px solid #ece2d4;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
@@ -710,11 +730,11 @@ onMounted(() => {
   }
   th,
   td {
-    border: 1px solid #dcdfe6;
+    border: 1px solid #e4d9c8;
     padding: 4px 8px;
   }
   code {
-    background: #f5f7fa;
+    background: #f7f0e6;
     padding: 2px 4px;
     border-radius: 3px;
   }
@@ -728,7 +748,7 @@ onMounted(() => {
   span {
     width: 6px;
     height: 6px;
-    background: #c0c4cc;
+    background: #d3c4b3;
     border-radius: 50%;
     animation: typing 1.2s infinite;
   }
@@ -745,7 +765,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   padding: 10px 20px;
-  border-top: 1px solid #e4e7ed;
+  border-top: 1px solid #ece2d4;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
 
@@ -753,6 +773,11 @@ onMounted(() => {
     border-radius: 20px;
     font-size: 13px;
     padding: 6px 16px;
+
+    &:hover:not(.is-disabled) {
+      color: #c2410c;
+      border-color: #f0b584;
+    }
   }
 }
 
@@ -760,7 +785,7 @@ onMounted(() => {
   display: flex;
   gap: 10px;
   padding: 12px 20px;
-  border-top: 1px solid #e4e7ed;
+  border-top: 1px solid #ece2d4;
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(10px);
 
@@ -770,12 +795,29 @@ onMounted(() => {
     :deep(.el-input__wrapper) {
       border-radius: 24px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      transition: box-shadow 0.15s ease;
+
+      &.is-focus {
+        box-shadow: 0 0 0 1px #c2410c inset, 0 2px 8px rgba(0, 0, 0, 0.06);
+      }
     }
   }
 
   .el-button {
     border-radius: 24px;
     padding: 0 24px;
+  }
+}
+
+// 发送按钮改为琥珀锈色，替代 Element Plus 默认蓝
+.send-btn {
+  background-color: #c2410c;
+  border-color: #c2410c;
+
+  &:hover,
+  &:focus-visible {
+    background-color: #9a3412;
+    border-color: #9a3412;
   }
 }
 
@@ -809,11 +851,11 @@ onMounted(() => {
 .tool-call-info {
   margin-top: 8px;
   padding: 6px 10px;
-  background: #f0f9ff;
+  background: #fdead9;
   border-radius: 6px;
   font-size: 12px;
-  color: #409eff;
-  border: 1px solid #e3f2fd;
+  color: #c2410c;
+  border: 1px solid #f3d5b5;
 }
 
 /* ── Thinking 指示器 ── */
@@ -826,14 +868,14 @@ onMounted(() => {
   .thinking-dot {
     width: 8px;
     height: 8px;
-    background: #409eff;
+    background: #c2410c;
     border-radius: 50%;
     animation: thinking-pulse 1.4s infinite ease-in-out;
   }
 
   .thinking-text {
     font-size: 13px;
-    color: #909399;
+    color: #8a7a6d;
   }
 }
 
@@ -855,15 +897,15 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: #f0f9ff;
-  border: 1px solid #d9ecff;
+  background: #fdead9;
+  border: 1px solid #f3d5b5;
   border-radius: 8px;
   font-size: 12px;
   transition: all 0.3s;
 
   &.is-loading {
-    background: #fdf6ec;
-    border-color: #faecd8;
+    background: #fdf1e0;
+    border-color: #f5dfc0;
   }
 }
 
@@ -878,12 +920,14 @@ onMounted(() => {
   font-size: 11px;
   font-weight: bold;
 
+  // loading 状态用琥珀锈，呼应品牌色
   &.tool-loading {
-    background: #e6a23c;
+    background: #d97706;
     color: #fff;
     animation: spin 1s linear infinite;
   }
 
+  // done 状态保留语义成功绿，不参与主题染色
   &.tool-done {
     background: #67c23a;
     color: #fff;
@@ -897,11 +941,11 @@ onMounted(() => {
 
 .tool-name {
   font-weight: 500;
-  color: #303133;
+  color: #4a3728;
 }
 
 .tool-summary {
-  color: #909399;
+  color: #8a7a6d;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -920,8 +964,8 @@ onMounted(() => {
   transition: all 0.2s;
 
   &:hover {
-    background: #f0f9ff;
-    border-color: #409eff;
+    background: #fdead9;
+    border-color: #c2410c;
     transform: scale(1.05);
   }
 }

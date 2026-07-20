@@ -1,21 +1,27 @@
-$primary-color: #409eff;
-$success-color: #67c23a;
-$warning-color: #e6a23c;
-$danger-color: #f56c6c;
-$info-color: #909399;
+$primary-color: #4caf50;
+$primary-dark: #388e3c;
+$primary-light: #81c784;
+$accent-color: #f97316;
+$success-color: #22c55e;
+$warning-color: #f59e0b;
+$danger-color: #ef4444;
+$info-color: #3b82f6;
 
 // ── 背景色 ──────────────────────────────────────────
-$bg-color: #f5f7fa;
+$bg-color: #f8fafc;
 $bg-color-dark: #1d1e1f;
-$sidebar-bg: #304156;
+$background-primary: #ffffff;
+$background-secondary: #f8fafc;
+$sidebar-bg: #2f3e34;
 $sidebar-text: #bfcbd9;
-$sidebar-active-text: #409eff;
+$sidebar-active-text: $primary-color;
+$border-color: #e5e7eb;
 
 // ── 文字色 ──────────────────────────────────────────
-$text-primary: #303133;
-$text-regular: #606266;
-$text-secondary: #909399;
-$text-placeholder: #c0c4cc;
+$text-primary: #1F2937;
+$text-regular: #4B5563;
+$text-secondary: #6B7280;
+$text-placeholder: #9CA3AF;
 
 // ── 布局尺寸 ────────────────────────────────────────
 $header-height: 56px;
@@ -30,11 +36,11 @@ $spacing-lg: 24px;
 $spacing-xl: 32px;
 
 // ── 圆角 ────────────────────────────────────────────
-$border-radius-sm: 4px;
-$border-radius-md: 8px;
-$border-radius-lg: 12px;
+$border-radius-sm: 8px;
+$border-radius-md: 12px;
+$border-radius-lg: 16px;
 
 // ── 阴影 ────────────────────────────────────────────
-$shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-$shadow-md: 0 2px 8px rgba(0, 0, 0, 0.1);
-$shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+$shadow-sm: 0 2px 8px rgba(15,23,42,.05);
+$shadow-md: 0 6px 18px rgba(15,23,42,.08);
+$shadow-lg: 0 10px 30px rgba(15,23,42,.10);

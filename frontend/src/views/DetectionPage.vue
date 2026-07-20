@@ -1,14 +1,31 @@
 <template>
-  <div class="detection-page">
-    <el-tabs v-model="activeTab" type="border-card" class="detection-tabs">
-      <!-- ══════════════════════════════════════════════════
-           Tab 1：图片 / 视频上传检测
-           ══════════════════════════════════════════════════ -->
-      <el-tab-pane label="图片/视频检测" name="upload">
-        <div class="upload-panel">
-          <!-- 上传区域 -->
+  <div class="page-container">
+
+    <PageHeader
+      title="智能检测"
+      subtitle="上传图片、视频或开启摄像头进行杂草检测。"
+    />
+
+    <el-tabs
+      v-model="activeTab"
+      class="detection-tabs"
+    >
+
+      <!-- ========================================= -->
+      <!-- Upload Detection -->
+      <!-- ========================================= -->
+
+      <el-tab-pane
+        label="图片 / 视频检测"
+        name="upload"
+      >
+
+        <SectionCard>
+
+          <!-- Upload -->
+
           <el-upload
-            v-if="!result"
+            v-if="!result && !uploading"
             class="upload-area"
             drag
             :auto-upload="false"
@@ -16,222 +33,325 @@
             :on-change="handleFileChange"
             accept="image/*,video/mp4,video/avi,video/quicktime,video/x-msvideo"
           >
-            <el-icon class="upload-icon"><UploadFilled /></el-icon>
-            <div class="upload-text">上传图片或视频进行检测</div>
-            <div class="upload-hint">
-              支持 JPG、PNG、BMP、WebP、MP4、AVI、MOV 格式，可批量上传
+
+            <el-icon class="upload-icon">
+              <UploadFilled />
+            </el-icon>
+
+            <div class="upload-text">
+              上传图片或视频进行检测
             </div>
+
+            <div class="upload-hint">
+              支持 JPG、PNG、BMP、WebP、MP4、AVI、MOV
+            </div>
+
           </el-upload>
 
-          <!-- 检测结果 -->
-          <div v-if="result" class="result-area">
-            <div class="result-header">
-              <h3>检测结果</h3>
-              <el-button @click="resetUpload">重新检测</el-button>
-            </div>
+          <!-- Loading -->
 
-            <!-- 视频结果 -->
-            <div v-if="isVideoResult" class="video-result">
-              <video
-                v-if="annotatedVideoSrc"
-                :src="annotatedVideoSrc"
-                controls
-                class="result-video"
-              />
-              <DetectionResultCard
-                v-if="result"
-                :result="result"
-                :loading="false"
-              />
-            </div>
+          <div
+            v-else-if="uploading"
+            class="loading-area"
+          >
 
-            <!-- 图片结果 -->
-            <div v-else class="image-result">
-              <img
-                v-if="annotatedImageSrc"
-                :src="annotatedImageSrc"
-                class="result-image"
-              />
-              <DetectionResultCard
-                v-if="result"
-                :result="result"
-                :loading="false"
-              />
-            </div>
-          </div>
-
-          <!-- 加载中 -->
-          <div v-if="uploading" class="loading-area">
-            <el-icon class="is-loading" :size="40"><Loading /></el-icon>
-            <p>正在检测中，请稍候...</p>
-          </div>
-        </div>
-      </el-tab-pane>
-
-      <!-- ═══════════════════════════════════════════════════
-           Tab 2：摄像头实时检测
-           ═══════════════════════════════════════════════════ -->
-      <el-tab-pane label="摄像头实时检测" name="camera">
-        <div class="camera-panel">
-          <div class="page-header">
-            <h2>摄像头实时检测</h2>
-            <el-tag :type="statusTagType" size="large">
-              {{ statusText }}
-            </el-tag>
-          </div>
-
-          <div class="main-content">
-            <div class="preview-panel">
-              <div class="video-wrapper">
-                <video
-                  ref="videoRef"
-                  autoplay
-                  playsinline
-                  muted
-                  style="display: none"
-                ></video>
-
-                <canvas
-                  ref="canvasRef"
-                  class="preview-canvas"
-                  :width="canvasWidth"
-                  :height="canvasHeight"
-                ></canvas>
-
-                <div v-if="!isRunning" class="placeholder">
-                  <p>点击下方按钮开启摄像头</p>
-                </div>
-              </div>
-
-              <div v-if="isRunning" class="video-stats">
-                <el-tag type="success">FPS: {{ currentFps }}</el-tag>
-                <el-tag type="info">帧: {{ frameCount }}</el-tag>
-                <el-tag type="info">推理: {{ inferenceTime }}ms</el-tag>
-              </div>
-            </div>
-
-            <div class="result-panel">
-              <el-card class="stats-card" shadow="never">
-                <template #header>
-                  <span>实时检测统计</span>
-                </template>
-
-                <div class="stats-grid">
-                  <div class="stat-item">
-                    <div class="stat-value">{{ objectCount }}</div>
-                    <div class="stat-label">当前目标数</div>
-                  </div>
-                  <div class="stat-item">
-                    <div class="stat-value">{{ currentFps }}</div>
-                    <div class="stat-label">实时 FPS</div>
-                  </div>
-                  <div class="stat-item">
-                    <div class="stat-value">{{ inferenceTime }}</div>
-                    <div class="stat-label">推理耗时(ms)</div>
-                  </div>
-                  <div class="stat-item">
-                    <div class="stat-value">{{ frameCount }}</div>
-                    <div class="stat-label">已处理帧</div>
-                  </div>
-                </div>
-              </el-card>
-
-              <el-card class="detections-card" shadow="never">
-                <template #header>
-                  <div class="card-header">
-                    <span>当前帧目标列表</span>
-                    <el-tag size="small"
-                      >{{ currentDetections.length }} 个目标</el-tag
-                    >
-                  </div>
-                </template>
-
-                <div v-if="currentDetections.length === 0" class="empty-state">
-                  暂无检测目标
-                </div>
-
-                <div v-else class="detection-list">
-                  <div
-                    v-for="(det, index) in currentDetections"
-                    :key="index"
-                    class="detection-item"
-                  >
-                    <div class="det-info">
-                      <span class="det-class">{{ det.class_name }}</span>
-                      <el-progress
-                        :percentage="Math.round(det.confidence * 100)"
-                        :stroke-width="6"
-                        :show-text="true"
-                        style="width: 120px"
-                      />
-                    </div>
-                    <div class="det-bbox">
-                      [{{ det.bbox.map((v) => Math.round(v)).join(", ") }}]
-                    </div>
-                  </div>
-                </div>
-              </el-card>
-
-              <el-card
-                v-if="Object.keys(classDistribution).length > 0"
-                class="distribution-card"
-                shadow="never"
-              >
-                <template #header>
-                  <span>类别分布</span>
-                </template>
-                <div class="distribution-list">
-                  <div
-                    v-for="(count, className) in classDistribution"
-                    :key="className"
-                    class="distribution-item"
-                  >
-                    <span class="class-name">{{ className }}</span>
-                    <el-tag size="small" type="primary">{{ count }}</el-tag>
-                  </div>
-                </div>
-              </el-card>
-            </div>
-          </div>
-
-          <div class="control-bar">
-            <el-button
-              v-if="!isRunning"
-              type="primary"
-              size="large"
-              @click="startCamera"
-              :loading="isConnecting"
+            <el-icon
+              class="is-loading"
+              :size="40"
             >
-              开启摄像头
-            </el-button>
-            <el-button v-else type="danger" size="large" @click="stopCamera">
-              停止检测
-            </el-button>
+              <Loading />
+            </el-icon>
 
-            <el-divider direction="vertical" />
+            <p>正在检测中，请稍候...</p>
 
-            <span class="control-label">推理模式：</span>
-            <el-radio-group v-model="detectMode" :disabled="isRunning">
-              <el-radio-button label="cpu">CPU 节能</el-radio-button>
-              <el-radio-button label="gpu">GPU 加速</el-radio-button>
-            </el-radio-group>
-
-            <el-divider direction="vertical" />
-
-            <span class="control-label">置信度：</span>
-            <el-slider
-              v-model="confThreshold"
-              :min="0.1"
-              :max="0.9"
-              :step="0.05"
-              :disabled="isRunning"
-              style="width: 150px"
-              show-input
-            />
           </div>
-        </div>
+
+          <!-- Result -->
+
+          <template v-else>
+
+            <div class="result-toolbar">
+
+              <el-button @click="resetUpload">
+                重新检测
+              </el-button>
+
+            </div>
+
+            <video
+              v-if="isVideoResult && annotatedVideoSrc"
+              :src="annotatedVideoSrc"
+              controls
+              class="result-video"
+            />
+
+            <img
+              v-else-if="annotatedImageSrc"
+              :src="annotatedImageSrc"
+              class="result-image"
+            />
+
+            <DetectionResultCard
+              :result="result"
+              :loading="false"
+            />
+
+          </template>
+
+        </SectionCard>
+
       </el-tab-pane>
+
+      <!-- ========================================= -->
+      <!-- Camera -->
+      <!-- ========================================= -->
+
+      <el-tab-pane
+        label="摄像头实时检测"
+        name="camera"
+      >
+
+        <div class="camera-layout">
+
+          <!-- Left -->
+
+          <SectionCard>
+
+            <template #header>
+              实时画面
+            </template>
+
+            <template #extra>
+
+              <el-tag
+                :type="statusTagType"
+              >
+                {{ statusText }}
+              </el-tag>
+
+            </template>
+
+            <div class="video-wrapper">
+
+              <video
+                ref="videoRef"
+                autoplay
+                muted
+                playsinline
+                style="display:none"
+              />
+
+              <canvas
+                ref="canvasRef"
+                class="preview-canvas"
+                :width="canvasWidth"
+                :height="canvasHeight"
+              />
+
+              <EmptyState
+                v-if="!isRunning"
+                title="摄像头未启动"
+                description="点击下方按钮开始实时检测。"
+              />
+
+            </div>
+
+            <div
+              v-if="isRunning"
+              class="video-stats"
+            >
+
+              <el-tag type="success">
+                FPS {{ currentFps }}
+              </el-tag>
+
+              <el-tag>
+                帧 {{ frameCount }}
+              </el-tag>
+
+              <el-tag>
+                {{ inferenceTime }} ms
+              </el-tag>
+
+            </div>
+
+          </SectionCard>
+
+          <!-- Right -->
+
+          <div class="camera-side">
+
+            <div class="stats-grid">
+
+              <StatsCard
+                title="目标数"
+                :value="objectCount"
+                :icon="Aim"
+              />
+
+              <StatsCard
+                title="FPS"
+                :value="currentFps"
+                :icon="VideoCamera"
+              />
+
+              <StatsCard
+                title="推理耗时"
+                :value="inferenceTime"
+                unit="ms"
+                :icon="Timer"
+                :inverse="true"
+              />
+
+              <StatsCard
+                title="处理帧"
+                :value="frameCount"
+                :icon="DataLine"
+              />
+
+            </div>
+
+            <SectionCard title="检测目标">
+
+              <template #extra>
+
+                <el-tag>
+                  {{ currentDetections.length }}
+                </el-tag>
+
+              </template>
+
+              <EmptyState
+                v-if="currentDetections.length === 0"
+                title="暂无检测目标"
+              />
+
+              <div
+                v-else
+                class="detection-list"
+              >
+
+                <div
+                  v-for="(det,index) in currentDetections"
+                  :key="index"
+                  class="detection-item"
+                >
+
+                  <div class="det-info">
+
+                    <span class="det-class">
+                      {{ det.class_name }}
+                    </span>
+
+                    <el-progress
+                      :percentage="Math.round(det.confidence*100)"
+                      :stroke-width="6"
+                    />
+
+                  </div>
+
+                  <div class="det-bbox">
+
+                    {{ det.bbox.map(v=>Math.round(v)).join(", ") }}
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </SectionCard>
+
+            <SectionCard
+              v-if="Object.keys(classDistribution).length"
+              title="类别分布"
+            >
+
+              <div class="distribution-list">
+
+                <div
+                  v-for="(count,name) in classDistribution"
+                  :key="name"
+                  class="distribution-item"
+                >
+
+                  <span>{{ name }}</span>
+
+                  <el-tag
+                    size="small"
+                    type="success"
+                  >
+                    {{ count }}
+                  </el-tag>
+
+                </div>
+
+              </div>
+
+            </SectionCard>
+
+          </div>
+
+        </div>
+
+        <div class="control-bar">
+
+          <el-button
+            v-if="!isRunning"
+            type="primary"
+            :loading="isConnecting"
+            @click="startCamera"
+          >
+            开启摄像头
+          </el-button>
+
+          <el-button
+            v-else
+            type="danger"
+            @click="stopCamera"
+          >
+            停止检测
+          </el-button>
+
+          <el-divider direction="vertical"/>
+
+          <span>推理模式</span>
+
+          <el-radio-group
+            v-model="detectMode"
+            :disabled="isRunning"
+          >
+
+            <el-radio-button label="cpu">
+              CPU
+            </el-radio-button>
+
+            <el-radio-button label="gpu">
+              GPU
+            </el-radio-button>
+
+          </el-radio-group>
+
+          <el-divider direction="vertical"/>
+
+          <span>置信度</span>
+
+          <el-slider
+            v-model="confThreshold"
+            :min="0.1"
+            :max="0.9"
+            :step="0.05"
+            :disabled="isRunning"
+            show-input
+            style="width:180px"
+          />
+
+        </div>
+
+      </el-tab-pane>
+
     </el-tabs>
+
   </div>
 </template>
 
@@ -243,11 +363,32 @@
  * Tab 2：摄像头实时检测
  */
 import { detectSingle, detectVideo } from "@/api/detection";
+
 import DetectionResultCard from "@/components/DetectionResultCard.vue";
+
+import EmptyState from "@/components/common/EmptyState.vue";
+import PageHeader from "@/components/common/PageHeader.vue";
+import SectionCard from "@/components/common/SectionCard.vue";
+import StatsCard from "@/components/common/StatsCard.vue";
+
 import { createCameraWs } from "@/utils/cameraWs";
-import { Loading, UploadFilled } from "@element-plus/icons-vue";
+
+import {
+  Aim,
+  DataLine,
+  Loading,
+  Timer,
+  UploadFilled,
+  VideoCamera,
+} from "@element-plus/icons-vue";
+
 import { ElMessage } from "element-plus";
-import { computed, onBeforeUnmount, ref } from "vue";
+
+import {
+  computed,
+  onBeforeUnmount,
+  ref,
+} from "vue";
 
 // ════════════════════════════════════════════════════════════
 // Tab 切换
@@ -502,269 +643,199 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-.detection-page {
-  padding: 20px;
-  background: #f5f5f5;
-  min-height: 100%;
-}
+@use "@/assets/styles/variables.scss" as *;
 
 .detection-tabs {
   :deep(.el-tabs__content) {
-    padding: 20px;
+    padding: $spacing-lg;
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   Tab 1：上传检测
-   ════════════════════════════════════════════════════════════ */
-.upload-panel {
-  max-width: 900px;
-  margin: 0 auto;
-}
+/* ===========================
+   Upload
+=========================== */
 
 .upload-area {
+  max-width: 900px;
+  margin: 0 auto;
+
   :deep(.el-upload-dragger) {
-    padding: 60px 20px;
-    border: 2px dashed #dcdfe6;
-    border-radius: 12px;
-    background: #fafafa;
-    transition: border-color 0.3s;
+    padding: 64px 24px;
+    border-radius: $border-radius-lg;
+    border: 2px dashed $border-color;
+    background: $background-secondary;
+    transition: all .25s ease;
 
     &:hover {
-      border-color: #409eff;
+      border-color: $primary-color;
+      background: rgba($primary-color,.04);
     }
   }
 }
 
 .upload-icon {
-  font-size: 48px;
-  color: #409eff;
-  margin-bottom: 12px;
+  font-size: 52px;
+  color: $primary-color;
+  margin-bottom: $spacing-md;
 }
 
 .upload-text {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  color: #303133;
-  margin-bottom: 8px;
 }
 
 .upload-hint {
-  font-size: 13px;
-  color: #909399;
-}
-
-.result-area {
-  .result-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-
-    h3 {
-      margin: 0;
-    }
-  }
-}
-
-.result-video {
-  width: 100%;
-  max-height: 500px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  background: #000;
-}
-
-.result-image {
-  max-width: 100%;
-  max-height: 500px;
-  border-radius: 8px;
-  margin-bottom: 16px;
+  margin-top: $spacing-sm;
+  color: $text-secondary;
 }
 
 .loading-area {
+  padding: 80px;
   text-align: center;
-  padding: 60px 20px;
-  color: #909399;
+}
 
-  p {
-    margin-top: 16px;
-    font-size: 16px;
+.result-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: $spacing-md;
+}
+
+.result-image,
+.result-video {
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: $border-radius-lg;
+  margin-bottom: $spacing-lg;
+}
+
+/* ===========================
+   Camera
+=========================== */
+
+.camera-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: $spacing-lg;
+}
+
+.camera-side {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+}
+
+.video-wrapper {
+  position: relative;
+  border-radius: $border-radius-lg;
+  overflow: hidden;
+  background: #000;
+  min-height: 420px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-canvas {
+  width: 100%;
+  display: block;
+}
+
+.video-stats {
+  margin-top: $spacing-md;
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.control-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: $spacing-md;
+  margin-top: $spacing-xl;
+}
+
+.control-label {
+  color: $text-secondary;
+  white-space: nowrap;
+}
+
+/* ===========================
+   Detection List
+=========================== */
+
+.detection-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.detection-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-md 0;
+  border-bottom: 1px solid $border-color;
+
+  &:last-child {
+    border-bottom: none;
   }
 }
 
-/* ════════════════════════════════════════════════════════════
-   Tab 2：摄像头检测
-   ════════════════════════════════════════════════════════════ */
-.camera-panel {
-  .page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
+.det-info {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+}
 
-    h2 {
-      margin: 0;
-    }
+.det-class {
+  min-width: 90px;
+  font-weight: 600;
+}
+
+.det-bbox {
+  font-family: monospace;
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+/* ===========================
+   Distribution
+=========================== */
+
+.distribution-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+}
+
+.distribution-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  padding: $spacing-xs $spacing-sm;
+  border-radius: $border-radius-md;
+  background: $background-secondary;
+}
+
+/* ===========================
+   Responsive
+=========================== */
+
+@media (max-width: 1200px) {
+  .camera-layout {
+    grid-template-columns: 1fr;
   }
+}
 
-  .main-content {
-    display: flex;
-    gap: 20px;
-    overflow: hidden;
-  }
-
-  .preview-panel {
-    flex: 3;
-    display: flex;
+@media (max-width: 768px) {
+  .control-bar {
     flex-direction: column;
-    gap: 12px;
-  }
-
-  .video-wrapper {
-    position: relative;
-    background: #000;
-    border-radius: 8px;
-    overflow: hidden;
-    min-height: 400px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .preview-canvas {
-    width: 100%;
-    height: auto;
-    display: block;
-  }
-
-  .placeholder {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #999;
-    font-size: 16px;
+    align-items: stretch;
   }
 
   .video-stats {
-    display: flex;
-    gap: 8px;
-  }
-
-  .result-panel {
-    flex: 2;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    overflow-y: auto;
-    max-height: 600px;
-  }
-
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-
-  .stat-item {
-    text-align: center;
-    padding: 12px;
-    background: #f9f9f9;
-    border-radius: 8px;
-  }
-
-  .stat-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: #409eff;
-  }
-
-  .stat-label {
-    font-size: 12px;
-    color: #999;
-    margin-top: 4px;
-  }
-
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .empty-state {
-    text-align: center;
-    color: #999;
-    padding: 20px;
-  }
-
-  .detection-list {
-    max-height: 300px;
-    overflow-y: auto;
-  }
-
-  .detection-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid #f0f0f0;
-
-    &:last-child {
-      border-bottom: none;
-    }
-  }
-
-  .det-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .det-class {
-    font-weight: 600;
-    min-width: 80px;
-  }
-
-  .det-bbox {
-    font-size: 12px;
-    color: #999;
-    font-family: monospace;
-  }
-
-  .distribution-list {
-    display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .distribution-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    background: #f5f5f5;
-    border-radius: 4px;
-  }
-
-  .class-name {
-    font-weight: 500;
-  }
-
-  .control-bar {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 16px 0;
-    border-top: 1px solid #e0e0e0;
-    margin-top: 16px;
-  }
-
-  .control-label {
-    font-size: 14px;
-    color: #666;
-    white-space: nowrap;
   }
 }
 </style>

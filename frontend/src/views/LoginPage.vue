@@ -164,10 +164,18 @@ async function handleLogin() {
 // 主按钮（叶绿）      #a4c969
 // 按钮悬停（深叶绿）  #8fb355
 // 标题/强调（深林绿）  #3d6b24
+// 强调色（十字准星橙，取自 mascot 图标）  #d85a30
+
+// 确保 html/body 撑满视口高度，避免 100vh 页面下半部分留白
+:global(html),
+:global(body) {
+  height: 100%;
+  margin: 0;
+}
 
 .login-page {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -178,8 +186,8 @@ async function handleLogin() {
       rgba(52, 107, 61, 0.75) 100%
     ),
     url("/bg.png");
-    background-size: cover, 650px auto;
-  background-position: center, center top;
+  background-size: cover, 650px auto;
+  background-position: center, center;
   background-repeat: no-repeat, no-repeat;
 }
 
@@ -237,15 +245,30 @@ async function handleLogin() {
   }
 }
 
+// 输入框聚焦时使用土壤棕作为强调色（与注册页一致），失焦后恢复默认
+:deep(.el-input__wrapper) {
+  transition: box-shadow 0.15s ease;
+  box-shadow: 0 0 0 1px transparent inset;
+
+  &.is-focus {
+    box-shadow: 0 0 0 1px #8b5e34 inset !important;
+  }
+}
+
 .login-btn {
   width: 100%;
   background-color: #a4c969;
   border-color: #a4c969;
 
   &:hover,
-  &:focus {
+  &:focus-visible {
     background-color: #8fb355;
     border-color: #8fb355;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #8b5e34;
+    outline-offset: 2px;
   }
 }
 

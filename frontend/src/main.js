@@ -8,6 +8,7 @@ import { createApp } from "vue";
 
 // 全局样式
 import "@/assets/styles/global.scss";
+import "@/assets/styles/index.scss";
 
 // Element Plus
 import ElementPlus from "element-plus";

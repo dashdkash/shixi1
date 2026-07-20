@@ -264,22 +264,57 @@ async function handleVerifyCode() {
 </script>
 
 <style lang="scss" scoped>
+// ── 杂草识别智能体 · 主题色（与登录/注册/重置密码页一致） ──
+// 强调色（聚焦态·土壤棕） #8b5e34
+
+:global(html),
+:global(body) {
+  height: 100%;
+  margin: 0;
+}
+
 .forgot-password-page {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #346b3d;
+  background-image:
+    radial-gradient(
+      circle at center,
+      rgba(224, 240, 195, 0.65) 30%,
+      rgba(52, 107, 61, 0.75) 100%
+    ),
+    url("/bg.png");
+  background-size: cover, 650px auto;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
 }
 
 .forgot-card {
   width: 420px;
   padding: 40px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  background: #fbfbf4;
+  border-radius: $border-radius-lg;
+  box-shadow: 0 8px 32px rgba(61, 107, 36, 0.18);
   position: relative;
+  border: 1px solid rgba(164, 201, 105, 0.35);
+
+  // ── 淡入动画 ──
+  opacity: 0;
+  animation: fade-in-card 0.4s ease-out 0.2s forwards;
+}
+
+@keyframes fade-in-card {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .forgot-header {
@@ -301,16 +336,17 @@ async function handleVerifyCode() {
 
   h2 {
     font-size: 22px;
-    color: #303133;
+    color: #3d6b24;
     margin-bottom: 8px;
   }
 
   p {
     font-size: 13px;
-    color: #909399;
+    color: $text-secondary;
   }
 }
 
+// el-alert 的 info 语义色保持默认，不参与主题染色
 .code-section {
   .el-alert {
     margin-bottom: 20px;
@@ -324,12 +360,40 @@ async function handleVerifyCode() {
   .resend-btn {
     font-size: 13px;
     padding: 0;
+    color: #3d6b24;
+
+    &.is-disabled {
+      color: $text-secondary;
+    }
+  }
+}
+
+// 输入框聚焦时使用土壤棕作为强调色，失焦后恢复默认
+:deep(.el-input__wrapper) {
+  transition: box-shadow 0.15s ease;
+  box-shadow: 0 0 0 1px transparent inset;
+
+  &.is-focus {
+    box-shadow: 0 0 0 1px #8b5e34 inset !important;
   }
 }
 
 .forgot-btn,
 .verify-btn {
   width: 100%;
+  background-color: #a4c969;
+  border-color: #a4c969;
+
+  &:hover,
+  &:focus-visible {
+    background-color: #8fb355;
+    border-color: #8fb355;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #8b5e34;
+    outline-offset: 2px;
+  }
 }
 
 .back-btn {
@@ -338,6 +402,7 @@ async function handleVerifyCode() {
   text-align: center;
   margin-top: 16px;
   font-size: 14px;
+  color: #3d6b24;
 }
 
 .forgot-footer {
@@ -345,7 +410,7 @@ async function handleVerifyCode() {
   margin-top: 24px;
 
   a {
-    color: #409eff;
+    color: #3d6b24;
     font-size: 14px;
 
     &:hover {

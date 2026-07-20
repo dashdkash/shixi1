@@ -1,157 +1,254 @@
 <template>
-  <div class="training-page">
-    <div class="page-header">
-      <h2>{{ $t("training.title") }}</h2>
-      <el-button type="primary" @click="showCreateDialog = true">
-        <el-icon><Plus /></el-icon>{{ $t("training.createTask") }}
-      </el-button>
-    </div>
+  <div class="page-container">
 
-    <el-card class="task-list-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span>{{ $t("training.taskList") }}</span>
-          <el-button text @click="fetchTasks">
-            <el-icon><Refresh /></el-icon>{{ $t("training.refresh") }}
-          </el-button>
-        </div>
+    <PageHeader
+      :title="$t('training.title')"
+      subtitle="创建、管理和监控模型训练任务。"
+    >
+      <template #extra>
+        <el-button
+          type="primary"
+          @click="showCreateDialog = true"
+        >
+          <el-icon><Plus /></el-icon>
+          {{ $t("training.createTask") }}
+        </el-button>
+      </template>
+    </PageHeader>
+
+    <!-- ========================= -->
+    <!-- Task List -->
+    <!-- ========================= -->
+
+    <SectionCard
+      :title="$t('training.taskList')"
+    >
+
+      <template #extra>
+
+        <el-button
+          text
+          @click="fetchTasks"
+        >
+          <el-icon><Refresh /></el-icon>
+
+          {{ $t("training.refresh") }}
+
+        </el-button>
+
       </template>
 
       <el-table
         :data="taskList"
         stripe
-        style="width: 100%"
         v-loading="loadingTasks"
+        style="width:100%"
       >
+
         <el-table-column
           prop="task_uuid"
           :label="$t('training.taskId')"
-          width="100"
+          width="110"
         />
+
         <el-table-column
           prop="model_name"
           :label="$t('training.model')"
-          width="110"
+          width="120"
         />
+
         <el-table-column
           prop="device"
           :label="$t('training.device')"
-          width="80"
+          width="90"
         />
-        <el-table-column :label="$t('training.progress')" width="180">
+
+        <el-table-column
+          :label="$t('training.progress')"
+          width="180"
+        >
+
           <template #default="{ row }">
+
             <el-progress
               :percentage="row.progress"
               :status="
-                row.status === 'completed'
+                row.status==='completed'
                   ? 'success'
-                  : row.status === 'failed'
+                  : row.status==='failed'
                     ? 'exception'
                     : ''
               "
-              :stroke-width="16"
+              :stroke-width="14"
             />
+
           </template>
+
         </el-table-column>
-        <el-table-column :label="$t('training.epoch')" width="100">
+
+        <el-table-column
+          :label="$t('training.epoch')"
+          width="100"
+        >
+
           <template #default="{ row }">
+
             {{ row.current_epoch }}/{{ row.epochs }}
+
           </template>
+
         </el-table-column>
-        <el-table-column :label="$t('training.status')" width="100">
+
+        <el-table-column
+          :label="$t('training.status')"
+          width="110"
+        >
+
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small">
+
+            <el-tag
+              :type="statusType(row.status)"
+            >
+
               {{ statusText(row.status) }}
+
             </el-tag>
+
           </template>
+
         </el-table-column>
+
         <el-table-column
           prop="created_at"
           :label="$t('training.createTime')"
-          width="170"
+          width="180"
         />
+
         <el-table-column
           :label="$t('training.action')"
-          width="200"
+          width="220"
           fixed="right"
         >
-          <template #default="{ row }">
-            <el-button
-              size="small"
-              type="primary"
-              text
-              @click="selectTask(row)"
-            >
-              {{ $t("training.monitor") }}
-            </el-button>
-            <el-button
-              v-if="row.status === 'running'"
-              size="small"
-              type="danger"
-              text
-              @click="stopTask(row.id)"
-            >
-              {{ $t("training.stop") }}
-            </el-button>
-            <el-button
-              v-if="row.status === 'completed'"
-              size="small"
-              text
-              @click="downloadModel(row.id)"
-            >
-              {{ $t("training.download") }}
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
 
-    <el-card v-if="selectedTask" class="monitor-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span>
-            {{ $t("training.monitor") }} — {{ $t("training.task") }}
-            {{ selectedTask.task_uuid }}
-            <el-tag
-              :type="statusType(selectedTask.status)"
-              size="small"
-              style="margin-left: 8px"
-            >
-              {{ statusText(selectedTask.status) }}
-            </el-tag>
-          </span>
-          <div class="monitor-info">
-            <span
-              >{{ $t("training.model") }}: {{ selectedTask.model_name }}</span
-            >
-            <span>{{ $t("training.device") }}: {{ selectedTask.device }}</span>
-            <span
-              >{{ $t("training.epoch") }}: {{ selectedTask.current_epoch }}/{{
-                selectedTask.epochs
-              }}</span
-            >
-          </div>
-        </div>
+          <template #default="{ row }">
+
+            <el-space>
+
+              <el-button
+                text
+                type="primary"
+                @click="selectTask(row)"
+              >
+                {{ $t("training.monitor") }}
+              </el-button>
+
+              <el-button
+                v-if="row.status==='running'"
+                text
+                type="danger"
+                @click="stopTask(row.id)"
+              >
+                {{ $t("training.stop") }}
+              </el-button>
+
+              <el-button
+                v-if="row.status==='completed'"
+                text
+                @click="downloadModel(row.id)"
+              >
+                {{ $t("training.download") }}
+              </el-button>
+
+            </el-space>
+
+          </template>
+
+        </el-table-column>
+
+      </el-table>
+
+    </SectionCard>
+
+    <!-- ========================= -->
+    <!-- Monitor -->
+    <!-- ========================= -->
+
+    <SectionCard
+      v-if="selectedTask"
+      :title="`${$t('training.monitor')} · ${selectedTask.task_uuid}`"
+    >
+
+      <template #extra>
+
+        <el-tag
+          :type="statusType(selectedTask.status)"
+        >
+
+          {{ statusText(selectedTask.status) }}
+
+        </el-tag>
+
       </template>
 
-      <el-row :gutter="16" class="metric-cards">
-        <el-col :span="4" v-for="item in metricCards" :key="item.label">
-          <el-card shadow="hover" class="metric-item">
-            <div class="metric-value">{{ item.value }}</div>
-            <div class="metric-label">{{ item.label }}</div>
-          </el-card>
-        </el-col>
-      </el-row>
+      <div class="monitor-info">
 
-      <el-row :gutter="16" style="margin-top: 16px">
-        <el-col :span="12">
-          <div ref="lossChartRef" style="height: 350px"></div>
-        </el-col>
-        <el-col :span="12">
-          <div ref="mapChartRef" style="height: 350px"></div>
-        </el-col>
-      </el-row>
-    </el-card>
+        <span>
+
+          {{ $t("training.model") }}:
+          {{ selectedTask.model_name }}
+
+        </span>
+
+        <span>
+
+          {{ $t("training.device") }}:
+          {{ selectedTask.device }}
+
+        </span>
+
+        <span>
+
+          {{ $t("training.epoch") }}:
+          {{ selectedTask.current_epoch }}/{{ selectedTask.epochs }}
+
+        </span>
+
+      </div>
+
+      <div class="metric-grid">
+
+        <StatsCard
+          v-for="item in metricCards"
+          :key="item.label"
+          :label="item.label"
+          :value="item.value"
+        />
+
+      </div>
+
+      <div class="chart-grid">
+
+        <SectionCard title="Loss">
+
+          <div
+            ref="lossChartRef"
+            class="chart"
+          />
+
+        </SectionCard>
+
+        <SectionCard title="Metrics">
+
+          <div
+            ref="mapChartRef"
+            class="chart"
+          />
+
+        </SectionCard>
+
+      </div>
+
+    </SectionCard>
 
     <el-dialog
       v-model="showCreateDialog"
@@ -258,6 +355,9 @@ import * as echarts from "echarts";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import PageHeader from "@/components/common/PageHeader.vue";
+import SectionCard from "@/components/common/SectionCard.vue";
+import StatsCard from "@/components/common/StatsCard.vue";
 
 const { t } = useI18n({ useScope: "global" });
 
@@ -606,59 +706,50 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped>
-.training-page {
-  padding: 20px;
+<style scoped lang="scss">
+@use "@/assets/styles/variables.scss" as *;
+
+.monitor-info{
+
+display:flex;
+flex-wrap:wrap;
+gap:$spacing-lg;
+margin-bottom:$spacing-lg;
+font-size:13px;
+color:$text-secondary;
+
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+.metric-grid{
+
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+gap:$spacing-md;
+margin-bottom:$spacing-lg;
+
 }
 
-.page-header h2 {
-  margin: 0;
-  font-size: 22px;
+.chart-grid{
+
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:$spacing-lg;
+
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.chart{
+
+height:350px;
+
 }
 
-.monitor-info {
-  display: flex;
-  gap: 16px;
-  font-size: 13px;
-  color: #909399;
+@media (max-width:992px){
+
+.chart-grid{
+
+grid-template-columns:1fr;
+
 }
 
-.metric-cards {
-  margin-bottom: 8px;
-}
-
-.metric-item {
-  text-align: center;
-  padding: 8px 0;
-}
-
-.metric-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: #303133;
-}
-
-.metric-label {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
-}
-
-.task-list-card,
-.monitor-card {
-  margin-bottom: 20px;
 }
 </style>

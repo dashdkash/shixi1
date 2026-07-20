@@ -199,9 +199,17 @@ async function handleRegister() {
 
 <style lang="scss" scoped>
 // ── 杂草识别智能体 · 主题色（与登录页一致） ──────
+// 强调色（聚焦态·土壤棕，替换原橙色以避免与校验红冲突） #8b5e34
+
+:global(html),
+:global(body) {
+  height: 100%;
+  margin: 0;
+}
+
 .register-page {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -214,7 +222,7 @@ async function handleRegister() {
     ),
     url("/bg.png");
   background-size: cover, 650px auto;
-  background-position: center, center top;
+  background-position: center, center;
   background-repeat: no-repeat, no-repeat;
 }
 
@@ -272,15 +280,30 @@ async function handleRegister() {
   }
 }
 
+// 输入框聚焦时使用土壤棕作为强调色，失焦后恢复默认
+:deep(.el-input__wrapper) {
+  transition: box-shadow 0.15s ease;
+  box-shadow: 0 0 0 1px transparent inset;
+
+  &.is-focus {
+    box-shadow: 0 0 0 1px #8b5e34 inset !important;
+  }
+}
+
 .register-btn {
   width: 100%;
   background-color: #a4c969;
   border-color: #a4c969;
 
   &:hover,
-  &:focus {
+  &:focus-visible {
     background-color: #8fb355;
     border-color: #8fb355;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #8b5e34;
+    outline-offset: 2px;
   }
 }
 

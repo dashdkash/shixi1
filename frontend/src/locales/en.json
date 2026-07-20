@@ -29,7 +29,8 @@
     "detection": "Detection",
     "training": "Training",
     "history": "History",
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+    "knowledge": "Knowledge Base"
   },
   "page": {
     "chat": {

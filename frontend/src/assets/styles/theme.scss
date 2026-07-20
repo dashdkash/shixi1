@@ -1,0 +1,45 @@
+@use "./variables.scss" as *;
+
+:root {
+  /* Colors */
+  --color-primary: #{$primary-color};
+  --color-primary-dark: #{$primary-dark};
+  --color-primary-light: #{$primary-light};
+
+  --color-success: #{$success-color};
+  --color-warning: #{$warning-color};
+  --color-danger: #{$danger-color};
+  --color-info: #{$info-color};
+
+  /* Backgrounds */
+  --bg-page: #{$bg-color};
+  --bg-card: #fff;
+  --bg-sidebar: #{$sidebar-bg};
+
+  /* Text */
+  --text-primary: #{$text-primary};
+  --text-regular: #{$text-regular};
+  --text-secondary: #{$text-secondary};
+
+  /* Border */
+  --border-color: #E5E7EB;
+
+  /* Radius */
+  --radius-sm: #{$border-radius-sm};
+  --radius-md: #{$border-radius-md};
+  --radius-lg: #{$border-radius-lg};
+
+  /* Shadow */
+  --shadow-sm: #{$shadow-sm};
+  --shadow-md: #{$shadow-md};
+  --shadow-lg: #{$shadow-lg};
+
+  /* Layout */
+  --page-padding: #{$spacing-lg};
+  --section-gap: #{$spacing-lg};
+  --card-padding: #{$spacing-lg};
+
+  /* Animation */
+  --transition-fast: .18s ease;
+  --transition-normal: .25s ease;
+}

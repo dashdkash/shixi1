@@ -102,16 +102,6 @@ const routes = [
           requiresAdmin: true,
         },
       },
-      {
-        path: "knowledge",
-        name: "Knowledge",
-        component: () => import("@/views/KnowledgePage.vue"),
-        meta: {
-          titleKey: "Knowledge Base",
-          icon: "Reading",
-          requiresAdmin: false,
-        },
-      },
     ],
   },
 

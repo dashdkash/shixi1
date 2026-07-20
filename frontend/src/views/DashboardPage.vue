@@ -1,124 +1,131 @@
 <template>
-  <div class="dashboard-page">
-    <!-- ── 页面标题 + 时间范围选择 ── -->
-    <div class="page-header">
-      <h2>数据看板</h2>
-      <el-radio-group v-model="periodDays" size="default" @change="loadAllData">
-        <el-radio-button :value="7">近 7 天</el-radio-button>
-        <el-radio-button :value="30">近 30 天</el-radio-button>
-        <el-radio-button :value="90">近 90 天</el-radio-button>
-      </el-radio-group>
+  <div class="page-container">
+
+    <PageHeader
+      title="数据看板"
+      subtitle="查看平台检测统计、趋势分析和数据分布。"
+    >
+      <template #actions>
+        <el-radio-group
+          v-model="periodDays"
+          @change="loadAllData"
+        >
+          <el-radio-button :label="7">
+            近 7 天
+          </el-radio-button>
+
+          <el-radio-button :label="30">
+            近 30 天
+          </el-radio-button>
+
+          <el-radio-button :label="90">
+            近 90 天
+          </el-radio-button>
+        </el-radio-group>
+      </template>
+    </PageHeader>
+
+    <!-- Statistics -->
+
+    <div class="stats-grid">
+
+      <StatsCard
+        title="检测任务"
+        :value="stats.total_tasks"
+        :growth="stats.growth?.tasks"
+        :icon="Document"
+      />
+
+      <StatsCard
+        title="处理图片"
+        :value="formatNumber(stats.total_images)"
+        :growth="stats.growth?.images"
+        :icon="PictureFilled"
+      />
+
+      <StatsCard
+        title="检测目标"
+        :value="formatNumber(stats.total_objects)"
+        :growth="stats.growth?.objects"
+        :icon="Aim"
+      />
+
+      <StatsCard
+        title="平均耗时"
+        :value="stats.avg_inference_time"
+        unit="ms"
+        :growth="stats.growth?.inference_time"
+        :inverse="true"
+        :icon="Timer"
+      />
+
     </div>
 
-    <!-- ── 数字统计卡片 ── -->
-    <el-row :gutter="16" class="stat-cards">
-      <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-icon" style="background: #ecf5ff">
-            <el-icon :size="28" color="#409eff"><Document /></el-icon>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stats.total_tasks }}</div>
-            <div class="stat-label">检测任务</div>
-            <div class="stat-growth" :class="growthClass('tasks')">
-              {{ formatGrowth(stats.growth?.tasks) }}
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-icon" style="background: #f0f9eb">
-            <el-icon :size="28" color="#67c23a"><PictureFilled /></el-icon>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ formatNumber(stats.total_images) }}</div>
-            <div class="stat-label">处理图片</div>
-            <div class="stat-growth" :class="growthClass('images')">
-              {{ formatGrowth(stats.growth?.images) }}
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-icon" style="background: #fdf6ec">
-            <el-icon :size="28" color="#e6a23c"><Aim /></el-icon>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">
-              {{ formatNumber(stats.total_objects) }}
-            </div>
-            <div class="stat-label">检测目标</div>
-            <div class="stat-growth" :class="growthClass('objects')">
-              {{ formatGrowth(stats.growth?.objects) }}
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-icon" style="background: #fef0f0">
-            <el-icon :size="28" color="#f56c6c"><Timer /></el-icon>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">
-              {{ stats.avg_inference_time }}<span class="unit">ms</span>
-            </div>
-            <div class="stat-label">平均耗时</div>
-            <div
-              class="stat-growth"
-              :class="growthClass('inference_time', true)"
-            >
-              {{ formatGrowth(stats.growth?.inference_time) }}
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <!-- Charts -->
 
-    <!-- ── 图表区域 ── -->
-    <el-row :gutter="16" class="chart-row">
-      <!-- 每日检测趋势（折线图） -->
+    <el-row :gutter="20">
+
       <el-col :span="16">
-        <el-card shadow="hover">
-          <template #header>
-            <span>每日检测趋势</span>
-          </template>
-          <div ref="trendChartRef" class="chart-container"></div>
-        </el-card>
+
+        <SectionCard title="每日检测趋势">
+
+          <div
+            ref="trendChartRef"
+            class="chart-container"
+          />
+
+        </SectionCard>
+
       </el-col>
-      <!-- 类别分布（饼图） -->
+
       <el-col :span="8">
-        <el-card shadow="hover">
-          <template #header>
-            <span>类别分布</span>
-          </template>
-          <div ref="classChartRef" class="chart-container"></div>
-        </el-card>
+
+        <SectionCard title="类别分布">
+
+          <div
+            ref="classChartRef"
+            class="chart-container"
+          />
+
+        </SectionCard>
+
       </el-col>
+
     </el-row>
 
-    <el-row :gutter="16" class="chart-row">
-      <!-- 场景分布（柱状图） -->
+    <el-row
+      :gutter="20"
+      style="margin-top:20px"
+    >
+
       <el-col :span="12">
-        <el-card shadow="hover">
-          <template #header>
-            <span>场景分布</span>
-          </template>
-          <div ref="sceneChartRef" class="chart-container"></div>
-        </el-card>
+
+        <SectionCard title="场景分布">
+
+          <div
+            ref="sceneChartRef"
+            class="chart-container"
+          />
+
+        </SectionCard>
+
       </el-col>
-      <!-- 任务类型分布（环形图） -->
+
       <el-col :span="12">
-        <el-card shadow="hover">
-          <template #header>
-            <span>任务类型分布</span>
-          </template>
-          <div ref="typeChartRef" class="chart-container"></div>
-        </el-card>
+
+        <SectionCard title="任务类型分布">
+
+          <div
+            ref="typeChartRef"
+            class="chart-container"
+          />
+
+        </SectionCard>
+
       </el-col>
+
     </el-row>
+
   </div>
 </template>
 
@@ -140,9 +147,34 @@ import {
   getTrend,
   getTypeDistribution,
 } from "@/api/dashboard";
-import { Aim, Document, PictureFilled, Timer } from "@element-plus/icons-vue";
+
+import {
+  Aim,
+  Document,
+  PictureFilled,
+  Timer,
+} from "@element-plus/icons-vue";
+
+import PageHeader from "@/components/common/PageHeader.vue";
+import SectionCard from "@/components/common/SectionCard.vue";
+import StatsCard from "@/components/common/StatsCard.vue";
+
 import * as echarts from "echarts";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+
+import {
+  onMounted,
+  onBeforeUnmount,
+  ref,
+} from "vue";
+
+// ── 主题色板（平台主题配色） ──
+const THEME_COLORS = [
+  "#4CAF50",
+  "#66BB6A",
+  "#81C784",
+  "#2E7D32",
+  "#A5D6A7",
+];
 
 // ── 响应式状态 ──
 const periodDays = ref(30);
@@ -265,11 +297,13 @@ function renderTrendChart(trend) {
         lineStyle: { width: 2 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: "rgba(64,158,255,0.3)" },
-            { offset: 1, color: "rgba(64,158,255,0.02)" },
+            { offset: 0, color:"rgba(76,175,80,.25)" },
+            { offset: 1, color: "rgba(217,119,6,0.02)" },
           ]),
         },
-        itemStyle: { color: "#409eff" },
+        itemStyle:{
+          color:"#4CAF50"
+        }
       },
       {
         name: "检测目标",
@@ -280,11 +314,11 @@ function renderTrendChart(trend) {
         lineStyle: { width: 2 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: "rgba(103,194,58,0.3)" },
-            { offset: 1, color: "rgba(103,194,58,0.02)" },
+            { offset: 0, color: "rgba(102,187,106,.25)" },
+            { offset: 1, color: "rgba(217,119,6,0.02)" },
           ]),
         },
-        itemStyle: { color: "#67c23a" },
+        itemStyle: { color: "#66BB6A" },
       },
     ],
   });
@@ -308,6 +342,7 @@ function renderClassChart(distribution) {
       top: 20,
       bottom: 20,
     },
+    color: THEME_COLORS,
     series: [
       {
         type: "pie",
@@ -364,8 +399,8 @@ function renderSceneChart(distribution) {
         itemStyle: {
           borderRadius: [0, 4, 4, 0],
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: "#409eff" },
-            { offset: 1, color: "#79bbff" },
+            { offset: 0, color: "#2E7D32" },
+            { offset: 1, color: "#81C784" },
           ]),
         },
         label: {
@@ -384,8 +419,6 @@ function renderTypeChart(distribution) {
     typeChart = echarts.init(typeChartRef.value);
   }
 
-  const colors = ["#409eff", "#67c23a", "#e6a23c", "#f56c6c", "#909399"];
-
   typeChart.setOption({
     tooltip: {
       trigger: "item",
@@ -395,7 +428,7 @@ function renderTypeChart(distribution) {
       bottom: 0,
       itemGap: 16,
     },
-    color: colors,
+    color: THEME_COLORS,
     series: [
       {
         type: "pie",
@@ -442,97 +475,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-.dashboard-page {
-  padding: 0;
-}
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-
-  h2 {
-    margin: 0;
-  }
-}
-
-/* 统计卡片 */
-.stat-cards {
-  margin-bottom: 16px;
-}
-
-.stat-card {
-  :deep(.el-card__body) {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 20px;
-  }
-}
-
-.stat-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.stat-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: #303133;
-  line-height: 1.2;
-
-  .unit {
-    font-size: 14px;
-    font-weight: 400;
-    color: #909399;
-    margin-left: 2px;
-  }
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #909399;
-  margin-top: 2px;
-}
-
-.stat-growth {
-  font-size: 12px;
-  margin-top: 4px;
-
-  &.growth-up {
-    color: #67c23a;
-    &::before {
-      content: "↑ ";
-    }
-  }
-
-  &.growth-down {
-    color: #f56c6c;
-    &::before {
-      content: "↓ ";
-    }
-  }
-
-  &.growth-flat {
-    color: #909399;
-  }
-}
-
-/* 图表区域 */
-.chart-row {
-  margin-bottom: 16px;
-}
 
 .chart-container {
   height: 320px;

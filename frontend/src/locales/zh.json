@@ -29,7 +29,8 @@
     "detection": "检测工作台",
     "training": "模型训练",
     "history": "历史记录",
-    "dashboard": "数据看板"
+    "dashboard": "数据看板",
+    "knowledge": "知识库"
   },
   "page": {
     "chat": {

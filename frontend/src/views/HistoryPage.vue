@@ -1,64 +1,123 @@
 <template>
-  <div class="history-page">
-    <!-- 标签页切换 -->
-    <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-      <el-tab-pane :label="$t('history.detection.title')" name="detection">
-        <!-- 检测历史列表 -->
-        <div class="history-list">
-          <div class="list-header">
-            <span>{{ $t("history.detection.title") }}</span>
-          </div>
+  <div class="page-container">
 
-          <div v-if="detectionList.length === 0" class="empty-state">
-            <el-icon class="empty-icon"><Search /></el-icon>
-            <p>{{ $t("history.empty") }}</p>
-          </div>
+    <PageHeader
+      title="历史记录"
+      subtitle="查看检测记录和历史对话。"
+    />
 
-          <div v-else class="record-grid">
+    <el-tabs
+      v-model="activeTab"
+      @tab-change="handleTabChange"
+    >
+
+      <!-- ========================= -->
+      <!-- Detection History -->
+      <!-- ========================= -->
+
+      <el-tab-pane
+        :label="$t('history.detection.title')"
+        name="detection"
+      >
+
+        <SectionCard
+          :title="$t('history.detection.title')"
+        >
+          <EmptyState
+            v-if="detectionList.length===0"
+            :title="$t('history.empty')"
+          >
+
+            <template #icon>
+
+              <el-icon>
+
+                <Search/>
+              </el-icon>
+
+            </template>
+
+          </EmptyState>
+
+          <div
+            v-else
+            class="record-grid"
+          >
+
             <div
               v-for="record in detectionList"
               :key="record.id"
               class="record-card"
               @click="showDetectionDetail(record)"
             >
+
               <div class="record-header">
-                <span class="record-id"
-                  >{{ $t("history.id") }}: {{ record.id }}</span
+
+                <span>
+
+                  #{{ record.id }}
+
+                </span>
+
+                <el-tag
+                  :type="getStatusType(record.status)"
                 >
-                <el-tag :type="getStatusType(record.status)" size="small">
+
                   {{ getStatusText(record.status) }}
+
                 </el-tag>
+
               </div>
-              <div class="record-body">
-                <div class="record-info">
-                  <span
-                    >{{ $t("history.totalImages") }}:
-                    {{ record.total_images }}</span
-                  >
-                  <span
-                    >{{ $t("history.totalObjects") }}:
-                    {{ record.total_objects }}</span
-                  >
-                  <span
-                    >{{ $t("history.inferenceTime") }}:
-                    {{ record.total_inference_time }}ms</span
-                  >
-                </div>
+
+              <div class="record-info">
+
+                <span>
+
+                  {{ record.total_images }}
+                  {{ $t("history.totalImages") }}
+
+                </span>
+
+                <span>
+
+                  {{ record.total_objects }}
+                  {{ $t("history.totalObjects") }}
+
+                </span>
+
+                <span>
+
+                  {{ record.total_inference_time }} ms
+
+                </span>
+
               </div>
+
               <div class="record-footer">
-                <span class="record-time">{{
-                  formatTime(record.created_at)
-                }}</span>
-                <el-button type="text" class="view-btn">
+
+                <span>
+
+                  {{ formatTime(record.created_at) }}
+
+                </span>
+
+                <el-button
+                  text
+                  type="primary"
+                >
+
                   {{ $t("history.viewDetail") }}
-                  <el-icon><ArrowRight /></el-icon>
+
                 </el-button>
+
               </div>
+
             </div>
+
           </div>
 
           <el-pagination
-            v-if="detectionTotal > detectionPageSize"
+            v-if="detectionTotal>detectionPageSize"
             class="pagination"
             :current-page="detectionPage"
             :page-size="detectionPageSize"
@@ -66,51 +125,107 @@
             @current-change="fetchDetectionHistory"
             layout="total, prev, pager, next"
           />
-        </div>
+
+        </SectionCard>
+
       </el-tab-pane>
 
-      <el-tab-pane :label="$t('history.chat.title')" name="chat">
-        <!-- 对话历史列表 -->
-        <div class="history-list">
-          <div class="list-header">
-            <span>{{ $t("history.chat.title") }}</span>
-          </div>
+      <!-- ========================= -->
+      <!-- Chat History -->
+      <!-- ========================= -->
 
-          <div v-if="chatList.length === 0" class="empty-state">
-            <el-icon class="empty-icon"><ChatDotRound /></el-icon>
-            <p>{{ $t("history.empty") }}</p>
-          </div>
+      <el-tab-pane
+        :label="$t('history.chat.title')"
+        name="chat"
+      >
 
-          <div v-else class="record-list">
+        <SectionCard
+          :title="$t('history.chat.title')"
+        >
+
+          <EmptyState
+            v-if="chatList.length===0"
+            :title="$t('history.empty')"
+          >
+
+            <template #icon>
+
+              <el-icon>
+
+                <ChatDotRound/>
+
+              </el-icon>
+
+            </template>
+
+          </EmptyState>
+
+          <div
+            v-else
+            class="record-list"
+          >
+
             <div
               v-for="session in chatList"
               :key="session.id"
               class="chat-card"
               @click="showChatDetail(session)"
             >
+
               <div class="chat-icon">
-                <el-icon><ChatDotRound /></el-icon>
+
+                <el-icon>
+
+                  <ChatDotRound/>
+
+                </el-icon>
+
               </div>
+
               <div class="chat-content">
-                <div class="chat-title">{{ session.title }}</div>
-                <div class="chat-meta">
-                  <span
-                    >{{ session.message_count }}
-                    {{ $t("history.messages") }}</span
-                  >
-                  <span>{{
-                    formatTime(session.last_message_at || session.created_at)
-                  }}</span>
+
+                <div class="chat-title">
+
+                  {{ session.title }}
+
                 </div>
+
+                <div class="chat-meta">
+
+                  <span>
+
+                    {{ session.message_count }}
+                    {{ $t("history.messages") }}
+
+                  </span>
+
+                  <span>
+
+                    {{
+                      formatTime(
+                        session.last_message_at ||
+                        session.created_at
+                      )
+                    }}
+
+                  </span>
+
+                </div>
+
               </div>
-              <div class="chat-arrow">
-                <el-icon><ArrowRight /></el-icon>
-              </div>
+
+              <el-icon>
+
+                <ArrowRight/>
+
+              </el-icon>
+
             </div>
+
           </div>
 
           <el-pagination
-            v-if="chatTotal > chatPageSize"
+            v-if="chatTotal>chatPageSize"
             class="pagination"
             :current-page="chatPage"
             :page-size="chatPageSize"
@@ -118,9 +233,15 @@
             @current-change="fetchChatHistory"
             layout="total, prev, pager, next"
           />
-        </div>
+
+        </SectionCard>
+
       </el-tab-pane>
+
     </el-tabs>
+
+    <!-- dialogs remain below -->
+
 
     <!-- 检测详情弹窗 -->
     <el-dialog
@@ -233,6 +354,11 @@
 
 <script setup>
 import request from "@/utils/request";
+
+import PageHeader from "@/components/common/PageHeader.vue";
+import SectionCard from "@/components/common/SectionCard.vue";
+import EmptyState from "@/components/common/EmptyState.vue";
+
 import {
   ArrowRight,
   ChatDotRound,
@@ -240,7 +366,11 @@ import {
   Search,
   User,
 } from "@element-plus/icons-vue";
-import { onMounted, ref } from "vue";
+
+import {
+  onMounted,
+  ref,
+} from "vue";
 
 const activeTab = ref("detection");
 
@@ -352,97 +482,7 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.history-page {
-  padding: 20px;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: #f5f7fa;
-  border-radius: 12px;
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-
-  &.detection-icon {
-    background: #ecf5ff;
-    color: #409eff;
-  }
-
-  &.image-icon {
-    background: #f0f9eb;
-    color: #67c23a;
-  }
-
-  &.object-icon {
-    background: #fff7e6;
-    color: #e6a23c;
-  }
-}
-
-.stat-info {
-  flex: 1;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
-}
-
-.list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: #909399;
-
-  .empty-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-    color: #c0c4cc;
-  }
-
-  p {
-    margin: 0;
-    font-size: 14px;
-  }
-}
-
+@use "@/assets/styles/variables.scss" as *;
 .record-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -451,15 +491,16 @@ onMounted(() => {
 }
 
 .record-card {
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  padding: 16px;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  padding: $spacing-lg;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 0.25s ease;
 
   &:hover {
-    border-color: #409eff;
-    box-shadow: 0 2px 12px rgba(64, 158, 255, 0.15);
+    border-color: $primary-color;
+    transform: translateY(-2px);
+    box-shadow: $shadow-md;
   }
 }
 
@@ -486,8 +527,8 @@ onMounted(() => {
 
   span {
     font-size: 12px;
-    color: #909399;
-    background: #f5f7fa;
+    color: $text-secondary;
+    background: $background-secondary;
     padding: 4px 8px;
     border-radius: 4px;
   }
@@ -508,7 +549,7 @@ onMounted(() => {
   .view-btn {
     font-size: 12px;
     padding: 0;
-    color: #409eff;
+    color: $primary-color;
   }
 }
 
@@ -520,18 +561,14 @@ onMounted(() => {
 }
 
 .chat-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  padding: $spacing-lg;
+  transition: 0.25s ease;
 
   &:hover {
-    border-color: #409eff;
-    background: #f5faff;
+    border-color: $primary-color;
+    box-shadow: $shadow-sm;
   }
 }
 
@@ -539,12 +576,13 @@ onMounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #f0f9ff;
+  background:rgba($primary-color,.08);
+  color:$primary-color;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #409eff;
+  color: $primary-color;
 }
 
 .chat-content {
@@ -554,7 +592,7 @@ onMounted(() => {
   .chat-title {
     font-size: 14px;
     font-weight: 500;
-    color: #303133;
+    color: $text-primary;
     margin-bottom: 4px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -565,7 +603,7 @@ onMounted(() => {
     display: flex;
     gap: 16px;
     font-size: 12px;
-    color: #909399;
+    color: $text-secondary;
   }
 }
 
@@ -595,13 +633,13 @@ onMounted(() => {
       .detail-id {
         font-size: 14px;
         font-weight: 500;
-        color: #303133;
+        color: $text-primary;
       }
     }
 
     .detail-time {
       font-size: 12px;
-      color: #909399;
+      color: $text-secondary;
     }
   }
 
@@ -620,14 +658,14 @@ onMounted(() => {
 
     .summary-label {
       font-size: 12px;
-      color: #909399;
+      color: $text-secondary;
       margin-bottom: 4px;
     }
 
     .summary-value {
       font-size: 20px;
       font-weight: 700;
-      color: #303133;
+      color: $text-primary;
     }
   }
 
@@ -635,7 +673,7 @@ onMounted(() => {
     h4 {
       font-size: 14px;
       font-weight: 500;
-      color: #303133;
+      color: $text-primary;
       margin-bottom: 12px;
     }
 
@@ -647,7 +685,7 @@ onMounted(() => {
 
     .image-item {
       padding: 12px;
-      background: #f5f7fa;
+      background: $background-secondary;
       border-radius: 8px;
 
       .image-info {
@@ -669,7 +707,7 @@ onMounted(() => {
         background: #fff;
         border-radius: 4px;
         font-size: 12px;
-        color: #409eff;
+        color: $primary-color;
         border: 1px solid #e4e7ed;
       }
     }
@@ -691,13 +729,13 @@ onMounted(() => {
       flex-direction: row-reverse;
 
       .message-content {
-        background: #409eff;
+        background: $primary-color;
         color: #fff;
         border-radius: 8px 8px 0 8px;
       }
 
       .message-avatar {
-        background: #409eff;
+        background: $primary-color;
         color: #fff;
       }
     }
@@ -705,7 +743,7 @@ onMounted(() => {
     &.assistant {
       .message-content {
         background: #f0f0f0;
-        color: #303133;
+        color: $text-primary;
         border-radius: 8px 8px 8px 0;
       }
 
