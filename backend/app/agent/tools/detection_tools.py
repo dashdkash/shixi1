@@ -45,8 +45,7 @@ def detect_single_image(image_path: str, conf: float = 0.25, iou: float = 0.45) 
     try:
         result = detection_service.detect_single(image_path, conf=conf, iou=iou)
         logger.info("单图检测完成: %s, 目标数: %d", image_path, result.get("total_objects", 0))
-        # 剥离 base64 图片数据，LLM 不需要看到图片内容，大幅减少上下文体积
-        result.pop("annotated_image_base64", None)
+        # 注意：保留 annotated_image_base64，由 _smart_truncate 在 LLM 上下文中精简
         return json.dumps(result, ensure_ascii=False)
     except Exception as e:
         logger.error("单图检测失败: %s, 错误: %s", image_path, str(e))
@@ -69,9 +68,7 @@ def detect_batch_images(image_paths: list[str], conf: float = 0.25) -> str:
     try:
         result = detection_service.detect_batch(image_paths, conf=conf)
         logger.info("批量检测完成: %d 张图片", len(image_paths))
-        # 剥离 base64 图片数据
-        for img in result.get("annotated_images", []):
-            img.pop("annotated_image_base64", None)
+        # 保留 base64，由 _smart_truncate 精简
         return json.dumps(result, ensure_ascii=False)
     except Exception as e:
         logger.error("批量检测失败: %s", str(e))
@@ -94,9 +91,7 @@ def detect_zip_images_file(zip_path: str, conf: float = 0.25) -> str:
     try:
         result = detection_service.detect_zip(zip_path, conf=conf)
         logger.info("ZIP 检测完成: %s", zip_path)
-        # 剥离 base64 图片数据
-        for img in result.get("annotated_images", []):
-            img.pop("annotated_image_base64", None)
+        # 保留 base64，由 _smart_truncate 精简
         return json.dumps(result, ensure_ascii=False)
     except Exception as e:
         logger.error("ZIP 检测失败: %s", str(e))
@@ -121,11 +116,7 @@ def detect_video_file(video_path: str, conf: float = 0.25, frame_sample_rate: in
         result = detection_service.detect_video(
             video_path, conf=conf, frame_sample_rate=frame_sample_rate
         )
-        # 移除 LLM 无法使用的大体积数据
-        if "key_frames" in result:
-            for frame in result["key_frames"]:
-                frame.pop("annotated_image_base64", None)
-        result.pop("annotated_video_url", None)
+        # 保留数据，由 _smart_truncate 精简
         logger.info("视频检测完成: %s", video_path)
         return json.dumps(result, ensure_ascii=False)
     except Exception as e:

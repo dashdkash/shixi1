@@ -44,10 +44,13 @@ request.interceptors.response.use(
     const { response } = error;
 
     if (response) {
+      // 登录请求的 401 不应触发“登录已过期”，直接返回后端错误信息
+      const isLoginRequest = error.config?.url?.includes("/auth/login");
+
       switch (response.status) {
         case 401:
-          // Token 过期或无效，清除用户信息并跳转登录页
-          if (!isRedirectingToLogin) {
+          // Token 过期或无效，清除用户信息并跳转登录页（登录请求本身除外）
+          if (!isLoginRequest && !isRedirectingToLogin) {
             isRedirectingToLogin = true;
             ElMessage.error("登录已过期，请重新登录");
             const userStore = useUserStore();
@@ -55,6 +58,8 @@ request.interceptors.response.use(
             router.push("/login").finally(() => {
               isRedirectingToLogin = false;
             });
+          } else if (isLoginRequest) {
+            ElMessage.error(response.data?.detail || "用户名或密码错误");
           }
           break;
 

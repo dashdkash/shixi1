@@ -6,14 +6,14 @@
  */
 import { createApp } from "vue";
 
-// 全局样式
-import "@/assets/styles/global.scss";
-
 // Element Plus
 import ElementPlus from "element-plus";
 import "element-plus/dist/index.css";
 import zhCn from "element-plus/es/locale/lang/zh-cn";
 import en from "element-plus/es/locale/lang/en";
+
+// 全局样式（必须在 Element Plus CSS 之后导入，以覆盖主题变量）
+import "@/assets/styles/global.scss";
 
 // 核心模块
 import App from "./App.vue";

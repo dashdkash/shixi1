@@ -1,5 +1,8 @@
 <template>
   <div class="detection-container">
+    <el-tabs v-model="activeTab" type="card">
+      <!-- ── Tab 1: 文件检测（图片+视频） ── -->
+      <el-tab-pane :label="$t('detection.fileTab')" name="file">
     <div
       class="upload-area"
       :class="{ 'is-dragover': isDragover }"
@@ -13,7 +16,7 @@
         ref="fileInput"
         type="file"
         multiple
-        accept="image/*,.zip"
+        accept="image/*,.zip,video/mp4,video/avi,video/quicktime,video/x-msvideo"
         class="file-input"
         @change="handleFileSelect"
       />
@@ -108,34 +111,35 @@
           </div>
 
           <div v-if="result.success" class="result-content">
-        <div class="result-stats">
-          <span
-            >{{ $t("detection.imageSize") }}: {{ result.width }} ×
-            {{ result.height }}</span
-          >
-          <span
-            >{{ $t("detection.inferenceTime") }}:
-            {{ result.inference_time }}ms</span
-          >
-          <span
-            >{{ $t("detection.objectsFound") }}:
-            {{ result.objects?.length || 0 }}</span
-          >
-        </div>
+            <img
+              v-if="result.annotated_image_base64"
+              :src="'data:image/jpeg;base64,' + result.annotated_image_base64"
+              class="annotated-image"
+            />
+            <div class="result-stats">
+              <span
+                >{{ $t("detection.inferenceTime") }}:
+                {{ result.inference_time?.toFixed(2) || 0 }}ms</span
+              >
+              <span
+                >{{ $t("detection.objectsFound") }}:
+                {{ result.objects?.length || 0 }}</span
+              >
+            </div>
 
-        <div v-if="result.objects?.length > 0" class="objects-list">
-          <div
-            v-for="(obj, objIndex) in result.objects"
-            :key="objIndex"
-            class="object-item"
-          >
-            <span class="object-class">{{ obj.class_name_cn }}</span>
-            <span class="object-conf"
-              >{{ (obj.confidence * 100).toFixed(1) }}%</span
-            >
+            <div v-if="result.objects?.length > 0" class="objects-list">
+              <div
+                v-for="(obj, objIndex) in result.objects"
+                :key="objIndex"
+                class="object-item"
+              >
+                <span class="object-class">{{ obj.class_name_cn }}</span>
+                <span class="object-conf"
+                  >{{ (obj.confidence * 100).toFixed(1) }}%</span
+                >
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
           <div v-else class="result-error">
             {{ result.error }}
@@ -143,20 +147,82 @@
         </div>
       </div>
     </div>
+
+      <!-- ── 视频检测区域 ── -->
+      <div v-if="videoResult" class="video-result-section">
+        <h3>视频检测结果</h3>
+        <div class="video-player-wrapper">
+          <video
+            v-if="videoResult.videoUrl"
+            :src="videoResult.videoUrl"
+            controls
+            class="video-player"
+          ></video>
+          <div class="video-stats">
+            <span>总帧数: {{ videoResult.total_frames }}</span>
+            <span>处理帧数: {{ videoResult.processed_frames }}</span>
+            <span>检测目标数: {{ videoResult.total_objects }}</span>
+            <span>耗时: {{ videoResult.total_inference_time }}ms</span>
+          </div>
+          <div v-if="videoResult.class_counts" class="video-class-counts">
+            <el-tag
+              v-for="(count, cls) in videoResult.class_counts"
+              :key="cls"
+              type="info"
+              class="class-tag"
+            >
+              {{ cls }}: {{ count }}
+            </el-tag>
+          </div>
+        </div>
+      </div>
+      <div v-if="videoProgress > 0 && videoProgress < 100" class="video-progress">
+        <el-progress :percentage="videoProgress" :stroke-width="12" />
+        <p>{{ videoMessage }}</p>
+      </div>
+      </el-tab-pane>
+
+      <!-- ── Tab 2: 摄像头检测 ── -->
+      <el-tab-pane :label="$t('detection.cameraTab')" name="camera">
+        <CameraDetection />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup>
+import { detectBatch, detectVideo, detectZip, getVideoStatus } from "@/api/detection";
+import CameraDetection from "@/components/CameraDetection.vue";
 import request from "@/utils/request";
 import { Close, Search, Upload } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
+import { computed, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 
+const route = useRoute();
+const { t } = useI18n({ useScope: "global" });
+const activeTab = ref(route.query.tab === "camera" ? "camera" : "file");
+
+// 监听路由 query 变化（从聊天页跳转摄像头 Tab）
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (tab === "camera" || tab === "file") {
+      activeTab.value = tab;
+    }
+  },
+);
 const fileInput = ref(null);
 const isDragover = ref(false);
 const isProcessing = ref(false);
 const pendingFiles = ref([]);
 const detectionResults = ref([]);
+
+// ── 视频检测状态 ──
+const videoResult = ref(null);
+const videoProgress = ref(0);
+const videoMessage = ref("");
 
 
 const summary = computed(() => {
@@ -221,12 +287,25 @@ const handlePaste = async (event) => {
 
   if (files.length > 0) {
     addFiles(files);
-    ElMessage.success(`${files.length} ${$t("detection.imagesPasted")}`);
+    ElMessage.success(`${files.length} ${t("detection.imagesPasted")}`);
   }
 };
 
 const addFiles = (files) => {
   const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+  const zipFiles = files.filter(
+    (f) =>
+      f.type === "application/zip" ||
+      f.type === "application/x-zip-compressed" ||
+      f.name.toLowerCase().endsWith(".zip"),
+  );
+  const videoFiles = files.filter(
+    (f) =>
+      f.type.startsWith("video/") ||
+      [".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv"].some((ext) =>
+        f.name.toLowerCase().endsWith(ext),
+      ),
+  );
 
   imageFiles.forEach((file) => {
     const reader = new FileReader();
@@ -241,14 +320,45 @@ const addFiles = (files) => {
     reader.readAsDataURL(file);
   });
 
-  if (imageFiles.length > 0) {
-    ElMessage.success(`${imageFiles.length} ${$t("detection.filesAdded")}`);
+  zipFiles.forEach((file) => {
+    pendingFiles.value.push({
+      name: file.name,
+      size: file.size,
+      file: file,
+      isZip: true,
+      preview: null,
+    });
+  });
+
+  videoFiles.forEach((file) => {
+    pendingFiles.value.push({
+      name: file.name,
+      size: file.size,
+      file: file,
+      isVideo: true,
+      preview: null,
+    });
+  });
+
+  const total = imageFiles.length + zipFiles.length + videoFiles.length;
+  if (total > 0) {
+    ElMessage.success(`${total} ${t("detection.filesAdded")}`);
   }
 
-  const nonImageFiles = files.filter((f) => !f.type.startsWith("image/"));
-  if (nonImageFiles.length > 0) {
+  const nonValidFiles = files.filter(
+    (f) =>
+      !f.type.startsWith("image/") &&
+      f.type !== "application/zip" &&
+      f.type !== "application/x-zip-compressed" &&
+      !f.name.toLowerCase().endsWith(".zip") &&
+      !f.type.startsWith("video/") &&
+      ![".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv"].some((ext) =>
+        f.name.toLowerCase().endsWith(ext),
+      ),
+  );
+  if (nonValidFiles.length > 0) {
     ElMessage.warning(
-      `${nonImageFiles.length} ${$t("detection.invalidFiles")}`,
+      `${nonValidFiles.length} ${t("detection.invalidFiles")}`,
     );
   }
 };
@@ -267,56 +377,175 @@ const startDetection = async () => {
   isProcessing.value = true;
 
   try {
-    const formData = new FormData();
-    const hasZip = pendingFiles.value.some((f) => f.isZip);
+    // ── 检查是否有视频文件 ──
+    const videoFiles = pendingFiles.value.filter((f) => f.isVideo);
+    const nonVideoFiles = pendingFiles.value.filter((f) => !f.isVideo);
 
-    if (hasZip && pendingFiles.value.length === 1) {
-      formData.append("file", pendingFiles.value[0].file);
-      const response = await request.post("/api/detection/zip", formData, {
-        timeout: 180000,
-      });
-      if (response.annotated_images) {
-        detectionResults.value = response.annotated_images.map((img) => ({
-          filename: img.image_path,
-          success: true,
-          annotated_image_base64: img.annotated_image_base64,
-          objects: [],
-          inference_time: 0,
-          width: 0,
-          height: 0,
-        }));
-      } else {
-        detectionResults.value = [
-          {
-            filename: pendingFiles.value[0].name,
-            success: true,
-            annotated_image_base64: response.annotated_image_base64,
-            objects: [],
-            inference_time: response.inference_time || 0,
-            width: 0,
-            height: 0,
-          },
-        ];
+    // ── 处理视频文件 ──
+    for (const vf of videoFiles) {
+      const formData = new FormData();
+      formData.append("file", vf.file);
+      try {
+        const res = await detectVideo(formData);
+        if (res.task_id) {
+          ElMessage.info(`视频 "${vf.name}" 已上传，正在检测中...`);
+          await pollVideoResult(res.task_id);
+        }
+      } catch (err) {
+        ElMessage.error(`视频检测失败: ${err.response?.data?.detail || err.message}`);
       }
-    } else {
-      pendingFiles.value.forEach((item) => {
-        formData.append("files", item.file);
-      });
-      const response = await request.post("/api/detection/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-      detectionResults.value = response.results;
+    }
+
+    // ── 处理图片/ZIP文件（原有逻辑） ──
+    if (nonVideoFiles.length > 0) {
+      const formData = new FormData();
+      const hasZip = nonVideoFiles.some((f) => f.isZip);
+
+      if (hasZip && nonVideoFiles.length === 1) {
+        formData.append("file", nonVideoFiles[0].file);
+        const response = await detectZip(formData);
+        detectionResults.value = buildResultsFromBatch(response);
+      } else {
+        nonVideoFiles.forEach((item) => {
+          formData.append("files", item.file);
+        });
+        const response = await detectBatch(formData);
+        detectionResults.value = buildResultsFromBatch(response);
+      }
     }
 
     pendingFiles.value = [];
-    ElMessage.success($t("detection.detectionComplete"));
+    ElMessage.success(t("detection.detectionComplete"));
   } catch (error) {
-    ElMessage.error($t("detection.detectionFailed"));
+    ElMessage.error(t("detection.detectionFailed"));
   } finally {
     isProcessing.value = false;
   }
+};
+
+/**
+ * 轮询视频检测结果（每2秒轮询，最多5分钟）
+ */
+const pollVideoResult = async (taskId) => {
+  const maxAttempts = 150;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const res = await getVideoStatus(taskId);
+      videoProgress.value = res.progress || 0;
+      videoMessage.value = res.message || "";
+
+      if (res.status === "completed") {
+        const result = res.result || res;
+        videoResult.value = {
+          videoUrl: result.annotated_video_url
+            ? proxyVideoUrl(result.annotated_video_url)
+            : null,
+          total_frames: result.total_frames || 0,
+          processed_frames: result.processed_frames || 0,
+          total_objects: result.total_objects || 0,
+          total_inference_time: result.total_inference_time || 0,
+          class_counts: result.class_counts || {},
+        };
+        videoProgress.value = 100;
+        ElMessage.success("视频检测完成！");
+        return;
+      } else if (res.status === "failed") {
+        ElMessage.error(`视频检测失败: ${res.message || "未知错误"}`);
+        videoProgress.value = 0;
+        return;
+      }
+    } catch (err) {
+      console.error("轮询视频状态失败:", err);
+    }
+  }
+  ElMessage.warning("视频检测超时，请稍后在历史记录中查看结果");
+};
+
+/**
+ * 将 MinIO 视频 URL 转换为后端代理路径
+ */
+const proxyVideoUrl = (minioUrl) => {
+  if (!minioUrl) return "";
+  try {
+    const url = new URL(minioUrl);
+    // 路径格式: /rsod-images/detections/14/video.mp4
+    const pathParts = url.pathname.split("/");
+    // 去掉 bucket 名称 (第一段)
+    if (pathParts.length > 2) {
+      const subPath = pathParts.slice(2).join("/");
+      return `/api/detection/video-proxy/${encodeURIComponent(subPath)}`;
+    }
+    return minioUrl;
+  } catch {
+    return minioUrl;
+  }
+};
+
+/**
+ * 将后端批量检测响应转换为前端结果卡片格式
+ */
+const buildResultsFromBatch = (response) => {
+  if (!response || response.error) {
+    return [
+      {
+        filename: "检测失败",
+        success: false,
+        error: response?.error || "检测失败",
+        objects: [],
+        inference_time: 0,
+        width: 0,
+        height: 0,
+      },
+    ];
+  }
+
+  // 按 image_path 分组 detections
+  const detsByImage = {};
+  for (const det of response.detections || []) {
+    const key = det.image_path || "unknown";
+    if (!detsByImage[key]) detsByImage[key] = [];
+    detsByImage[key].push(det);
+  }
+
+  const annotatedImages = response.annotated_images || [];
+
+  if (annotatedImages.length > 0) {
+    return annotatedImages.map((img) => {
+      const key = img.image_path || "unknown";
+      const imageDets = detsByImage[key] || [];
+      const objects = imageDets.map((d) => ({
+        class_name: d.class_name,
+        class_name_cn: d.class_name_cn || d.class_name,
+        class_id: d.class_id,
+        confidence: d.confidence,
+        bbox: d.bbox,
+      }));
+      const inferenceTime = imageDets[0]?.inference_time || 0;
+      return {
+        filename: key,
+        success: true,
+        annotated_image_base64: img.annotated_image_base64,
+        objects,
+        inference_time: inferenceTime,
+      };
+    });
+  }
+
+  // 回退：只有 detections 时，按图片分组生成结果
+  return Object.entries(detsByImage).map(([imgPath, dets]) => ({
+    filename: imgPath,
+    success: true,
+    annotated_image_base64: null,
+    objects: dets.map((d) => ({
+      class_name: d.class_name,
+      class_name_cn: d.class_name_cn || d.class_name,
+      class_id: d.class_id,
+      confidence: d.confidence,
+      bbox: d.bbox,
+    })),
+    inference_time: dets[0]?.inference_time || 0,
+  }));
 };
 </script>
 
@@ -336,13 +565,13 @@ const startDetection = async () => {
   background: #f5f7fa;
 
   &:hover {
-    border-color: #409eff;
-    background: rgba(64, 158, 255, 0.08);
+    border-color: #1e1e1e;
+    background: rgba(0, 0, 0, 0.04);
   }
 
   &.is-dragover {
-    border-color: #409eff;
-    background: rgba(64, 158, 255, 0.12);
+    border-color: #1e1e1e;
+    background: rgba(0, 0, 0, 0.06);
     transform: scale(1.02);
   }
 }
@@ -354,7 +583,7 @@ const startDetection = async () => {
 .upload-content {
   .upload-icon {
     font-size: 48px;
-    color: #409eff;
+    color: #1e1e1e;
     margin-bottom: 16px;
   }
 
@@ -547,6 +776,15 @@ const startDetection = async () => {
 .result-content {
   padding: 12px;
 
+  .annotated-image {
+    width: 100%;
+    max-height: 280px;
+    object-fit: contain;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    background: #f5f7fa;
+  }
+
   .result-image-container {
     margin-bottom: 12px;
     border-radius: 4px;
@@ -592,12 +830,12 @@ const startDetection = async () => {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: rgba(64, 158, 255, 0.1);
+  background: rgba(0, 0, 0, 0.05);
   border-radius: 4px;
 
   .object-class {
     font-size: 12px;
-    color: #409eff;
+    color: #1e1e1e;
     font-weight: 500;
   }
 
@@ -611,5 +849,65 @@ const startDetection = async () => {
   padding: 12px;
   font-size: 13px;
   color: #f56c6c;
+}
+
+/* ── 视频检测结果样式 ── */
+.video-result-section {
+  margin-top: 24px;
+
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #303133;
+    margin-bottom: 16px;
+  }
+}
+
+.video-player-wrapper {
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.video-player {
+  width: 100%;
+  max-height: 500px;
+  display: block;
+}
+
+.video-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+
+  span {
+    font-size: 13px;
+    color: #606266;
+  }
+}
+
+.video-class-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+
+  .class-tag {
+    font-size: 12px;
+  }
+}
+
+.video-progress {
+  margin-top: 16px;
+  text-align: center;
+
+  p {
+    font-size: 13px;
+    color: #909399;
+    margin-top: 8px;
+  }
 }
 </style>

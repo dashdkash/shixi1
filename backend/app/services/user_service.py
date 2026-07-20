@@ -233,6 +233,70 @@ class UserService:
         return True
 
     @staticmethod
+    def generate_reset_verification_code(db: Session, email: str) -> str | None:
+        """
+        生成密码重置验证码（6位数字）
+
+        Args:
+            db: 数据库会话
+            email: 用户邮箱
+
+        Returns:
+            验证码，如果用户不存在返回 None
+        """
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return None
+
+        import random
+        code = str(random.randint(100000, 999999))
+
+        user.reset_verification_code = code
+        user.reset_verification_code_expires_at = datetime.now() + timedelta(minutes=5)
+        db.commit()
+
+        return code
+
+    @staticmethod
+    def verify_reset_code(db: Session, email: str, code: str) -> bool:
+        """
+        验证密码重置验证码
+        """
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False
+
+        if not user.reset_verification_code or user.reset_verification_code != code:
+            return False
+
+        if user.reset_verification_code_expires_at and user.reset_verification_code_expires_at < datetime.now():
+            return False
+
+        return True
+
+    @staticmethod
+    def reset_password_with_code(db: Session, email: str, code: str, new_password: str) -> bool:
+        """
+        使用验证码重置密码
+        """
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return False
+
+        if not user.reset_verification_code or user.reset_verification_code != code:
+            return False
+
+        if user.reset_verification_code_expires_at and user.reset_verification_code_expires_at < datetime.now():
+            return False
+
+        user.hashed_password = hash_password(new_password)
+        user.reset_verification_code = None
+        user.reset_verification_code_expires_at = None
+        db.commit()
+
+        return True
+
+    @staticmethod
     def update_profile(db: Session, user: User, email: str | None = None, phone: str | None = None) -> User:
         """
         更新用户个人信息

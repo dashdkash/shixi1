@@ -328,6 +328,7 @@ async def get_chat_detail(
                 "role": msg.role,
                 "content": msg.content,
                 "agent_used": msg.agent_used,
+                "tool_result": msg.tool_result,
                 "created_at": msg.created_at.isoformat(),
             }
             for msg in messages

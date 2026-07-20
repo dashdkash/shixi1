@@ -3,6 +3,7 @@
  * 管理对话会话列表、当前会话消息等
  */
 import { defineStore } from "pinia";
+import request from "@/utils/request";
 
 export const useAgentStore = defineStore("agent", {
   state: () => ({
@@ -62,7 +63,13 @@ export const useAgentStore = defineStore("agent", {
     /** 新建对话 */
     newChat() {
       this.currentSessionId = null;
-      this.messages = [];
+      this.messages = [
+        {
+          role: "assistant",
+          content:
+            "🌿 你好！我是杂草识别智能助手。\n\n我可以帮你：\n- 📷 识别图片中的杂草种类和数量\n- 📊 提供杂草分布统计分析\n- 💡 给出专业的除草建议\n\n上传一张农田或草坪的照片，我来帮你分析！",
+        },
+      ];
       this.abort();
     },
 
@@ -72,6 +79,32 @@ export const useAgentStore = defineStore("agent", {
       this.messages = [];
       this.sessions = [];
       this.abort();
+    },
+
+    /** 加载历史会话 */
+    loadSession(sessionId, messages) {
+      this.currentSessionId = sessionId;
+      this.messages = messages;
+    },
+
+    /** 从后端获取会话列表 */
+    async fetchSessions() {
+      try {
+        const res = await request.get("/chat/sessions?page=1&page_size=30");
+        if (res && res.data) {
+          this.sessions = res.data;
+        }
+      } catch {
+        // 静默处理
+      }
+    },
+
+    /** 会话列表刷新事件计数器（触发侧栏重新获取） */
+    _sessionVersion: 0,
+
+    /** 通知侧栏刷新会话列表 */
+    notifySessionsChanged() {
+      this._sessionVersion = (this._sessionVersion || 0) + 1;
     },
   },
 });

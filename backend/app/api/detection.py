@@ -624,4 +624,46 @@ async def camera_detection_ws(websocket: WebSocket):
             frame_count,
             connection_id,
         )
-        
+
+
+@router.get("/video-proxy/{sub_path:path}", summary="视频代理（解决 MinIO CORS）")
+async def video_proxy(sub_path: str):
+    """
+    视频代理端点：将 MinIO 视频 URL 转换为后端代理路径
+    解决前端 <video> 标签跨域访问 MinIO 的问题
+    """
+    from urllib.parse import unquote
+    from fastapi.responses import StreamingResponse
+    from app.storage.minio_client import MinIOClient
+
+    object_name = unquote(sub_path)
+    try:
+        mc = MinIOClient()
+        data = mc.client.get_object(mc.bucket_name, object_name)
+
+        def iter_chunks():
+            try:
+                while True:
+                    chunk = data.read(65536)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                data.close()
+
+        content_type = "video/mp4"
+        if object_name.endswith(".avi"):
+            content_type = "video/x-msvideo"
+        elif object_name.endswith(".webm"):
+            content_type = "video/webm"
+
+        return StreamingResponse(
+            iter_chunks(),
+            media_type=content_type,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"视频不存在: {str(e)}"},
+        )

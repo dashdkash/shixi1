@@ -9,8 +9,10 @@ from app.api.chat import router as chat_router  # Day 8 新增
 from app.api.detection import router as detection_router  # Day 8 新增
 from app.api.health import router as health_router
 from app.api.training import router as training_router  # 新增：训练路由
+from app.api.dashboard import router as dashboard_router  # 数据看板路由
 from app.api.history import router as history_router
 from app.api.knowledge import router as knowledge_router
+from fastapi.staticfiles import StaticFiles
 from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.middleware.request_logger import RequestLogMiddleware
@@ -74,6 +76,16 @@ app.include_router(detection_router)  # Day 8 新增
 
 app.include_router(knowledge_router)
 app.include_router(history_router)
+app.include_router(dashboard_router)  # 数据看板路由
+
+# ===== 静态文件挂载 =====
+import os
+uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+detections_dir = os.path.join(os.path.dirname(__file__), "detections")
+os.makedirs(uploads_dir, exist_ok=True)
+os.makedirs(detections_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+app.mount("/detections", StaticFiles(directory=detections_dir), name="detections")
 
 # ===== 根路径 =====
 @app.get("/")

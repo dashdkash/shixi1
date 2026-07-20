@@ -67,6 +67,15 @@ export default defineConfig(async ({ mode }) => {
       "/api": {
         target: `http://localhost:${backendPort}`,
         changeOrigin: true,
+        ws: true,
+      },
+      "/uploads": {
+        target: `http://localhost:${backendPort}`,
+        changeOrigin: true,
+      },
+      "/detections": {
+        target: `http://localhost:${backendPort}`,
+        changeOrigin: true,
       },
     },
   },

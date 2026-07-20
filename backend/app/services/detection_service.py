@@ -132,10 +132,25 @@ class DetectionService:
         """
         加载 YOLO 模型
 
-        优先使用场景关联的默认模型，否则使用全局默认模型
+        优先级：
+          1. settings.DEFAULT_MODEL_PATH（配置文件显式指定的模型，最高优先级）
+          2. 场景关联的默认模型
+          3. 全局默认模型（DB 中 is_default=True）
+          4. 最新训练产出的 best.pt
+          5. 回退到预训练 yolo11n.pt
         """
-        model_path = None
+        # 优先级 1：配置文件显式指定的模型
+        configured_path = getattr(settings, "DEFAULT_MODEL_PATH", "")
+        if configured_path:
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            if not os.path.isabs(configured_path):
+                configured_path = os.path.join(backend_dir, configured_path)
+            if os.path.exists(configured_path):
+                logger.info("加载配置默认模型: %s", configured_path)
+                return YOLO(configured_path)
 
+        # 优先级 2：场景关联的默认模型
+        model_path = None
         if scene_id:
             db = SessionLocal()
             try:
@@ -283,8 +298,15 @@ class DetectionService:
 
         db = SessionLocal()
         try:
-            # 当 scene_id 为 None 时，自动查询第一个可用场景
+            # 当 scene_id 为 None 时，使用全局配置的默认场景（按名称查找）
             if not scene_id:
+                scene_name = getattr(settings, 'DEFAULT_SCENE_NAME', 'weeds')
+                scene = db.query(DetectionScene).filter(DetectionScene.name == scene_name).first()
+                if scene:
+                    scene_id = scene.id
+            else:
+                scene = db.query(DetectionScene).filter(DetectionScene.id == scene_id).first()
+            if not scene:
                 default_scene = db.query(DetectionScene).first()
                 if default_scene:
                     scene_id = default_scene.id
@@ -408,10 +430,15 @@ class DetectionService:
 
         db = SessionLocal()
         try:
-            model = self._get_model(scene_id)
-
-            # 当 scene_id 为 None 时，自动查询第一个可用场景
+            # 当 scene_id 为 None 时，使用全局配置的默认场景（按名称查找）
             if not scene_id:
+                scene_name = getattr(settings, 'DEFAULT_SCENE_NAME', 'weeds')
+                scene = db.query(DetectionScene).filter(DetectionScene.name == scene_name).first()
+                if scene:
+                    scene_id = scene.id
+            else:
+                scene = db.query(DetectionScene).filter(DetectionScene.id == scene_id).first()
+            if not scene:
                 default_scene = db.query(DetectionScene).first()
                 if default_scene:
                     scene_id = default_scene.id
@@ -649,6 +676,24 @@ class DetectionService:
 
         db = SessionLocal()
         try:
+            # 当 scene_id 为 None 时，使用全局配置的默认场景（按名称查找）
+            if not scene_id:
+                scene_name = getattr(settings, 'DEFAULT_SCENE_NAME', 'weeds')
+                scene = db.query(DetectionScene).filter(DetectionScene.name == scene_name).first()
+                if scene:
+                    scene_id = scene.id
+            else:
+                scene = db.query(DetectionScene).filter(DetectionScene.id == scene_id).first()
+            if not scene:
+                default_scene = db.query(DetectionScene).first()
+                if default_scene:
+                    scene_id = default_scene.id
+                    scene = default_scene
+                else:
+                    return {"error": "数据库中没有可用的检测场景"}
+                    
+            class_names_cn = scene.class_names_cn if scene and scene.class_names_cn else {}
+
             # ── 加载模型 ──
             model = self._get_model(scene_id)
 
@@ -745,14 +790,14 @@ class DetectionService:
                     )
                 return annotated
 
-            # 创建临时文件用于输出标注视频
+            # 创建临时文件用于输出标注视频（先用 AVI/MJPG，兼容性最佳）
             output_tmp = tempfile.NamedTemporaryFile(
-                suffix=".mp4", delete=False
+                suffix=".avi", delete=False
             )
             output_video_path = output_tmp.name
             output_tmp.close()
 
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            fourcc = cv2.VideoWriter_fourcc(*"MJPG")
             video_writer = cv2.VideoWriter(
                 output_video_path, fourcc, fps, (width, height)
             )
@@ -882,52 +927,65 @@ class DetectionService:
             cap.release()
             video_writer.release()
 
-            # ── 使用 ffmpeg 转码为浏览器可播放的 H.264 ──
-            h264_video_path = output_video_path.replace(".mp4", "_h264.mp4")
-            try:
-                subprocess.run(
-                    [
-                        shutil.which("ffmpeg") or "ffmpeg",
-                        "-y",
-                        "-i", output_video_path,
-                        "-c:v", "libx264",
-                        "-preset", "fast",
-                        "-crf", "23",
-                        "-pix_fmt", "yuv420p",
-                        "-movflags", "+faststart",
-                        h264_video_path,
-                    ],
-                    capture_output=True,
-                    timeout=300,
-                    check=True,
-                )
-                # 替换原文件
-                os.replace(h264_video_path, output_video_path)
-                logger.info("视频已转码为 H.264 格式")
-            except Exception as e:
-                logger.warning("ffmpeg 转码失败，使用原始 mp4v 视频: %s", str(e))
+            # ── 使用 ffmpeg 转码为浏览器可播放的 H.264 MP4 ──
+            ffmpeg_ok = False
+            mp4_path = output_video_path.replace(".avi", ".mp4")
+            ffmpeg_path = shutil.which("ffmpeg")
+            if ffmpeg_path:
                 try:
-                    os.unlink(h264_video_path)
-                except Exception:
-                    pass
+                    subprocess.run(
+                        [
+                            ffmpeg_path,
+                            "-y",
+                            "-i", output_video_path,
+                            "-c:v", "libx264",
+                            "-preset", "fast",
+                            "-crf", "23",
+                            "-pix_fmt", "yuv420p",
+                            "-movflags", "+faststart",
+                            mp4_path,
+                        ],
+                        capture_output=True,
+                        timeout=300,
+                        check=True,
+                    )
+                    ffmpeg_ok = True
+                    logger.info("视频已转码为 H.264 MP4 格式")
+                except Exception as e:
+                    logger.warning("ffmpeg 转码失败: %s", str(e))
+                    try:
+                        os.unlink(mp4_path)
+                    except Exception:
+                        pass
+            else:
+                logger.warning("未找到 ffmpeg，将使用原始 AVI 视频")
+
+            if ffmpeg_ok:
+                final_video_path = mp4_path
+                video_ext = "mp4"
+            else:
+                final_video_path = output_video_path
+                video_ext = "avi"
 
             # ── 上传标注视频到 MinIO ──
             annotated_video_url = None
             try:
                 minio_client = MinIOClient()
-                object_name = f"detections/{task_id}/annotated_video.mp4"
+                object_name = f"detections/{task_id}/annotated_video.{video_ext}"
                 annotated_video_url = minio_client.upload_file(
-                    object_name, output_video_path
+                    object_name, final_video_path
                 )
                 logger.info("标注视频已上传: %s", object_name)
             except Exception as e:
                 logger.warning("标注视频上传 MinIO 失败: %s", str(e))
 
             # 清理临时视频文件
-            try:
-                os.unlink(output_video_path)
-            except Exception:
-                pass
+            for p in [output_video_path, mp4_path]:
+                try:
+                    if os.path.exists(p):
+                        os.unlink(p)
+                except Exception:
+                    pass
 
             # ── 更新任务状态为完成 ──
             if task:
