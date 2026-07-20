@@ -30,6 +30,7 @@
     "training": "Training",
     "history": "History",
     "dashboard": "Dashboard",
+    "knowledge": "Knowledge Base",
     "newChat": "New Chat",
     "historyTitle": "Chat History",
     "noHistory": "No chat history",
@@ -67,6 +68,10 @@
     "profile": {
       "title": "Profile",
       "description": "Manage your account information"
+    },
+    "knowledge": {
+      "title": "Knowledge Base",
+      "description": "Manage knowledge documents with upload, search and RAG Q&A"
     }
   },
   "lang": {
@@ -220,6 +225,33 @@
     "backToLogin": "Back to Login",
     "forgotPassword": "Forgot Password",
     "goToLogin": "Login Now"
+  },
+  "knowledge": {
+    "upload": "Upload",
+    "buildPreset": "Build Preset Index",
+    "documentList": "Documents",
+    "fileName": "File Name",
+    "source": "Source",
+    "chunks": "Chunks",
+    "createdAt": "Created At",
+    "actions": "Actions",
+    "delete": "Delete",
+    "empty": "No Documents",
+    "emptyDesc": "Upload knowledge documents to build RAG knowledge base",
+    "uploadFirst": "Upload Now",
+    "searchTest": "Knowledge Search Test",
+    "searchPlaceholder": "Enter keywords to search knowledge base...",
+    "score": "Score",
+    "noResults": "No results found",
+    "uploadTitle": "Upload Knowledge Document",
+    "uploadHint": "Click or drag files here",
+    "uploadTip": "Supports .md, .txt, .pdf, .docx formats",
+    "uploadBtn": "Upload",
+    "stats": {
+      "documents": "Total Documents",
+      "chunks": "Knowledge Chunks",
+      "sources": "Data Sources"
+    }
   },
   "profile": {
     "userInfo": "User Info",

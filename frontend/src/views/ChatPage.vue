@@ -1,5 +1,31 @@
 <template>
-  <div class="chat-page">
+  <div class="chat-page-layout">
+    <!-- ── 会话侧边栏 ── -->
+    <div class="session-sidebar">
+      <el-button class="new-chat-btn" @click="handleNewChat">
+        <el-icon><Plus /></el-icon>
+        <span>新对话</span>
+      </el-button>
+      <div class="session-list">
+        <div
+          v-for="s in sessions"
+          :key="s.id"
+          :class="['session-item', { active: s.id === agentStore.currentSessionId }]"
+          @click="handleSelectSession(s)"
+        >
+          <span class="session-title">{{ s.title }}</span>
+          <el-icon class="session-delete" @click.stop="handleDeleteSession(s)">
+            <Delete />
+          </el-icon>
+        </div>
+        <div v-if="sessions.length === 0" class="session-empty">
+          暂无历史对话
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 聊天主区域 ── -->
+    <div class="chat-page">
     <!-- ── 消息列表区域 ── -->
     <div class="message-list" ref="messageListRef">
       <div
@@ -165,6 +191,7 @@
         <span style="font-size:12px">II</span>
       </el-button>
     </div>
+    </div>
   </div>
 </template>
 
@@ -188,8 +215,8 @@ import { renderMarkdown } from "@/utils/markdown";
 import request from "@/utils/request";
 import { streamChat, TOOL_NAME_MAP } from "@/utils/stream";
 import { ElMessage } from "element-plus";
-import { Top } from "@element-plus/icons-vue";
-import { computed, nextTick, onActivated, onMounted, ref } from "vue";
+import { Top, Delete, Plus } from "@element-plus/icons-vue";
+import { computed, nextTick, onActivated, onMounted, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 
 /** 工具名称中文映射 */
@@ -671,7 +698,45 @@ async function pollVideoTask(taskId) {
   return null;
 }
 
+// ── 会话侧边栏 ──
+const sessions = ref([]);
+
+async function fetchSessions() {
+  try {
+    const res = await request.get("/chat/sessions?page=1&page_size=30");
+    if (res && res.data) {
+      sessions.value = res.data;
+    }
+  } catch {
+    // 静默处理
+  }
+}
+
+function handleNewChat() {
+  agentStore.newChat();
+}
+
+async function handleSelectSession(session) {
+  await agentStore.switchSession(session.id);
+}
+
+async function handleDeleteSession(session) {
+  try {
+    await agentStore.deleteSession(session.id);
+    fetchSessions();
+  } catch {
+    // 静默处理
+  }
+}
+
+// 当 ChatPage 创建新会话后，刷新列表
+watch(
+  () => agentStore._sessionVersion,
+  () => { fetchSessions(); }
+);
+
 onMounted(async () => {
+  fetchSessions();
   // 检查是否从数据看板跳转生成报告
   if (route.query.report === "1") {
     const days = Number(route.query.days) || 30;
@@ -708,10 +773,107 @@ onActivated(() => {
 </script>
 
 <style lang="scss" scoped>
+.chat-page-layout {
+  display: flex;
+  height: 100%;
+}
+
+/* ── 会话侧边栏 ── */
+.session-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid #e4e7ed;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.new-chat-btn {
+  width: 100%;
+  margin-bottom: 12px;
+  border: 1px dashed #333;
+  border-radius: 8px;
+
+  &:hover,
+  &:focus-visible {
+    color: #1e1e1e;
+    border-color: #1e1e1e;
+  }
+}
+
+.session-list {
+  flex: 1;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+  }
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: #666;
+  transition: all 0.15s;
+
+  &:hover {
+    background: #f5f5f5;
+    color: #333;
+
+    .session-delete {
+      opacity: 1;
+    }
+  }
+
+  &.active {
+    background: #f0f0f0;
+    color: #1e1e1e;
+    font-weight: 500;
+  }
+}
+
+.session-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.session-delete {
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: #f56c6c;
+  flex-shrink: 0;
+
+  &:hover {
+    color: #ff4444;
+  }
+}
+
+.session-empty {
+  text-align: center;
+  color: #999;
+  font-size: 12px;
+  padding: 20px 0;
+}
+
 .chat-page {
+  flex: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
   background: transparent;
 }
 

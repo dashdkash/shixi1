@@ -30,6 +30,7 @@
     "training": "模型训练",
     "history": "历史记录",
     "dashboard": "数据看板",
+    "knowledge": "知识库",
     "newChat": "新建会话",
     "historyTitle": "历史对话",
     "noHistory": "暂无历史对话",
@@ -67,6 +68,10 @@
     "profile": {
       "title": "个人中心",
       "description": "管理您的账户信息"
+    },
+    "knowledge": {
+      "title": "知识库管理",
+      "description": "管理知识文档，支持上传、检索与 RAG 智能问答"
     }
   },
   "lang": {
@@ -220,6 +225,33 @@
     "backToLogin": "返回登录",
     "forgotPassword": "忘记密码",
     "goToLogin": "立即登录"
+  },
+  "knowledge": {
+    "upload": "上传文档",
+    "buildPreset": "构建预置索引",
+    "documentList": "文档列表",
+    "fileName": "文件名",
+    "source": "来源",
+    "chunks": "分块数",
+    "createdAt": "创建时间",
+    "actions": "操作",
+    "delete": "删除",
+    "empty": "暂无文档",
+    "emptyDesc": "上传知识文档以构建 RAG 知识库",
+    "uploadFirst": "立即上传",
+    "searchTest": "知识检索测试",
+    "searchPlaceholder": "输入关键词检索知识库...",
+    "score": "相关度",
+    "noResults": "未找到相关结果",
+    "uploadTitle": "上传知识文档",
+    "uploadHint": "点击或拖拽文件到此区域",
+    "uploadTip": "支持 .md, .txt, .pdf, .docx 格式",
+    "uploadBtn": "开始上传",
+    "stats": {
+      "documents": "文档总数",
+      "chunks": "知识分块",
+      "sources": "数据来源"
+    }
   },
   "profile": {
     "userInfo": "个人信息",
