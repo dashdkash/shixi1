@@ -12,6 +12,21 @@ docker-compose up -d
 cd backend
 alembic upgrade head
 ```
+抱歉数据库版本删掉了...
+1. 确保 pgvector 扩展已安装（在新数据库中）
+docker exec -it rsod-postgres psql -U lujie -d lujie -c "CREATE EXTENSION IF NOT EXISTS vector;"
+2. 清除旧的 alembic 版本记录，让 alembic 认为数据库是全新的
+docker exec -it rsod-postgres psql -U lujie -d lujie -c "DROP TABLE IF EXISTS alembic_version;"
+3. 清理 __pycache__ 防止缓存干扰
+Remove-Item -Recurse -Force alembic\versions\__pycache__ -ErrorAction SilentlyContinue
+4. 执行迁移
+python -m alembic upgrade head
+5. 初始化数据
+python init_roles.py
+python tools/init_scenes.py
+
+不知道这个方法行不行
+
 
 ### 3. 初始化角色（必须）
 ```bash
