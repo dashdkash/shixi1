@@ -74,7 +74,7 @@ services:
 
   # ── Redis ───────────────────────────────────────────
   redis:
-    image: redis:7-alpine
+    image: redis:alpine
     container_name: rsod-redis
     restart: unless-stopped
     ports:
@@ -97,7 +97,7 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
-      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:9000}
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-47.116.192.53:9000}
     ports:
       - "9000:9000"
       - "9001:9001"
