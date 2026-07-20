@@ -21,9 +21,6 @@ docker exec -it rsod-postgres psql -U lujie -d lujie -c "DROP TABLE IF EXISTS al
 Remove-Item -Recurse -Force alembic\versions\__pycache__ -ErrorAction SilentlyContinue
 4. 执行迁移
 python -m alembic upgrade head
-5. 初始化数据
-python init_roles.py
-python tools/init_scenes.py
 
 不知道这个方法行不行
 
