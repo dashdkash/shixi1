@@ -1,0 +1,117 @@
+# ═══════════════════════════════════════════════════════
+# RSOD Web Platform — 生产环境 Docker Compose 配置
+# 使用 GitHub Container Registry (ghcr.io) 镜像
+# ═══════════════════════════════════════════════════════
+
+services:
+  # ── 前端 Nginx ──────────────────────────────────────
+  frontend:
+    image: ghcr.io/dashdkash/rsod-frontend:latest
+    container_name: rsod-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - rsod-network
+
+  # ── 后端 FastAPI ────────────────────────────────────
+  backend:
+    image: ghcr.io/dashdkash/rsod-backend:latest
+    container_name: rsod-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # 覆盖 .env 中的数据库地址（容器内使用服务名）
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: lujie
+      DB_USER: lujie
+      DB_PASSWORD: lujie
+      DATABASE_URL: postgresql://lujie:lujie@postgres:5432/lujie
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./detections:/app/detections
+      - ./logs:/app/logs
+    networks:
+      - rsod-network
+
+  # ── PostgreSQL + Pgvector ──────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: rsod-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lujie
+      POSTGRES_USER: lujie
+      POSTGRES_PASSWORD: lujie
+    ports:
+      - "5432:5432"
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lujie -d lujie"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rsod-network
+
+  # ── Redis ───────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: rsod-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - /data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rsod-network
+
+  # ── MinIO 对象存储 ──────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: rsod-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:9000}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - /data/minio:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - rsod-network
+
+networks:
+  rsod-network:
+    driver: bridge
