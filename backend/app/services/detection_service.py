@@ -457,6 +457,9 @@ class DetectionService:
             db.add(task)
             db.flush()
 
+            # ── 加载模型 ──
+            model = self._get_model(scene_id)
+
             all_detections = []
             annotated_images = []  # 每张图片的标注图 base64
             total_objects = 0
