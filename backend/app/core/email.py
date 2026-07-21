@@ -12,7 +12,7 @@ from app.config.settings import settings
 
 def send_password_reset_email(to_email: str, reset_token: str) -> bool:
     """
-    发送密码重置邮件
+    发送密码重置邮件（仅包含验证码）
 
     Args:
         to_email: 收件人邮箱
@@ -22,40 +22,25 @@ def send_password_reset_email(to_email: str, reset_token: str) -> bool:
         bool: 是否发送成功
     """
     try:
-        # 构建重置链接（携带 email 和 code 参数）
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?email={to_email}&code={reset_token}"
-
         # 创建邮件对象
         msg = MIMEMultipart()
         msg['From'] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
         msg['To'] = to_email
         msg['Subject'] = "密码重置 - RSOD Agent Platform"
 
-        # 邮件正文（HTML 格式）
+        # 邮件正文（仅显示验证码）
         html_body = f"""
         <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
             <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #409eff;">密码重置</h2>
-                <p>您好，</p>
-                <p>我们收到了您的密码重置请求。请点击下方按钮重置密码：</p>
+                <h2 style="color: #409eff;">密码重置验证码</h2>
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{reset_url}" 
-                       style="background-color: #409eff; color: white; padding: 12px 30px; 
-                              text-decoration: none; border-radius: 5px; display: inline-block;">
-                        重置密码
-                    </a>
+                    <p style="font-size: 36px; font-weight: bold; color: #409eff; letter-spacing: 8px;">
+                        {reset_token}
+                    </p>
                 </div>
-                <p>或者，您可以复制以下链接到浏览器中打开：</p>
-                <p style="background-color: #f5f5f5; padding: 10px; border-radius: 3px; word-break: break-all;">
-                    {reset_url}
-                </p>
-                <p style="color: #999; font-size: 14px;">
-                    此链接将在 1 小时后失效。如果您没有请求重置密码，请忽略此邮件。
-                </p>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-                <p style="color: #999; font-size: 12px;">
-                    此邮件由系统自动发送，请勿回复。
+                <p style="color: #999; font-size: 14px; text-align: center;">
+                    此验证码将在 1 小时后失效。
                 </p>
             </div>
         </body>
@@ -84,7 +69,7 @@ def send_password_reset_email(to_email: str, reset_token: str) -> bool:
 
 def send_verification_email(to_email: str, verification_token: str) -> bool:
     """
-    发送邮箱验证邮件
+    发送邮箱验证邮件（带验证链接）
 
     Args:
         to_email: 收件人邮箱
