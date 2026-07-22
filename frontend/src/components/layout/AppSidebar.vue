@@ -57,7 +57,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useUserStore } from "@/stores/user";
 import { useAgentStore } from "@/stores/agent";
@@ -89,14 +89,20 @@ const currentLang = ref(locale.value);
 const isCollapsed = ref(false);
 
 /** 侧边栏菜单配置 */
-const menuItems = [
+const allMenuItems = [
   { path: "/chat", i18nKey: "sidebar.chat", icon: ChatDotRound },
   { path: "/detection", i18nKey: "sidebar.detection", icon: Camera },
-  { path: "/training", i18nKey: "sidebar.training", icon: Cpu },
-  { path: "/dashboard", i18nKey: "sidebar.dashboard", icon: DataAnalysis },
-  { path: "/knowledge", i18nKey: "sidebar.knowledge", icon: Reading },
+  { path: "/training", i18nKey: "sidebar.training", icon: Cpu, adminOnly: true },
+  { path: "/dashboard", i18nKey: "sidebar.dashboard", icon: DataAnalysis, adminOnly: true },
+  { path: "/knowledge", i18nKey: "sidebar.knowledge", icon: Reading, adminOnly: true },
   { path: "/history", i18nKey: "sidebar.history", icon: Clock },
 ];
+
+/** 根据角色过滤菜单项 */
+const menuItems = computed(() => {
+  if (userStore.isSuperuser) return allMenuItems;
+  return allMenuItems.filter(item => !item.adminOnly);
+});
 
 function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value;
