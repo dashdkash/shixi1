@@ -2,11 +2,11 @@
   <div class="dashboard-page">
     <!-- ── 页面标题 + 时间范围选择 ── -->
     <div class="page-header">
-      <h2>数据看板</h2>
+      <h2>{{ $t('dashboard.title') }}</h2>
       <el-radio-group v-model="periodDays" size="default" @change="loadAllData">
-        <el-radio-button :value="7">近 7 天</el-radio-button>
-        <el-radio-button :value="30">近 30 天</el-radio-button>
-        <el-radio-button :value="90">近 90 天</el-radio-button>
+        <el-radio-button :value="7">{{ $t('dashboard.period7') }}</el-radio-button>
+        <el-radio-button :value="30">{{ $t('dashboard.period30') }}</el-radio-button>
+        <el-radio-button :value="90">{{ $t('dashboard.period90') }}</el-radio-button>
       </el-radio-group>
     </div>
 
@@ -21,7 +21,7 @@
             <div class="stat-value">
               {{ formatNumber(stats.total_objects) }}
             </div>
-            <div class="stat-label">检测目标</div>
+            <div class="stat-label">{{ $t('dashboard.totalObjects') }}</div>
             <div class="stat-growth" :class="growthClass('objects')">
               {{ formatGrowth(stats.growth?.objects) }}
             </div>
@@ -36,7 +36,7 @@
       <el-col :span="24">
         <el-card shadow="hover">
           <template #header>
-            <span>每日检测趋势</span>
+            <span>{{ $t('dashboard.dailyTrend') }}</span>
           </template>
           <div ref="trendChartRef" class="chart-container"></div>
         </el-card>
@@ -48,7 +48,7 @@
       <el-col :span="24">
         <el-card shadow="hover">
           <template #header>
-            <span>类别分布</span>
+            <span>{{ $t('dashboard.classDist') }}</span>
           </template>
           <div ref="classChartRef" class="chart-container"></div>
         </el-card>
@@ -58,7 +58,7 @@
     <!-- ── 生成报告按钮 ── -->
     <div class="report-action">
       <el-button type="primary" size="large" @click="generateReport">
-        📝 生成检测报告与防治建议
+        {{ $t('dashboard.generateReport') }}
       </el-button>
     </div>
   </div>
@@ -82,6 +82,9 @@ import { Aim } from "@element-plus/icons-vue";
 import * as echarts from "echarts";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // ── 响应式状态 ──
 const periodDays = ref(30);
@@ -112,7 +115,7 @@ function formatGrowth(value) {
   if (value === undefined || value === null) return "";
   if (value > 0) return `+${value}%`;
   if (value < 0) return `${value}%`;
-  return "持平";
+  return t('dashboard.growthFlat');
 }
 
 function growthClass(key, inverse = false) {
@@ -157,7 +160,7 @@ function renderTrendChart(trend) {
       axisPointer: { type: "cross" },
     },
     legend: {
-      data: ["检测任务", "检测目标"],
+      data: [t('dashboard.detectionTasks'), t('dashboard.detectionObjects')],
       bottom: 0,
     },
     grid: {
@@ -174,18 +177,18 @@ function renderTrendChart(trend) {
     yAxis: [
       {
         type: "value",
-        name: "任务数",
+        name: t('dashboard.taskCount'),
         axisLabel: { fontSize: 11 },
       },
       {
         type: "value",
-        name: "目标数",
+        name: t('dashboard.objectCount'),
         axisLabel: { fontSize: 11 },
       },
     ],
     series: [
       {
-        name: "检测任务",
+        name: t('dashboard.detectionTasks'),
         type: "line",
         data: taskCounts,
         smooth: true,
@@ -199,7 +202,7 @@ function renderTrendChart(trend) {
         itemStyle: { color: "#1e1e1e" },
       },
       {
-        name: "检测目标",
+        name: t('dashboard.detectionObjects'),
         type: "line",
         yAxisIndex: 1,
         data: objectCounts,

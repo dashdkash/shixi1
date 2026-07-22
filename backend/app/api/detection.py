@@ -452,6 +452,7 @@ async def camera_detection_ws(websocket: WebSocket):
     iou = 0.45
     scene_id = None
     model = None
+    class_names_cn = {}  # 类别中文名映射
 
     # ── 帧处理状态 ──
     last_frame_time = 0
@@ -477,6 +478,22 @@ async def camera_detection_ws(websocket: WebSocket):
                 try:
                     from app.services.detection_service import get_model
                     model = get_model(scene_id)
+
+                    # 加载场景类别中文名映射
+                    try:
+                        from app.database.session import SessionLocal
+                        from app.entity.db_models import DetectionScene
+                        _db = SessionLocal()
+                        _scene = None
+                        if scene_id:
+                            _scene = _db.query(DetectionScene).filter(DetectionScene.id == scene_id).first()
+                        if not _scene:
+                            _scene = _db.query(DetectionScene).first()
+                        if _scene and _scene.class_names_cn:
+                            class_names_cn = _scene.class_names_cn
+                        _db.close()
+                    except Exception:
+                        pass
 
                     dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
                     model.predict(
@@ -562,6 +579,7 @@ async def camera_detection_ws(websocket: WebSocket):
                             detections.append(
                                 {
                                     "class_name": cls_name,
+                                    "class_name_cn": class_names_cn.get(cls_name, cls_name),
                                     "class_id": cls_id,
                                     "confidence": round(confidence, 4),
                                     "bbox": [

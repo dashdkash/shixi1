@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from "vue";
+import { computed, ref, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useUserStore } from "@/stores/user";
 import { useAgentStore } from "@/stores/agent";
@@ -119,13 +119,18 @@ const { locale, t } = useI18n({ useScope: "global" });
 
 const currentLang = ref(locale.value);
 
-/** 侧边栏菜单配置 */
-const menuItems = [
+/** 侧边栏菜单配置（训练仅管理员可见） */
+const allMenuItems = [
   { path: "/detection", i18nKey: "sidebar.detection", icon: Camera },
-  { path: "/training", i18nKey: "sidebar.training", icon: Cpu },
+  { path: "/training", i18nKey: "sidebar.training", icon: Cpu, adminOnly: true },
   { path: "/dashboard", i18nKey: "sidebar.dashboard", icon: DataAnalysis },
   { path: "/history", i18nKey: "sidebar.history", icon: Clock },
 ];
+
+const menuItems = computed(() => {
+  if (userStore.isSuperuser) return allMenuItems;
+  return allMenuItems.filter((item) => !item.adminOnly);
+});
 
 /** 判断当前路由是否匹配 */
 function isActive(path) {
@@ -176,6 +181,14 @@ function handleNewChat() {
 
 /** 选择历史会话 */
 async function handleSelectSession(session) {
+  // 如果点击的是当前正在查看的会话，不重新加载消息
+  // keep-alive 已保持 ChatPage 存活，内存中的流式状态（agentFlow、toolCalls 等）
+  // 比 DB 加载的更完整，重新加载会丢失这些中间状态
+  if (session.id === agentStore.currentSessionId) {
+    router.push("/chat");
+    return;
+  }
+
   try {
     const res = await request.get(`/history/chat/${session.id}`);
     if (res && res.messages) {
@@ -184,6 +197,7 @@ async function handleSelectSession(session) {
         const msg = {
           role: m.role === "ai" ? "assistant" : m.role,
           content: m.content,
+          loading: false,  // DB 加载的消息已完成，不显示加载指示器
         };
         // 解析 tool_result 中的 task_id，重建检测结果卡片
         if (m.tool_result) {

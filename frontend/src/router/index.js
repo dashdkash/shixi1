@@ -55,7 +55,7 @@ const routes = [
         path: 'training',
         name: 'Training',
         component: () => import('@/views/TrainingPage.vue'),
-        meta: { title: '模型训练', icon: 'Cpu' },
+        meta: { title: '模型训练', icon: 'Cpu', requiresAdmin: true },
       },
       {
         path: 'history',
@@ -107,6 +107,21 @@ router.beforeEach((to, from, next) => {
   } else if ((to.path === '/login' || to.path === '/register') && token) {
     // 已登录用户访问登录/注册页，跳转到首页
     next('/')
+  } else if (to.matched.some((record) => record.meta.requiresAdmin)) {
+    // 需要管理员权限，检查是否为管理员
+    let isAdmin = false
+    try {
+      const userStr = localStorage.getItem('rsod_user')
+      if (userStr) {
+        const user = JSON.parse(userStr)
+        isAdmin = user?.is_superuser || (user?.roles && user.roles.includes('admin'))
+      }
+    } catch {}
+    if (!isAdmin) {
+      next('/')
+    } else {
+      next()
+    }
   } else {
     next()
   }
