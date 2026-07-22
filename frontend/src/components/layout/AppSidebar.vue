@@ -28,6 +28,38 @@
       </router-link>
     </nav>
 
+    <!-- 历史对话（可折叠） -->
+    <div v-show="!isCollapsed" class="sidebar-history">
+      <div class="history-header" @click="historyCollapsed = !historyCollapsed">
+        <span class="history-title">{{ $t("sidebar.historyTitle") }}</span>
+        <el-icon class="collapse-icon" :class="{ collapsed: historyCollapsed }">
+          <ArrowDown />
+        </el-icon>
+      </div>
+      <div v-show="!historyCollapsed" class="history-list" @scroll="handleScroll">
+        <div
+          v-for="session in sessions"
+          :key="session.id"
+          class="history-item"
+          :class="{ active: session.id === agentStore.currentSessionId }"
+          @click="handleSelectSession(session)"
+        >
+          <el-icon class="history-icon"><ChatDotRound /></el-icon>
+          <span class="history-text" :title="session.title">{{ session.title }}</span>
+          <el-icon
+            class="history-delete"
+            @click.stop="handleDeleteSession(session)"
+          ><Delete /></el-icon>
+        </div>
+        <div v-if="sessions.length === 0" class="history-empty">
+          {{ $t("sidebar.noHistory") }}
+        </div>
+        <div v-if="hasMore" class="history-more" @click="loadMore">
+          {{ loadingMore ? $t("sidebar.loading") : $t("sidebar.loadMore") }}
+        </div>
+      </div>
+    </div>
+
     <!-- 底部：用户信息 -->
     <div class="sidebar-footer">
       <el-dropdown trigger="click" @command="handleCommand" placement="top-start">
@@ -57,13 +89,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useUserStore } from "@/stores/user";
 import { useAgentStore } from "@/stores/agent";
 import { setLanguage } from "@/locales";
 import { useI18n } from "vue-i18n";
 import { ElMessageBox } from "element-plus";
+import request from "@/utils/request";
 import {
   ChatDotRound,
   Camera,
@@ -77,6 +110,7 @@ import {
   Expand,
   Fold,
   Reading,
+  Delete,
 } from "@element-plus/icons-vue";
 
 const route = useRoute();
@@ -137,6 +171,135 @@ function handleCommand(command) {
       break;
   }
 }
+
+// ── 历史对话 ──
+const sessions = ref([]);
+const historyCollapsed = ref(false);
+const currentPage = ref(1);
+const hasMore = ref(false);
+const loadingMore = ref(false);
+
+async function fetchSessions(page = 1) {
+  try {
+    const res = await request.get(`/chat/sessions?page=${page}&page_size=30`);
+    if (res && res.data) {
+      if (page === 1) {
+        sessions.value = res.data;
+      } else {
+        sessions.value.push(...res.data);
+      }
+      hasMore.value = sessions.value.length < res.total;
+      currentPage.value = page;
+    }
+  } catch {
+    // 静默处理
+  }
+}
+
+function loadMore() {
+  if (loadingMore.value) return;
+  loadingMore.value = true;
+  fetchSessions(currentPage.value + 1).finally(() => {
+    loadingMore.value = false;
+  });
+}
+
+function handleScroll() {
+  // 可扩展为滚动到底部自动加载
+}
+
+/** 选择历史会话 */
+async function handleSelectSession(session) {
+  if (session.id === agentStore.currentSessionId) {
+    router.push("/chat");
+    return;
+  }
+
+  try {
+    const res = await request.get(`/history/chat/${session.id}`);
+    if (res && res.messages) {
+      const messages = [];
+      for (const m of res.messages) {
+        const msg = {
+          role: m.role === "ai" ? "assistant" : m.role,
+          content: m.content,
+          loading: false,
+        };
+        if (m.tool_result) {
+          try {
+            const toolData = typeof m.tool_result === "string"
+              ? JSON.parse(m.tool_result)
+              : m.tool_result;
+            if (toolData.task_id) {
+              try {
+                const detail = await request.get(`/history/detection/${toolData.task_id}`);
+                msg.detectionResult = {
+                  task_id: detail.id,
+                  total_objects: detail.total_objects,
+                  total_inference_time: detail.total_inference_time,
+                  total_images: detail.total_images,
+                  class_counts: buildClassCounts(detail.images),
+                  annotated_image_url: detail.images?.[0]?.annotated_image_url,
+                };
+              } catch {
+                msg.detectionResult = { task_id: toolData.task_id };
+              }
+            }
+          } catch {
+            // tool_result 解析失败，忽略
+          }
+        }
+        messages.push(msg);
+      }
+      agentStore.loadSession(session.id, messages);
+      router.push("/chat");
+    }
+  } catch {
+    // 静默处理
+  }
+}
+
+/** 从检测结果图片列表构建 class_counts 对象 */
+function buildClassCounts(images) {
+  const counts = {};
+  if (!Array.isArray(images)) return counts;
+  for (const img of images) {
+    if (!Array.isArray(img.objects)) continue;
+    for (const obj of img.objects) {
+      const name = obj.class_name_cn || obj.class_name;
+      if (name) counts[name] = (counts[name] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+/** 删除会话 */
+async function handleDeleteSession(session) {
+  try {
+    await ElMessageBox.confirm("确定删除此对话？", "提示", {
+      type: "warning",
+    });
+    await request.delete(`/chat/sessions/${session.id}`);
+    sessions.value = sessions.value.filter((s) => s.id !== session.id);
+    if (agentStore.currentSessionId === session.id) {
+      agentStore.newChat();
+    }
+  } catch {
+    // 取消或失败
+  }
+}
+
+onMounted(() => {
+  fetchSessions();
+});
+
+// 当 ChatPage 创建新会话后，刷新列表
+watch(
+  () => agentStore._sessionVersion,
+  () => {
+    fetchSessions();
+  }
+);
 </script>
 
 <style lang="scss" scoped>
@@ -261,6 +424,127 @@ function handleCommand(command) {
     background: rgba(0, 0, 0, 0.1);
     color: #1e1e1e;
     font-weight: 500;
+  }
+}
+
+/* ─ 历史对话 ── */
+.sidebar-history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  margin-top: 8px;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+  cursor: pointer;
+  user-select: none;
+
+  .history-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .collapse-icon {
+    font-size: 12px;
+    color: #888;
+    transition: transform 0.2s;
+
+    &.collapsed {
+      transform: rotate(-90deg);
+    }
+  }
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+  }
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #666;
+  transition: all 0.15s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #333;
+
+    .history-delete {
+      opacity: 1;
+    }
+  }
+
+  &.active {
+    background: rgba(0, 0, 0, 0.08);
+    color: #222;
+    font-weight: 500;
+  }
+}
+
+.history-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.history-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-delete {
+  font-size: 14px;
+  opacity: 0;
+  color: #f56c6c;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+
+  &:hover {
+    color: #ff4444;
+  }
+}
+
+.history-empty {
+  text-align: center;
+  color: #999;
+  font-size: 12px;
+  padding: 20px 0;
+}
+
+.history-more {
+  text-align: center;
+  color: #666;
+  font-size: 12px;
+  padding: 8px;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
   }
 }
 
