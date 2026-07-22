@@ -450,7 +450,9 @@ async def chat_stream(
                         f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'summary': result_str[:100], 'result': result_str}, ensure_ascii=False)}\n\n"
                     )
                     # 保存检测工具的结果（包含 task_id）
-                    if tool_name in ("detect_single", "detect_batch", "detect_video"):
+                    if tool_name in ("detect_single", "detect_batch", "detect_video",
+                                     "detect_single_image", "detect_batch_images",
+                                     "detect_zip_images_file", "detect_video_file"):
                         try:
                             result_data = json.loads(result_str) if isinstance(result_str, str) else result_str
                             if isinstance(result_data, dict) and "task_id" in result_data:
