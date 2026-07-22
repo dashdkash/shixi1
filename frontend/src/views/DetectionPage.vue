@@ -469,12 +469,10 @@ const proxyVideoUrl = (minioUrl) => {
   if (!minioUrl) return "";
   try {
     const url = new URL(minioUrl);
-    // 路径格式: /rsod-images/detections/14/video.mp4
-    const pathParts = url.pathname.split("/");
-    // 去掉 bucket 名称 (第一段)
-    if (pathParts.length > 2) {
-      const subPath = pathParts.slice(2).join("/");
-      return `/api/detection/video-proxy/${encodeURIComponent(subPath)}`;
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    if (pathParts.length > 1) {
+      const subPath = pathParts.slice(1).join("/");
+      return `/api/detection/video-proxy/${subPath}`;
     }
     return minioUrl;
   } catch {

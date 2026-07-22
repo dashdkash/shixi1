@@ -19,6 +19,12 @@
         >
           您的浏览器不支持视频播放
         </video>
+        <div class="video-download-link">
+          <a :href="annotatedVideoSrc" target="_blank">
+            <el-icon><Download /></el-icon>
+            下载标注视频
+          </a>
+        </div>
       </div>
 
       <!-- 单图模式：标注图 -->
@@ -101,7 +107,7 @@
  *   - 目标总数和推理耗时
  *   - 各类别数量统计表格
  */
-import { DataAnalysis } from "@element-plus/icons-vue";
+import { DataAnalysis, Download } from "@element-plus/icons-vue";
 import { computed, getCurrentInstance, ref } from "vue";
 
 const { proxy } = getCurrentInstance();
@@ -122,9 +128,29 @@ const isBatch = computed(() => {
   return Array.isArray(props.result.annotated_images) && props.result.annotated_images.length > 0;
 });
 
-/** 视频模式：标注视频 URL */
+/**
+ * 将 MinIO 视频 URL 转换为后端代理路径（解决跨域问题）
+ */
+function proxyVideoUrl(minioUrl) {
+  if (!minioUrl) return null;
+  try {
+    const url = new URL(minioUrl);
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    if (pathParts.length > 1) {
+      const subPath = pathParts.slice(1).join("/");
+      return `/api/detection/video-proxy/${subPath}`;
+    }
+    return minioUrl;
+  } catch {
+    return minioUrl;
+  }
+}
+
+/** 视频模式：标注视频 URL（通过后端代理解决 MinIO 跨域） */
 const annotatedVideoSrc = computed(() => {
-  return props.result.annotated_video_url || null;
+  const url = proxyVideoUrl(props.result.annotated_video_url);
+  console.log('[DetectionResultCard] annotatedVideoSrc:', url, '原始URL:', props.result.annotated_video_url);
+  return url;
 });
 
 /** 单图模式：标注图 URL（优先使用后端代理，其次 MinIO URL，最后 base64） */
@@ -197,13 +223,33 @@ const classCountsArray = computed(() => {
 .result-video {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 
   .video-player {
     width: 100%;
+    min-height: 200px;
     max-height: 300px;
     object-fit: contain;
     border-radius: 4px;
     background: #000;
+  }
+
+  .video-download-link {
+    font-size: 12px;
+
+    a {
+      color: #409eff;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
   }
 }
 
