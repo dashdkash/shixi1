@@ -311,6 +311,11 @@ class DetectionService:
                 if default_scene:
                     scene_id = default_scene.id
 
+            # ── 获取类别中文名映射 ──
+            class_names_cn = {}
+            if scene and scene.class_names_cn:
+                class_names_cn = scene.class_names_cn
+
             # ── 加载模型 ──
             model = self._get_model(scene_id)
 
@@ -339,6 +344,7 @@ class DetectionService:
                     detections.append(
                         {
                             "class_name": cls_name,
+                            "class_name_cn": class_names_cn.get(cls_name, cls_name),
                             "class_id": cls_id,
                             "confidence": round(confidence, 4),
                             "bbox": [
@@ -445,6 +451,14 @@ class DetectionService:
                 else:
                     return {"error": "数据库中没有可用的检测场景，请先创建检测场景"}
 
+            # ── 获取类别中文名映射 ──
+            class_names_cn = {}
+            if scene and scene.class_names_cn:
+                class_names_cn = scene.class_names_cn
+
+            # ── 加载模型 ──
+            model = self._get_model(scene_id)
+
             # ── 创建批量检测任务 ──
             task = DetectionTask(
                 user_id=user_id or 0,
@@ -500,6 +514,7 @@ class DetectionService:
                         det = {
                             "image_path": image_path,
                             "class_name": cls_name,
+                            "class_name_cn": class_names_cn.get(cls_name, cls_name),
                             "class_id": cls_id,
                             "confidence": round(confidence, 4),
                             "bbox": [
@@ -523,6 +538,7 @@ class DetectionService:
                                 task_id=task.id,
                                 image_path=image_path,
                                 class_name=det["class_name"],
+                                class_name_cn=det.get("class_name_cn"),
                                 class_id=det["class_id"],
                                 confidence=det["confidence"],
                                 bbox=det["bbox"],
@@ -763,6 +779,8 @@ class DetectionService:
             last_detections = []
             last_frame = None
             current_scene_seen_track_ids = set()
+            first_frame_annotated_url = None  # 用于历史预览图
+            _minio_client = None  # 延迟初始化的 MinIO 客户端
             class_colors = {
                 "person": (0, 255, 0),
                 "car": (255, 0, 0),
@@ -849,6 +867,7 @@ class DetectionService:
 
                             det = {
                                 "class_name": cls_name,
+                                "class_name_cn": class_names_cn.get(cls_name, cls_name),
                                 "class_id": cls_id,
                                 "confidence": round(confidence, 4),
                                 "bbox": [
@@ -892,12 +911,30 @@ class DetectionService:
                         }
                     )
 
+                    # 上传当前帧标注图到 MinIO，供检测记录预览和详情查看
+                    current_frame_url = None
+                    if frame_detections:
+                        try:
+                            if _minio_client is None:
+                                _minio_client = MinIOClient()
+                            _, img_buf = cv2.imencode(".jpg", annotated_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                            obj_name = f"detections/{task_id}/frame_{frame_idx}.jpg"
+                            current_frame_url = _minio_client.upload_bytes(
+                                obj_name, img_buf.tobytes(), "image/jpeg"
+                            )
+                            if first_frame_annotated_url is None:
+                                first_frame_annotated_url = current_frame_url
+                        except Exception as e:
+                            logger.warning("视频关键帧上传 MinIO 失败: %s", str(e))
+
                     # 保存检测结果到数据库
                     for det in frame_detections:
                         db_result = DetectionResult(
                             task_id=task_id,
                             image_path=f"frame_{frame_idx}.jpg",
+                            annotated_image_url=current_frame_url,
                             class_name=det["class_name"],
+                            class_name_cn=det.get("class_name_cn"),
                             class_id=det["class_id"],
                             confidence=det["confidence"],
                             bbox=det["bbox"],
@@ -929,6 +966,36 @@ class DetectionService:
             # ── 释放资源 ──
             cap.release()
             video_writer.release()
+
+            # 若所有帧均未检测到目标，创建占位记录以保留预览图
+            if first_frame_annotated_url is None:
+                try:
+                    if _minio_client is None:
+                        _minio_client = MinIOClient()
+                    # 从视频中取第一帧作为预览
+                    cap2 = cv2.VideoCapture(video_path)
+                    ret2, first_frame = cap2.read()
+                    cap2.release()
+                    if ret2:
+                        _, img_buf = cv2.imencode(".jpg", first_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                        obj_name = f"detections/{task_id}/frame_0_preview.jpg"
+                        first_frame_annotated_url = _minio_client.upload_bytes(
+                            obj_name, img_buf.tobytes(), "image/jpeg"
+                        )
+                except Exception as e:
+                    logger.warning("视频预览帧上传失败: %s", str(e))
+                placeholder = DetectionResult(
+                    task_id=task_id,
+                    image_path="frame_0.jpg",
+                    annotated_image_url=first_frame_annotated_url,
+                    class_name="no_detection",
+                    class_id=-1,
+                    confidence=0,
+                    bbox=[],
+                    inference_time=0,
+                )
+                db.add(placeholder)
+                db.commit()
 
             # ── 使用 ffmpeg 转码为浏览器可播放的 H.264 MP4 ──
             ffmpeg_ok = False
