@@ -62,6 +62,7 @@ class ChatRequest(BaseModel):
     message: str
     stream: bool = True
     image_path: Optional[str] = None
+    video_path: Optional[str] = None  # 视频文件路径
     session_id: Optional[int] = None  # 会话 ID，为空则自动创建新会话
 
 
@@ -391,10 +392,12 @@ async def chat_stream(
         except Exception as e:
             logger.warning("加载对话历史失败: %s", e)
 
-        # 将当前用户消息加入状态（附带图片路径）
+        # 将当前用户消息加入状态（附带图片/视频路径）
         user_text = request.message
         if request.image_path:
             user_text = f"{user_text}\n[附件图片路径: {request.image_path}]"
+        if request.video_path:
+            user_text = f"{user_text}\n[附件视频路径: {request.video_path}]"
         graph_messages.append(_HM(content=user_text))
 
         # 保存用户原始消息到 Redis（不含图片路径，防止下轮误触发）
