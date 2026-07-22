@@ -28,6 +28,14 @@
       </router-link>
     </nav>
 
+    <!-- 新建对话按钮 -->
+    <div class="sidebar-new-chat" v-show="!isCollapsed">
+      <button class="new-chat-btn" @click="handleNewChat">
+        <el-icon><Plus /></el-icon>
+        <span>{{ $t("sidebar.newChat") }}</span>
+      </button>
+    </div>
+
     <!-- 历史对话（可折叠） -->
     <div v-show="!isCollapsed" class="sidebar-history">
       <div class="history-header" @click="historyCollapsed = !historyCollapsed">
@@ -111,6 +119,7 @@ import {
   Fold,
   Reading,
   Delete,
+  Plus,
 } from "@element-plus/icons-vue";
 
 const route = useRoute();
@@ -145,6 +154,12 @@ function toggleCollapse() {
 /** 判断当前路由是否匹配 */
 function isActive(path) {
   return route.path.startsWith(path);
+}
+
+/** 新建对话 */
+function handleNewChat() {
+  agentStore.clear();
+  router.push("/chat");
 }
 
 /** 处理用户菜单 */
@@ -427,7 +442,38 @@ watch(
   }
 }
 
-/* ─ 历史对话 ── */
+/* ── 新建对话按钮 ── */
+.sidebar-new-chat {
+  padding: 12px 16px 0;
+}
+
+.new-chat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 40px;
+  border: 1px dashed #bbb;
+  border-radius: 8px;
+  background: transparent;
+  color: #666;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #409eff;
+    color: #409eff;
+    background: rgba(64, 158, 255, 0.05);
+  }
+
+  .el-icon {
+    font-size: 16px;
+  }
+}
+
+/* ── 历史对话 ── */
 .sidebar-history {
   flex: 1;
   display: flex;
