@@ -174,6 +174,13 @@
               {{ cls }}: {{ count }}
             </el-tag>
           </div>
+          <!-- 视频下载链接 -->
+          <div v-if="videoResult.videoUrl" class="video-download-link">
+            <div class="download-label">标注视频（带检测框）：</div>
+            <a :href="videoResult.videoUrl" target="_blank" class="download-link">
+              ▶ 点击下载/在线观看（有效期 7 天）
+            </a>
+          </div>
         </div>
       </div>
       <div v-if="videoProgress > 0 && videoProgress < 100" class="video-progress">

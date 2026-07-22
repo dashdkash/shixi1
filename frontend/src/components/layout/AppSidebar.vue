@@ -159,6 +159,11 @@ function isActive(path) {
 /** 新建对话 */
 function handleNewChat() {
   agentStore.clear();
+  agentStore.addMessage({
+    role: "assistant",
+    content:
+      "🌿 你好！我是杂草识别智能助手。\n\n我可以帮你：\n- 📷 识别图片中的杂草种类和数量\n- 📊 提供杂草分布统计分析\n- 💡 给出专业的除草建议\n\n上传一张农田或草坪的照片，我来帮你分析！",
+  });
   router.push("/chat");
 }
 

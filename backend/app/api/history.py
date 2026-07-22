@@ -174,6 +174,7 @@ async def get_detection_detail(
         "total_images": task.total_images,
         "total_objects": task.total_objects,
         "total_inference_time": round(task.total_inference_time, 2) if task.total_inference_time is not None else None,
+        "annotated_video_url": task.annotated_video_url,
         "created_at": task.created_at.isoformat(),
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "images": images_list,

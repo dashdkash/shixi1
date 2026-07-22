@@ -122,6 +122,8 @@ export const useAgentStore = defineStore("agent", {
                       total_images: detail.total_images,
                       class_counts: _buildClassCounts(detail.images),
                       annotated_image_url: detail.images?.[0]?.annotated_image_url,
+                      // 优先从数据库获取，旧记录回退到 tool_result
+                      annotated_video_url: detail.annotated_video_url || toolData.annotated_video_url,
                     };
                   } catch {
                     msg.detectionResult = { task_id: toolData.task_id };

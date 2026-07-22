@@ -19,12 +19,6 @@
         >
           您的浏览器不支持视频播放
         </video>
-        <div class="video-download-link">
-          <a :href="annotatedVideoSrc" target="_blank">
-            <el-icon><Download /></el-icon>
-            下载标注视频
-          </a>
-        </div>
       </div>
 
       <!-- 单图模式：标注图 -->
@@ -237,17 +231,25 @@ const classCountsArray = computed(() => {
   }
 
   .video-download-link {
-    font-size: 12px;
+    font-size: 13px;
+    margin-top: 4px;
 
-    a {
-      color: #409eff;
+    .download-label {
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .download-link {
+      color: #1a73e8;
       text-decoration: none;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 4px;
+      cursor: pointer;
 
       &:hover {
         text-decoration: underline;
+        color: #1557b0;
       }
     }
   }

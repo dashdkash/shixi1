@@ -239,6 +239,9 @@ class DetectionTask(Base):
     iou_threshold = Column(Float, default=0.45, comment="NMS IoU 阈值")
     image_size = Column(Integer, default=640, comment="推理图像尺寸")
 
+    # 标注视频 URL（视频检测）
+    annotated_video_url = Column(Text, nullable=True, comment="标注视频 MinIO URL")
+
     # 错误信息
     error_message = Column(Text, nullable=True, comment="失败时的错误信息")
 

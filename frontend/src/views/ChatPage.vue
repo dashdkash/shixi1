@@ -95,6 +95,21 @@
               </div>
             </div>
 
+            <!-- 视频下载链接（放在信息开头） -->
+            <div
+              v-if="msg.detectionResult?.annotated_video_url"
+              class="video-download-outside"
+            >
+              <div class="download-label">标注视频（带检测框）：</div>
+              <a
+                :href="getVideoProxyUrl(msg.detectionResult.annotated_video_url)"
+                target="_blank"
+                class="download-link"
+              >
+                ▶ 点击下载/在线观看（有效期 7 天）
+              </a>
+            </div>
+
             <div
               v-if="msg.content"
               class="message-content markdown-body"
@@ -258,6 +273,24 @@ function isVideoFile(file) {
   if (file.type && file.type.startsWith("video/")) return true;
   const ext = file.name.split(".").pop().toLowerCase();
   return VIDEO_EXTENSIONS.has(ext);
+}
+
+/**
+ * 将 MinIO 视频 URL 转换为后端代理路径（解决跨域问题）
+ */
+function getVideoProxyUrl(minioUrl) {
+  if (!minioUrl) return null;
+  try {
+    const url = new URL(minioUrl);
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    if (pathParts.length > 1) {
+      const subPath = pathParts.slice(1).join("/");
+      return `/api/detection/video-proxy/${subPath}`;
+    }
+    return minioUrl;
+  } catch {
+    return minioUrl;
+  }
 }
 
 // ── 计算属性 ──
@@ -1264,6 +1297,32 @@ onActivated(() => {
   30% {
     opacity: 1;
     transform: translateY(-4px);
+  }
+}
+
+/* ── 视频下载链接（卡片外部） ── */
+.video-download-outside {
+  margin-top: 8px;
+  padding: 0 4px;
+  font-size: 13px;
+
+  .download-label {
+    color: #333;
+    margin-bottom: 4px;
+  }
+
+  .download-link {
+    color: #1a73e8;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+      color: #1557b0;
+    }
   }
 }
 </style>

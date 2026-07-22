@@ -1062,6 +1062,7 @@ class DetectionService:
                 task.status = "completed"
                 task.total_objects = total_objects
                 task.total_inference_time = total_inference_time
+                task.annotated_video_url = annotated_video_url
                 task.completed_at = datetime.now()
                 db.commit()
 

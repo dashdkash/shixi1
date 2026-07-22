@@ -409,6 +409,7 @@ async def chat_stream(
         # ── 通过 LangGraph 多 Agent 状态图流式执行 ──
         graph = build_multi_agent_graph()
         full_text = ""
+        tool_result_json = None  # 保存工具执行结果（用于历史记录）
 
         # thinking 事件
         yield f"data: {json.dumps({'type': 'thinking', 'content': '正在分析您的请求...'})}\n\n"
@@ -448,6 +449,14 @@ async def chat_stream(
                     yield (
                         f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'summary': result_str[:100], 'result': result_str}, ensure_ascii=False)}\n\n"
                     )
+                    # 保存检测工具的结果（包含 task_id）
+                    if tool_name in ("detect_single", "detect_batch", "detect_video"):
+                        try:
+                            result_data = json.loads(result_str) if isinstance(result_str, str) else result_str
+                            if isinstance(result_data, dict) and "task_id" in result_data:
+                                tool_result_json = json.dumps({"task_id": result_data["task_id"]}, ensure_ascii=False)
+                        except Exception:
+                            pass
 
         except Exception as e:
             logger.error("Multi-Agent 流式执行异常: %s", str(e), exc_info=True)
@@ -471,6 +480,7 @@ async def chat_stream(
                 role="assistant",
                 content=full_text or "[无响应]",
                 agent_used="multi_agent",
+                tool_result=tool_result_json,
             )
             db2.add(ai_msg)
             chat_session = db2.query(ChatSession).filter(ChatSession.id == session_id).first()
