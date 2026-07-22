@@ -70,6 +70,12 @@ const routes = [
         meta: { title: '数据看板', icon: 'DataAnalysis' },
       },
       {
+        path: 'knowledge',
+        name: 'Knowledge',
+        component: () => import('@/views/KnowledgePage.vue'),
+        meta: { title: '知识库', icon: 'Collection' },
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/ProfilePage.vue'),

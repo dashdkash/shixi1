@@ -27,7 +27,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    """从 JWT Token 中解析当前用户"""
+    """从 JWT Token 中解析当前用户，并查询管理员状态"""
     credentials_exception = HTTPException(
         status_code=401,
         detail="无效的认证凭据",
@@ -40,7 +40,18 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
     except (JWTError, ValueError):
         raise credentials_exception
-    return {"id": int(user_id_str)}
+
+    # 查询用户表获取 is_superuser 状态
+    from app.database.session import SessionLocal
+    from app.entity.db_models import User
+    _db = SessionLocal()
+    try:
+        user = _db.query(User).filter(User.id == int(user_id_str)).first()
+        is_superuser = user.is_superuser if user else False
+    finally:
+        _db.close()
+
+    return {"id": int(user_id_str), "is_superuser": is_superuser}
 
 
 class SearchRequest(BaseModel):
@@ -104,9 +115,16 @@ async def upload_document(
 @router.get("/documents")
 async def list_documents(current_user=Depends(get_current_user)):
     """
-    获取所有知识文档列表
+    获取知识文档列表
+
+    - 管理员：返回所有文档
+    - 普通用户：返回系统预置文档 + 自己上传的文档
     """
-    return {"data": rag_service.list_documents()}
+    docs = rag_service.list_documents(
+        user_id=current_user["id"],
+        is_superuser=current_user["is_superuser"],
+    )
+    return {"data": docs}
 
 
 @router.delete("/documents/{doc_id}")
@@ -116,8 +134,15 @@ async def delete_document(
 ):
     """
     删除知识文档及其所有向量片段
+
+    - 管理员可删除任何文档
+    - 普通用户只能删除自己上传的文档
     """
-    result = rag_service.delete_document(doc_id)
+    result = rag_service.delete_document(
+        doc_id,
+        user_id=current_user["id"],
+        is_superuser=current_user["is_superuser"],
+    )
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
     return result
@@ -133,11 +158,13 @@ async def build_preset_documents(
     current_user=Depends(get_current_user),
 ):
     """
-    批量构建预置知识文档索引
+    批量构建预置知识文档索引（仅管理员可操作）
 
     扫描 backend/knowledge_base/ 目录下的所有 .md/.txt/.pdf 文件，
     逐个解析、切片、向量化入库。跳过已入库的同名文档。
     """
+    if not current_user["is_superuser"]:
+        raise HTTPException(status_code=403, detail="仅管理员可构建预置知识库")
     kb_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "knowledge_base")
 
     if not os.path.isdir(kb_dir):
@@ -206,7 +233,7 @@ async def get_stats(current_user=Depends(get_current_user)):
     """
     获取知识库统计信息
 
-    返回文档数量、总片段数等统计数据。
+    管理员看到全局统计，普通用户只看到自己可见的文档统计。
     """
     from app.database.session import SessionLocal
     from app.entity.db_models import KnowledgeChunk, KnowledgeDocument
@@ -214,14 +241,57 @@ async def get_stats(current_user=Depends(get_current_user)):
 
     db = SessionLocal()
     try:
-        doc_count = db.query(KnowledgeDocument).count()
-        chunk_count = db.query(func.count(KnowledgeChunk.id)).scalar() or 0
-        preset_count = db.query(KnowledgeDocument).filter(
-            KnowledgeDocument.source_type == "preset"
-        ).count()
-        upload_count = db.query(KnowledgeDocument).filter(
-            KnowledgeDocument.source_type == "upload"
-        ).count()
+        user_id = current_user["id"]
+        is_admin = current_user["is_superuser"]
+
+        # 可见性过滤
+        if is_admin:
+            visible_filter = True  # 管理员看所有
+        else:
+            visible_filter = (
+                (KnowledgeDocument.source_type == "preset")
+                | (KnowledgeDocument.uploaded_by == user_id)
+            )
+
+        doc_query = db.query(KnowledgeDocument)
+        if not is_admin:
+            doc_query = doc_query.filter(visible_filter)
+
+        doc_count = doc_query.count()
+
+        # 片段数统计（基于可见文档）
+        visible_doc_ids = [d.id for d in doc_query.all()]
+        if visible_doc_ids:
+            chunk_count = (
+                db.query(func.count(KnowledgeChunk.id))
+                .filter(KnowledgeChunk.document_id.in_(visible_doc_ids))
+                .scalar() or 0
+            )
+        else:
+            chunk_count = 0
+
+        preset_count = (
+            db.query(KnowledgeDocument)
+            .filter(KnowledgeDocument.source_type == "preset")
+            .count()
+        )
+
+        # 用户上传数：管理员看全局，普通用户看自己的
+        if is_admin:
+            upload_count = (
+                db.query(KnowledgeDocument)
+                .filter(KnowledgeDocument.source_type == "upload")
+                .count()
+            )
+        else:
+            upload_count = (
+                db.query(KnowledgeDocument)
+                .filter(
+                    KnowledgeDocument.source_type == "upload",
+                    KnowledgeDocument.uploaded_by == user_id,
+                )
+                .count()
+            )
 
         return {
             "document_count": doc_count,

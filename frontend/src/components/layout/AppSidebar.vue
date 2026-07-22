@@ -109,6 +109,7 @@ import {
   User,
   SwitchButton,
   Operation,
+  Collection,
 } from "@element-plus/icons-vue";
 
 const route = useRoute();
@@ -124,6 +125,7 @@ const allMenuItems = [
   { path: "/detection", i18nKey: "sidebar.detection", icon: Camera },
   { path: "/training", i18nKey: "sidebar.training", icon: Cpu, adminOnly: true },
   { path: "/dashboard", i18nKey: "sidebar.dashboard", icon: DataAnalysis },
+  { path: "/knowledge", i18nKey: "sidebar.knowledge", icon: Collection },
   { path: "/history", i18nKey: "sidebar.history", icon: Clock },
 ];
 

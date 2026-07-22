@@ -225,15 +225,25 @@ class RAGService:
 
     # ── 文档管理 ─────────────────────────────────────────
 
-    def list_documents(self) -> list[dict]:
-        """列出所有知识文档"""
+    def list_documents(self, user_id=None, is_superuser=False) -> list[dict]:
+        """
+        列出知识文档，支持可见性过滤
+
+        Args:
+            user_id: 当前用户 ID
+            is_superuser: 是否为管理员
+
+        管理员可见所有文档，普通用户可见预置文档 + 自己上传的文档。
+        """
         db = SessionLocal()
         try:
-            docs = (
-                db.query(KnowledgeDocument)
-                .order_by(KnowledgeDocument.created_at.desc())
-                .all()
-            )
+            query = db.query(KnowledgeDocument)
+            if not is_superuser:
+                query = query.filter(
+                    (KnowledgeDocument.source_type == "preset")
+                    | (KnowledgeDocument.uploaded_by == user_id)
+                )
+            docs = query.order_by(KnowledgeDocument.created_at.desc()).all()
             return [
                 {
                     "id": doc.id,
@@ -241,6 +251,8 @@ class RAGService:
                     "file_type": doc.file_type,
                     "chunk_count": doc.chunk_count,
                     "source_type": doc.source_type,
+                    "uploaded_by": doc.uploaded_by,
+                    "is_owner": doc.uploaded_by == user_id if user_id else False,
                     "created_at": doc.created_at.isoformat(),
                 }
                 for doc in docs
@@ -248,12 +260,14 @@ class RAGService:
         finally:
             db.close()
 
-    def delete_document(self, doc_id: int) -> dict:
+    def delete_document(self, doc_id: int, user_id=None, is_superuser=False) -> dict:
         """
         删除文档及其所有片段（级联删除）
 
         Args:
             doc_id: 文档 ID
+            user_id: 当前用户 ID
+            is_superuser: 是否为管理员
 
         Returns:
             {"message": str} 或 {"error": str}
@@ -266,6 +280,10 @@ class RAGService:
 
             if not doc:
                 return {"error": "文档不存在"}
+
+            # 权限校验：普通用户只能删除自己上传的文档
+            if not is_superuser and doc.uploaded_by != user_id:
+                return {"error": "无权删除此文档"}
 
             title = doc.title
             db.delete(doc)
