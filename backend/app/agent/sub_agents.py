@@ -81,7 +81,7 @@ def _strip_large_fields(data: dict):
     """移除检测结果中 LLM 无法使用的大体积字段"""
     # 单图检测
     data.pop("annotated_image_base64", None)
-    data.pop("annotated_video_url", None)
+    # 保留 annotated_video_url，前端需要它来显示视频和下载按钮
     # 批量检测
     for img in data.get("annotated_images", []):
         if isinstance(img, dict):
