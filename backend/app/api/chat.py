@@ -62,6 +62,7 @@ class ChatRequest(BaseModel):
     message: str
     stream: bool = True
     image_path: Optional[str] = None
+    video_path: Optional[str] = None  # 视频附件路径（对话中上传视频文件时）
     session_id: Optional[int] = None  # 会话 ID，为空则自动创建新会话
 
 
@@ -363,6 +364,8 @@ async def chat_stream(
             agent_used="detection",
         )
         db.add(user_msg)
+        # 立即更新 last_message_at，确保侧栏按时间排序时该会话排在最前
+        session.last_message_at = datetime.now()
         db.commit()
         session_id = session.id
     finally:
@@ -391,10 +394,12 @@ async def chat_stream(
         except Exception as e:
             logger.warning("加载对话历史失败: %s", e)
 
-        # 将当前用户消息加入状态（附带图片路径）
+        # 将当前用户消息加入状态（附带图片/视频路径）
         user_text = request.message
         if request.image_path:
             user_text = f"{user_text}\n[附件图片路径: {request.image_path}]"
+        if request.video_path:
+            user_text = f"{user_text}\n[附件视频路径: {request.video_path}]"
         graph_messages.append(_HM(content=user_text))
 
         # 保存用户原始消息到 Redis（不含图片路径，防止下轮误触发）
@@ -403,9 +408,17 @@ async def chat_stream(
         except Exception as e:
             logger.warning("保存用户消息失败: %s", e)
 
-        # ── 通过 LangGraph 多 Agent 状态图流式执行 ──
+        # ── 通过 LangGraph 并行多 Agent 状态图流式执行 ──
         graph = build_multi_agent_graph()
         full_text = ""
+
+        # 子 Agent 名称集合
+        _AGENT_NODES = {"detection", "analysis", "qa"}
+
+        # 状态跟踪
+        plan_sent = False          # 是否已发送 agent_plan
+        started_agents = set()     # 已发送 agent_start 的 Agent
+        ended_agents = set()       # 已发送 agent_end 的 Agent
 
         # thinking 事件
         yield f"data: {json.dumps({'type': 'thinking', 'content': '正在分析您的请求...'})}\n\n"
@@ -416,34 +429,77 @@ async def chat_stream(
                 version="v2",
             ):
                 kind = event.get("event", "")
+                metadata = event.get("metadata", {}) or {}
+                node = metadata.get("langgraph_node", "")
+                data = event.get("data", {}) or {}
 
-                if kind == "on_chat_model_stream":
-                    chunk = event.get("data", {}).get("chunk")
+                # ── 1. Supervisor 路由完成 → 发送 agent_plan ──
+                if kind == "on_chat_model_end" and node == "supervisor":
+                    output = data.get("output")
+                    if output and hasattr(output, "content"):
+                        raw = output.content.strip().lower()
+                        agents = []
+                        for name in raw.split(","):
+                            name = name.strip()
+                            if name in _AGENT_NODES and name not in agents:
+                                agents.append(name)
+                        if not agents:
+                            agents = ["qa"]
+                        plan_sent = True
+                        logger.info("[Parallel] agent_plan: %s", agents)
+                        yield (
+                            f"data: {json.dumps({'type': 'agent_plan', 'agents': agents}, ensure_ascii=False)}\n\n"
+                        )
+
+                # ── 2. 子 Agent 节点开始 → 发送 agent_start ──
+                elif kind == "on_chain_start" and node in _AGENT_NODES:
+                    if node not in started_agents:
+                        started_agents.add(node)
+                        logger.info("[Parallel] agent_start: %s", node)
+                        yield (
+                            f"data: {json.dumps({'type': 'agent_start', 'agent': node}, ensure_ascii=False)}\n\n"
+                        )
+
+                # ── 3. 子 Agent 节点结束 → 发送 agent_end ──
+                elif kind == "on_chain_end" and node in _AGENT_NODES:
+                    if node in started_agents and node not in ended_agents:
+                        ended_agents.add(node)
+                        logger.info("[Parallel] agent_end: %s", node)
+                        yield (
+                            f"data: {json.dumps({'type': 'agent_end', 'agent': node, 'status': 'success'}, ensure_ascii=False)}\n\n"
+                        )
+
+                # ── 4. 仅 summarize 节点的 LLM 输出作为 text_chunk ──
+                elif kind == "on_chat_model_stream" and node == "summarize":
+                    chunk = data.get("chunk")
                     if chunk and hasattr(chunk, "content") and chunk.content:
                         full_text += chunk.content
                         yield (
                             f"data: {json.dumps({'type': 'text_chunk', 'content': chunk.content}, ensure_ascii=False)}\n\n"
                         )
 
+                # ── 5. 工具调用事件（附带来源 agent） ──
                 elif kind == "on_tool_start":
                     tool_name = event.get("name", "")
-                    tool_input = event.get("data", {}).get("input", {})
-                    logger.info("[Multi-Agent] 工具调用: %s", tool_name)
+                    tool_input = data.get("input", {})
+                    # 从 tags 或 metadata 推断工具属于哪个 agent
+                    agent_source = node if node in _AGENT_NODES else ""
+                    logger.info("[Multi-Agent] 工具调用: %s (来自 %s)", tool_name, agent_source)
                     yield (
-                        f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'input': {k: str(v)[:100] for k, v in (tool_input or {}).items()}}, ensure_ascii=False)}\n\n"
+                        f"data: {json.dumps({'type': 'tool_start', 'tool': tool_name, 'agent': agent_source, 'input': {k: str(v)[:100] for k, v in (tool_input or {}).items()}}, ensure_ascii=False)}\n\n"
                     )
 
                 elif kind == "on_tool_end":
                     tool_name = event.get("name", "")
-                    output = event.get("data", {}).get("output", "")
-                    # output 可能是 ToolMessage 对象或纯字符串
+                    output = data.get("output", "")
                     if hasattr(output, "content"):
                         result_str = output.content
                     else:
                         result_str = str(output) if output else ""
+                    agent_source = node if node in _AGENT_NODES else ""
                     logger.info("[Multi-Agent] 工具完成: %s (%d 字符)", tool_name, len(result_str))
                     yield (
-                        f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'summary': result_str[:100], 'result': result_str}, ensure_ascii=False)}\n\n"
+                        f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'agent': agent_source, 'summary': result_str[:100], 'result': result_str}, ensure_ascii=False)}\n\n"
                     )
 
         except Exception as e:
@@ -451,6 +507,27 @@ async def chat_stream(
             yield (
                 f"data: {json.dumps({'type': 'error', 'content': f'处理出错：{str(e)}'}, ensure_ascii=False)}\n\n"
             )
+
+            # 流式异常时仍保存已生成的部分内容到数据库
+            if full_text:
+                db_partial = SessionLocal()
+                try:
+                    partial_msg = ChatMessage(
+                        session_id=session_id,
+                        role="assistant",
+                        content=full_text + "\n\n[回复已中断]",
+                        agent_used="multi_agent_parallel",
+                    )
+                    db_partial.add(partial_msg)
+                    partial_session = db_partial.query(ChatSession).filter(ChatSession.id == session_id).first()
+                    if partial_session:
+                        partial_session.message_count += 1
+                        partial_session.last_message_at = datetime.now()
+                    db_partial.commit()
+                except Exception as save_err:
+                    logger.error("保存中断内容失败: %s", str(save_err))
+                finally:
+                    db_partial.close()
 
         # 保存 AI 回复到 Redis 记忆（截断防止上下文超限）
         if full_text:
@@ -467,7 +544,7 @@ async def chat_stream(
                 session_id=session_id,
                 role="assistant",
                 content=full_text or "[无响应]",
-                agent_used="multi_agent",
+                agent_used="multi_agent_parallel",
             )
             db2.add(ai_msg)
             chat_session = db2.query(ChatSession).filter(ChatSession.id == session_id).first()

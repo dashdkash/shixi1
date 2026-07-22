@@ -4,7 +4,11 @@
 
     <!-- 页面内容区 -->
     <main class="layout-content">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <keep-alive :include="['ChatPage']">
+          <component :is="Component" />
+        </keep-alive>
+      </router-view>
     </main>
   </div>
 </template>

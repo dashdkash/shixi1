@@ -1,163 +1,190 @@
 <template>
-  <div class="knowledge-page">
-    <PageHeader :title="$t('page.knowledge.title')" :subtitle="$t('page.knowledge.description')">
+  <div class="page-container">
+    <PageHeader
+      :title="$t('knowledge.title')"
+      :subtitle="$t('knowledge.subtitle')"
+    >
+      <template #icon>
+        <el-icon><Collection /></el-icon>
+      </template>
       <template #extra>
-        <el-button type="primary" @click="showUploadDialog = true">
-          <el-icon><Upload /></el-icon>
-          {{ $t('knowledge.upload') }}
-        </el-button>
-        <el-button @click="handleBuildPreset" :loading="building">
-          <el-icon><SetUp /></el-icon>
-          {{ $t('knowledge.buildPreset') }}
-        </el-button>
+        <el-space>
+          <el-button
+            v-if="userStore.isSuperuser"
+            @click="buildPreset"
+          >
+            <el-icon><Refresh /></el-icon>
+            {{ $t('knowledge.buildPreset') }}
+          </el-button>
+          <el-button type="primary" @click="showUploadDialog = true">
+            <el-icon><Plus /></el-icon>
+            {{ $t('knowledge.uploadDoc') }}
+          </el-button>
+        </el-space>
       </template>
     </PageHeader>
 
-    <!-- 统计卡片 -->
-    <div class="stats-row">
+    <!-- Statistics -->
+    <div class="stats-grid">
       <StatsCard
-        :title="$t('knowledge.stats.documents')"
-        :value="stats.total_documents ?? 0"
-        icon="📄"
+        :title="$t('knowledge.statDocCount')"
+        :value="stats.document_count"
+        :icon="Document"
       />
       <StatsCard
-        :title="$t('knowledge.stats.chunks')"
-        :value="stats.total_chunks ?? 0"
-        icon="🧩"
+        :title="$t('knowledge.statChunkCount')"
+        :value="stats.chunk_count"
+        :icon="Collection"
       />
       <StatsCard
-        :title="$t('knowledge.stats.sources')"
-        :value="stats.sources?.length ?? 0"
-        icon="📚"
+        :title="$t('knowledge.statPresetCount')"
+        :value="stats.preset_count"
+        :icon="Folder"
+      />
+      <StatsCard
+        :title="$t('knowledge.statUploadCount')"
+        :value="stats.upload_count"
+        :icon="FolderOpened"
       />
     </div>
 
-    <!-- 文档列表 + 检索测试 -->
-    <div class="knowledge-content">
-      <!-- 文档列表 -->
-      <SectionCard :title="$t('knowledge.documentList')">
-        <template #extra>
-          <el-button size="small" @click="fetchDocuments">
-            <el-icon><Refresh /></el-icon>
-          </el-button>
+    <!-- Document List -->
+    <SectionCard :title="$t('knowledge.docList')">
+      <template #extra>
+        <el-button text @click="fetchDocuments">
+          <el-icon><Refresh /></el-icon>
+          {{ $t('knowledge.refresh') }}
+        </el-button>
+      </template>
+
+      <EmptyState
+        v-if="documents.length === 0 && !loading"
+        :title="$t('knowledge.emptyDocs')"
+        :description="$t('knowledge.emptyDocsHint')"
+      >
+        <template #icon>
+          <el-icon><Document /></el-icon>
         </template>
+      </EmptyState>
 
-        <el-table :data="documents" v-loading="loadingDocs" stripe>
-          <el-table-column prop="filename" :label="$t('knowledge.fileName')" min-width="200" />
-          <el-table-column prop="source" :label="$t('knowledge.source')" width="120" />
-          <el-table-column prop="chunk_count" :label="$t('knowledge.chunks')" width="100" align="center" />
-          <el-table-column prop="created_at" :label="$t('knowledge.createdAt')" width="180">
-            <template #default="{ row }">
-              {{ formatDate(row.created_at) }}
-            </template>
-          </el-table-column>
-          <el-table-column :label="$t('knowledge.actions')" width="100" align="center">
-            <template #default="{ row }">
-              <el-button
-                type="danger"
-                size="small"
-                text
-                @click="handleDelete(row)"
-              >
-                {{ $t('knowledge.delete') }}
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+      <el-table
+        v-else
+        :data="documents"
+        v-loading="loading"
+        stripe
+      >
+        <el-table-column prop="title" :label="$t('knowledge.colTitle')" />
 
-        <EmptyState
-          v-if="!loadingDocs && documents.length === 0"
-          :title="$t('knowledge.empty')"
-          :description="$t('knowledge.emptyDesc')"
-        >
-          <template #action>
-            <el-button type="primary" @click="showUploadDialog = true">
-              {{ $t('knowledge.uploadFirst') }}
+        <el-table-column :label="$t('knowledge.colSource')" width="140">
+          <template #default="{ row }">
+            <el-tag :type="row.source_type === 'preset' ? 'success' : 'primary'">
+              {{ row.source_type === 'preset' ? $t('knowledge.sourcePreset') : $t('knowledge.sourceUpload') }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column :label="$t('knowledge.colOwner')" width="120">
+          <template #default="{ row }">
+            <span>{{ row.is_owner ? $t('knowledge.ownerMine') : $t('knowledge.ownerSystem') }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="chunk_count" :label="$t('knowledge.colChunks')" width="100" />
+
+        <el-table-column prop="created_at" :label="$t('knowledge.colCreatedAt')" width="180" />
+
+        <el-table-column :label="$t('knowledge.colAction')" width="120">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.is_owner || userStore.isSuperuser"
+              text
+              type="danger"
+              @click="deleteDocument(row)"
+            >
+              {{ $t('knowledge.btnDelete') }}
             </el-button>
           </template>
-        </EmptyState>
-      </SectionCard>
+        </el-table-column>
+      </el-table>
+    </SectionCard>
 
-      <!-- 检索测试 -->
-      <SectionCard :title="$t('knowledge.searchTest')">
-        <div class="search-box">
-          <el-input
-            v-model="searchQuery"
-            :placeholder="$t('knowledge.searchPlaceholder')"
-            @keyup.enter="handleSearch"
-            clearable
-          >
-            <template #append>
-              <el-button @click="handleSearch" :loading="searching">
-                <el-icon><Search /></el-icon>
-              </el-button>
-            </template>
-          </el-input>
-          <el-input-number
-            v-model="topK"
-            :min="1"
-            :max="20"
-            :step="1"
-            size="small"
-            controls-position="right"
-            style="width: 100px; margin-left: 8px"
-          />
-        </div>
-
-        <div v-if="searchResults.length > 0" class="search-results">
-          <div v-for="(item, idx) in searchResults" :key="idx" class="result-item">
-            <div class="result-header">
-              <span class="result-source">{{ item.source || item.filename }}</span>
-              <el-tag size="small" type="info">
-                {{ $t('knowledge.score') }}: {{ (item.score ?? 0).toFixed(3) }}
-              </el-tag>
-            </div>
-            <div class="result-content">{{ item.content }}</div>
-          </div>
-        </div>
-
-        <EmptyState
-          v-if="searched && searchResults.length === 0"
-          :title="$t('knowledge.noResults')"
-          description=""
+    <!-- Search Test -->
+    <SectionCard :title="$t('knowledge.searchTest')">
+      <div class="search-bar">
+        <el-input
+          v-model="searchQuery"
+          :placeholder="$t('knowledge.searchPlaceholder')"
+          clearable
+          @keyup.enter="searchKnowledge"
         />
-      </SectionCard>
-    </div>
-
-    <!-- 上传对话框 -->
-    <el-dialog
-      v-model="showUploadDialog"
-      :title="$t('knowledge.uploadTitle')"
-      width="500px"
-    >
-      <el-upload
-        ref="uploadRef"
-        :auto-upload="false"
-        :on-change="handleFileChange"
-        :file-list="uploadFileList"
-        accept=".md,.txt,.pdf,.docx"
-        multiple
-        drag
-      >
-        <el-icon class="el-icon--upload"><Upload /></el-icon>
-        <div class="el-upload__text">
-          {{ $t('knowledge.uploadHint') }}
-        </div>
-        <template #tip>
-          <div class="el-upload__tip">
-            {{ $t('knowledge.uploadTip') }}
-          </div>
-        </template>
-      </el-upload>
-
-      <template #footer>
-        <el-button @click="showUploadDialog = false">{{ $t('common.cancel') }}</el-button>
         <el-button
           type="primary"
-          @click="handleUpload"
-          :loading="uploading"
-          :disabled="uploadFileList.length === 0"
+          :loading="searching"
+          @click="searchKnowledge"
         >
+          {{ $t('knowledge.searchBtn') }}
+        </el-button>
+      </div>
+
+      <EmptyState
+        v-if="!searchResults.length && !searching"
+        :title="$t('knowledge.noSearchResults')"
+      />
+
+      <div v-else class="search-results">
+        <el-card
+          v-for="item in searchResults"
+          :key="item.id"
+          shadow="never"
+          class="search-result-card"
+        >
+          <h4>{{ item.title }}</h4>
+          <p>{{ item.content }}</p>
+          <el-tag>{{ item.score?.toFixed(3) }}</el-tag>
+        </el-card>
+      </div>
+    </SectionCard>
+
+    <!-- Upload Dialog -->
+    <el-dialog
+      v-model="showUploadDialog"
+      :title="$t('knowledge.uploadDialogTitle')"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <el-form :model="uploadForm" label-width="90px">
+        <el-form-item :label="$t('knowledge.uploadLabelTitle')">
+          <el-input
+            v-model="uploadForm.title"
+            :placeholder="$t('knowledge.uploadTitlePlaceholder')"
+          />
+        </el-form-item>
+        <el-form-item :label="$t('knowledge.uploadLabelSource')">
+          <el-radio-group v-model="uploadForm.source_type">
+            <el-radio value="upload">{{ $t('knowledge.sourceUpload') }}</el-radio>
+            <el-radio v-if="userStore.isSuperuser" value="preset">{{ $t('knowledge.sourcePreset') }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="$t('knowledge.uploadLabelFile')">
+          <el-upload
+            ref="uploadRef"
+            :auto-upload="false"
+            :limit="1"
+            :show-file-list="true"
+            :on-change="handleFileChange"
+            :on-remove="handleFileRemove"
+            accept=".pdf,.txt,.md"
+          >
+            <el-button type="primary">{{ $t('knowledge.selectFile') }}</el-button>
+            <template #tip>
+              <div class="upload-tip">{{ $t('knowledge.uploadTip') }}</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showUploadDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="uploading" @click="uploadDocument">
           {{ $t('knowledge.uploadBtn') }}
         </el-button>
       </template>
@@ -167,146 +194,164 @@
 
 <script setup>
 import { ref, reactive, onMounted } from "vue";
+import { useUserStore } from "@/stores/user";
+import request from "@/utils/request";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { useI18n } from "vue-i18n";
 import {
-  Upload,
-  SetUp,
+  Plus,
   Refresh,
-  Search,
+  Document,
+  Collection,
+  Folder,
+  FolderOpened,
 } from "@element-plus/icons-vue";
+
 import PageHeader from "@/components/common/PageHeader.vue";
 import SectionCard from "@/components/common/SectionCard.vue";
 import StatsCard from "@/components/common/StatsCard.vue";
 import EmptyState from "@/components/common/EmptyState.vue";
-import {
-  listDocumentsApi,
-  uploadDocumentApi,
-  deleteDocumentApi,
-  searchKnowledgeApi,
-  getKnowledgeStatsApi,
-  buildPresetApi,
-} from "@/api/knowledge";
 
-// ── 状态 ──
+const { t } = useI18n({ useScope: "global" });
+const userStore = useUserStore();
+
 const documents = ref([]);
-const stats = reactive({ total_documents: 0, total_chunks: 0, sources: [] });
-const loadingDocs = ref(false);
-const searching = ref(false);
-const searched = ref(false);
-const uploading = ref(false);
-const building = ref(false);
-
+const loading = ref(false);
 const searchQuery = ref("");
+const searching = ref(false);
 const searchResults = ref([]);
-const topK = ref(5);
+const stats = reactive({
+  document_count: 0,
+  chunk_count: 0,
+  preset_count: 0,
+  upload_count: 0,
+});
 
 const showUploadDialog = ref(false);
-const uploadRef = ref(null);
-const uploadFileList = ref([]);
+const uploading = ref(false);
+const uploadRef = ref();
+const selectedFile = ref(null);
 
-// ── 方法 ──
+const uploadForm = reactive({
+  title: "",
+  source_type: "upload",
+});
 
 async function fetchDocuments() {
-  loadingDocs.value = true;
+  loading.value = true;
   try {
-    const res = await listDocumentsApi();
-    // 后端返回 {data: [...]} 格式
-    documents.value = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-  } catch {
-    // 静默
+    const res = await request.get("/knowledge/documents");
+    documents.value = res.data || [];
+  } catch (error) {
+    ElMessage.error(t("knowledge.msgFetchFail"));
+    console.error(error);
   } finally {
-    loadingDocs.value = false;
+    loading.value = false;
   }
 }
 
 async function fetchStats() {
   try {
-    const res = await getKnowledgeStatsApi();
-    if (res) {
-      // 后端返回 {document_count, chunk_count, preset_count, upload_count}
-      stats.total_documents = res.document_count ?? res.total_documents ?? 0;
-      stats.total_chunks = res.chunk_count ?? res.total_chunks ?? 0;
-      stats.sources = res.sources ?? [];
-    }
-  } catch {
-    // 静默
+    const res = await request.get("/knowledge/stats");
+    Object.assign(stats, res);
+  } catch (error) {
+    console.error(error);
   }
 }
 
-function handleFileChange(file, fileList) {
-  uploadFileList.value = fileList;
-}
-
-async function handleUpload() {
-  if (uploadFileList.value.length === 0) return;
-  uploading.value = true;
+async function buildPreset() {
   try {
-    for (const f of uploadFileList.value) {
-      const formData = new FormData();
-      formData.append("file", f.raw);
-      await uploadDocumentApi(formData);
-    }
-    ElMessage.success("上传成功");
-    showUploadDialog.value = false;
-    uploadFileList.value = [];
+    await ElMessageBox.confirm(
+      t("knowledge.buildConfirmMsg"),
+      t("common.warning"),
+      { type: "warning" }
+    );
+    const res = await request.post("/knowledge/build");
+    ElMessage.success(res.message);
     fetchDocuments();
     fetchStats();
-  } catch (err) {
-    ElMessage.error("上传失败: " + (err.response?.data?.detail || err.message));
+  } catch (error) {
+    if (error !== "cancel") {
+      ElMessage.error(t("knowledge.msgBuildFail"));
+    }
+  }
+}
+
+function handleFileChange(file) {
+  selectedFile.value = file.raw;
+}
+
+function handleFileRemove() {
+  selectedFile.value = null;
+}
+
+async function uploadDocument() {
+  if (!selectedFile.value) {
+    ElMessage.warning(t("knowledge.msgNoFile"));
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", selectedFile.value);
+  if (uploadForm.title.trim()) {
+    formData.append("title", uploadForm.title.trim());
+  }
+  formData.append("source_type", uploadForm.source_type);
+
+  uploading.value = true;
+  try {
+    const res = await request.post("/knowledge/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    ElMessage.success(t("knowledge.msgUploadSuccess", { count: res.chunk_count }));
+    showUploadDialog.value = false;
+    uploadForm.title = "";
+    uploadForm.source_type = "upload";
+    selectedFile.value = null;
+    uploadRef.value?.clearFiles();
+    await fetchDocuments();
+    await fetchStats();
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || t("knowledge.msgUploadFail"));
   } finally {
     uploading.value = false;
   }
 }
 
-async function handleDelete(row) {
+async function deleteDocument(row) {
   try {
-    await ElMessageBox.confirm("确定删除此文档？", "提示", { type: "warning" });
-    await deleteDocumentApi(row.id);
-    ElMessage.success("已删除");
-    fetchDocuments();
-    fetchStats();
-  } catch {
-    // 取消或失败
+    await ElMessageBox.confirm(
+      t("knowledge.deleteConfirmMsg", { title: row.title }),
+      t("knowledge.deleteConfirmTitle"),
+      { type: "warning" }
+    );
+    await request.delete(`/knowledge/documents/${row.id}`);
+    ElMessage.success(t("knowledge.msgDeleteSuccess"));
+    await fetchDocuments();
+    await fetchStats();
+  } catch (error) {
+    if (error !== "cancel") {
+      ElMessage.error(t("knowledge.msgDeleteFail"));
+    }
   }
 }
 
-async function handleSearch() {
-  if (!searchQuery.value.trim()) return;
+async function searchKnowledge() {
+  if (!searchQuery.value.trim()) {
+    ElMessage.warning(t("knowledge.msgNoQuery"));
+    return;
+  }
   searching.value = true;
-  searched.value = false;
   try {
-    const res = await searchKnowledgeApi(searchQuery.value, topK.value);
-    // 后端返回 {query, results: [...]}
-    searchResults.value = Array.isArray(res?.results) ? res.results : Array.isArray(res) ? res : [];
-  } catch {
-    searchResults.value = [];
+    const res = await request.post("/knowledge/search", {
+      query: searchQuery.value,
+      top_k: 5,
+    });
+    searchResults.value = res.results || [];
+  } catch (error) {
+    ElMessage.error(t("knowledge.msgSearchFail"));
   } finally {
     searching.value = false;
-    searched.value = true;
-  }
-}
-
-async function handleBuildPreset() {
-  try {
-    await ElMessageBox.confirm("将构建预置知识文档索引，是否继续？", "提示");
-    building.value = true;
-    await buildPresetApi();
-    ElMessage.success("预置索引构建完成");
-    fetchDocuments();
-    fetchStats();
-  } catch {
-    // 取消或失败
-  } finally {
-    building.value = false;
-  }
-}
-
-function formatDate(str) {
-  if (!str) return "-";
-  try {
-    return new Date(str).toLocaleString();
-  } catch {
-    return str;
   }
 }
 
@@ -316,61 +361,79 @@ onMounted(() => {
 });
 </script>
 
-<style lang="scss" scoped>
-.knowledge-page {
-  max-width: 1100px;
-  margin: 0 auto;
-}
+<style scoped lang="scss">
+@use "@/assets/styles/variables.scss" as *;
 
-.stats-row {
+.stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: $spacing-md;
-  margin-bottom: $spacing-lg;
-}
-
-.knowledge-content {
-  display: flex;
-  flex-direction: column;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: $spacing-lg;
+  margin-bottom: $spacing-xl;
 }
 
-.search-box {
+.search-bar {
   display: flex;
-  align-items: center;
-  margin-bottom: $spacing-md;
+  gap: 12px;
+  margin-bottom: $spacing-lg;
+
+  .el-input {
+    flex: 1;
+  }
 }
 
 .search-results {
   display: flex;
   flex-direction: column;
-  gap: $spacing-sm;
+  gap: 12px;
 }
 
-.result-item {
-  padding: $spacing-sm $spacing-md;
-  background: #f9f9f9;
-  border: 1px solid #eee;
-  border-radius: $border-radius-md;
-}
-
-.result-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: $spacing-xs;
-
-  .result-source {
-    font-weight: 500;
+.search-result-card {
+  h4 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: #303133;
+  }
+  p {
+    margin: 0 0 8px;
     font-size: 13px;
-    color: $text-primary;
+    color: #606266;
+    line-height: 1.6;
   }
 }
 
-.result-content {
-  font-size: 13px;
-  color: $text-regular;
-  line-height: 1.6;
-  white-space: pre-wrap;
+.upload-tip {
+  margin-top: $spacing-xs;
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+:deep(.el-upload) {
+  width: 100%;
+}
+
+:deep(.el-upload .el-button) {
+  width: 100%;
+}
+
+:deep(.el-table) {
+  border-radius: $border-radius-md;
+}
+
+:deep(.el-dialog) {
+  border-radius: $border-radius-lg;
+}
+
+:deep(.el-form-item:last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.el-tag) {
+  text-transform: capitalize;
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

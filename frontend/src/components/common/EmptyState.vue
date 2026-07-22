@@ -4,7 +4,7 @@
       <slot name="icon">🌿</slot>
     </div>
     <div class="empty-title">{{ title }}</div>
-    <div class="empty-description">{{ description }}</div>
+    <div v-if="description" class="empty-description">{{ description }}</div>
     <slot />
     <div v-if="$slots.action" class="empty-action">
       <slot name="action" />
@@ -15,40 +15,36 @@
 <script setup>
 defineProps({
   title: { type: String, required: true },
-  description: { type: String, default: "" },
+  description: { type: String, default: '' },
 });
 </script>
 
 <style lang="scss" scoped>
 .empty-state {
+  min-height: 200px;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
-  padding: $spacing-xl $spacing-lg;
+  align-items: center;
+  gap: 8px;
   text-align: center;
+  color: #909399;
 }
-
 .empty-icon {
   font-size: 48px;
-  margin-bottom: $spacing-md;
+  margin-bottom: 12px;
 }
-
 .empty-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  color: $text-primary;
-  margin-bottom: $spacing-xs;
+  color: #303133;
 }
-
 .empty-description {
-  font-size: 13px;
-  color: $text-secondary;
-  max-width: 320px;
-  line-height: 1.6;
+  margin-top: 8px;
+  max-width: 360px;
+  color: #909399;
 }
-
 .empty-action {
-  margin-top: $spacing-md;
+  margin-top: 20px;
 }
 </style>

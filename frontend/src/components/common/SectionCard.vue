@@ -18,33 +18,31 @@
 
 <script setup>
 defineProps({
-  title: { type: String, default: "" },
-  bodyClass: { type: String, default: "" },
+  title: { type: String, default: '' },
+  bodyClass: { type: String, default: '' },
 });
 </script>
 
 <style lang="scss" scoped>
 .section-card {
-  margin-bottom: $spacing-lg;
-  border-radius: $border-radius-md;
-  border: 1px solid #ebeef5;
+  border: none;
 }
-
 .section-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-
 .section-card-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
-  color: $text-primary;
+  color: #303133;
 }
-
+.section-card-extra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .section-card-content {
-  :deep(.el-table) {
-    border-radius: $border-radius-md;
-  }
+  width: 100%;
 }
 </style>

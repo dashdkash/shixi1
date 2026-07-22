@@ -176,7 +176,7 @@
                 :key="objIdx"
                 class="object-tag"
               >
-                {{ obj.class_name_cn }} ({{
+                {{ obj.class_name_cn || obj.class_name }} ({{
                   (obj.confidence * 100).toFixed(1)
                 }}%)
               </div>

@@ -67,13 +67,13 @@ const routes = [
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('@/views/DashboardPage.vue'),
-        meta: { title: '数据看板', icon: 'DataAnalysis', requiresAdmin: true },
+        meta: { title: '数据看板', icon: 'DataAnalysis' },
       },
       {
         path: 'knowledge',
         name: 'Knowledge',
         component: () => import('@/views/KnowledgePage.vue'),
-        meta: { title: '知识库', icon: 'Reading', requiresAdmin: true },
+        meta: { title: '知识库', icon: 'Collection' },
       },
       {
         path: 'profile',
@@ -113,15 +113,18 @@ router.beforeEach((to, from, next) => {
   } else if ((to.path === '/login' || to.path === '/register') && token) {
     // 已登录用户访问登录/注册页，跳转到首页
     next('/')
-  } else if (to.meta.requiresAdmin) {
-    // 需要管理员权限的页面，检查用户角色
-    const userStr = localStorage.getItem('rsod_user')
-    const user = userStr ? JSON.parse(userStr) : null
-    const isAdmin = user?.is_superuser || (user?.roles && user.roles.includes('admin'))
-
+  } else if (to.matched.some((record) => record.meta.requiresAdmin)) {
+    // 需要管理员权限，检查是否为管理员
+    let isAdmin = false
+    try {
+      const userStr = localStorage.getItem('rsod_user')
+      if (userStr) {
+        const user = JSON.parse(userStr)
+        isAdmin = user?.is_superuser || (user?.roles && user.roles.includes('admin'))
+      }
+    } catch {}
     if (!isAdmin) {
-      // 普通用户访问管理员页面，跳转到首页
-      next('/chat')
+      next('/')
     } else {
       next()
     }

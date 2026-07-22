@@ -1,9 +1,8 @@
 <template>
   <el-card shadow="never" class="stats-card">
     <div class="stats-header">
-      <div v-if="icon" class="stats-icon">
-        <template v-if="typeof icon === 'string'">{{ icon }}</template>
-        <el-icon v-else :size="22"><component :is="icon" /></el-icon>
+      <div v-if="icon" class="stats-icon" :style="{ background: iconBackground, color: iconColor }">
+        <el-icon :size="22"><component :is="icon" /></el-icon>
       </div>
       <div class="stats-label">{{ title }}</div>
     </div>
@@ -13,88 +12,57 @@
         <span v-if="unit" class="unit">{{ unit }}</span>
       </slot>
     </div>
-    <div v-if="growth !== null" class="stats-growth" :class="growthClass">
-      {{ growthText }}
-    </div>
   </el-card>
 </template>
 
 <script setup>
-import { computed } from "vue";
-
-const props = defineProps({
+defineProps({
   title: { type: String, required: true },
   value: { type: [String, Number], required: true },
-  icon: { type: [Object, String], default: null },
-  unit: { type: String, default: "" },
-  growth: { type: Number, default: null },
-  iconColor: { type: String, default: "#1e1e1e" },
-  iconBackground: { type: String, default: "rgba(30,30,30,.08)" },
-  inverse: { type: Boolean, default: false },
-});
-
-const growthClass = computed(() => {
-  if (props.growth === null || props.growth === undefined || props.growth === 0) return "growth-flat";
-  if (props.inverse) return props.growth < 0 ? "growth-up" : "growth-down";
-  return props.growth > 0 ? "growth-up" : "growth-down";
-});
-
-const growthText = computed(() => {
-  if (props.growth === null || props.growth === undefined) return "";
-  if (props.growth === 0) return "持平";
-  return props.growth > 0 ? `↑ +${props.growth}%` : `↓ ${props.growth}%`;
+  icon: { type: Object, default: null },
+  unit: { type: String, default: '' },
+  iconColor: { type: String, default: '#1e1e1e' },
+  iconBackground: { type: String, default: 'rgba(30,30,30,.08)' },
 });
 </script>
 
 <style lang="scss" scoped>
 .stats-card {
-  border-radius: $border-radius-md;
-  border: 1px solid #ebeef5;
+  border: none;
+  cursor: default;
+  transition: all 0.25s ease;
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
 }
-
 .stats-header {
   display: flex;
   align-items: center;
-  gap: $spacing-sm;
-  margin-bottom: $spacing-md;
+  gap: 12px;
+  margin-bottom: 12px;
 }
-
 .stats-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: $border-radius-md;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: v-bind(iconBackground);
-  color: v-bind(iconColor);
+  flex-shrink: 0;
 }
-
 .stats-label {
-  font-size: 13px;
-  color: $text-secondary;
+  font-size: 14px;
+  color: #909399;
 }
-
 .stats-value {
   font-size: 28px;
   font-weight: 700;
-  color: $text-primary;
   line-height: 1.2;
-
-  .unit {
-    font-size: 14px;
-    font-weight: 400;
-    color: $text-secondary;
-    margin-left: 4px;
-  }
+  color: #1e1e1e;
 }
-
-.stats-growth {
-  font-size: 12px;
-  margin-top: $spacing-sm;
-
-  &.growth-up { color: $success-color; }
-  &.growth-down { color: $danger-color; }
-  &.growth-flat { color: $text-secondary; }
+.unit {
+  font-size: 14px;
+  color: #909399;
 }
 </style>

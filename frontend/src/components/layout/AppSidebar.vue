@@ -57,7 +57,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { computed, ref, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useUserStore } from "@/stores/user";
 import { useAgentStore } from "@/stores/agent";
@@ -74,9 +74,7 @@ import {
   User,
   SwitchButton,
   Operation,
-  Expand,
-  Fold,
-  Reading,
+  Collection,
 } from "@element-plus/icons-vue";
 
 const route = useRoute();
@@ -88,29 +86,152 @@ const { locale, t } = useI18n({ useScope: "global" });
 const currentLang = ref(locale.value);
 const isCollapsed = ref(false);
 
-/** 侧边栏菜单配置 */
+/** 侧边栏菜单配置（训练仅管理员可见） */
 const allMenuItems = [
-  { path: "/chat", i18nKey: "sidebar.chat", icon: ChatDotRound },
   { path: "/detection", i18nKey: "sidebar.detection", icon: Camera },
   { path: "/training", i18nKey: "sidebar.training", icon: Cpu, adminOnly: true },
-  { path: "/dashboard", i18nKey: "sidebar.dashboard", icon: DataAnalysis, adminOnly: true },
-  { path: "/knowledge", i18nKey: "sidebar.knowledge", icon: Reading, adminOnly: true },
+  { path: "/dashboard", i18nKey: "sidebar.dashboard", icon: DataAnalysis },
+  { path: "/knowledge", i18nKey: "sidebar.knowledge", icon: Collection },
   { path: "/history", i18nKey: "sidebar.history", icon: Clock },
 ];
 
-/** 根据角色过滤菜单项 */
 const menuItems = computed(() => {
   if (userStore.isSuperuser) return allMenuItems;
-  return allMenuItems.filter(item => !item.adminOnly);
+  return allMenuItems.filter((item) => !item.adminOnly);
 });
-
-function toggleCollapse() {
-  isCollapsed.value = !isCollapsed.value;
-}
 
 /** 判断当前路由是否匹配 */
 function isActive(path) {
   return route.path.startsWith(path);
+}
+
+// ── 历史对话 ──
+const sessions = ref([]);
+const historyCollapsed = ref(false);
+const currentPage = ref(1);
+const hasMore = ref(false);
+const loadingMore = ref(false);
+
+async function fetchSessions(page = 1) {
+  try {
+    const res = await request.get(`/chat/sessions?page=${page}&page_size=30`);
+    if (res && res.data) {
+      if (page === 1) {
+        sessions.value = res.data;
+      } else {
+        sessions.value.push(...res.data);
+      }
+      hasMore.value = sessions.value.length < res.total;
+      currentPage.value = page;
+    }
+  } catch {
+    // 静默处理
+  }
+}
+
+function loadMore() {
+  if (loadingMore.value) return;
+  loadingMore.value = true;
+  fetchSessions(currentPage.value + 1).finally(() => {
+    loadingMore.value = false;
+  });
+}
+
+function handleScroll() {
+  // 可扩展为滚动到底部自动加载
+}
+
+/** 新建会话 */
+function handleNewChat() {
+  agentStore.newChat();
+  router.push("/chat");
+}
+
+/** 选择历史会话 */
+async function handleSelectSession(session) {
+  // 如果点击的是当前正在查看的会话，不重新加载消息
+  // keep-alive 已保持 ChatPage 存活，内存中的流式状态（agentFlow、toolCalls 等）
+  // 比 DB 加载的更完整，重新加载会丢失这些中间状态
+  if (session.id === agentStore.currentSessionId) {
+    router.push("/chat");
+    return;
+  }
+
+  try {
+    const res = await request.get(`/history/chat/${session.id}`);
+    if (res && res.messages) {
+      const messages = [];
+      for (const m of res.messages) {
+        const msg = {
+          role: m.role === "ai" ? "assistant" : m.role,
+          content: m.content,
+          loading: false,  // DB 加载的消息已完成，不显示加载指示器
+        };
+        // 解析 tool_result 中的 task_id，重建检测结果卡片
+        if (m.tool_result) {
+          try {
+            const toolData = typeof m.tool_result === "string"
+              ? JSON.parse(m.tool_result)
+              : m.tool_result;
+            if (toolData.task_id) {
+              // 获取检测任务详情，丰富卡片数据
+              try {
+                const detail = await request.get(`/history/detection/${toolData.task_id}`);
+                msg.detectionResult = {
+                  task_id: detail.id,
+                  total_objects: detail.total_objects,
+                  total_inference_time: detail.total_inference_time,
+                  total_images: detail.total_images,
+                  class_counts: buildClassCounts(detail.images),
+                  annotated_image_url: detail.images?.[0]?.annotated_image_url,
+                };
+              } catch {
+                // 降级：仅使用 task_id 显示标注图
+                msg.detectionResult = { task_id: toolData.task_id };
+              }
+            }
+          } catch {
+            // tool_result 解析失败，忽略
+          }
+        }
+        messages.push(msg);
+      }
+      agentStore.loadSession(session.id, messages);
+      router.push("/chat");
+    }
+  } catch {
+    // 静默处理
+  }
+}
+
+/** 从检测结果图片列表构建 class_counts 对象 */
+function buildClassCounts(images) {
+  const counts = {};
+  if (!Array.isArray(images)) return counts;
+  for (const img of images) {
+    if (!Array.isArray(img.objects)) continue;
+    for (const obj of img.objects) {
+      const name = obj.class_name_cn || obj.class_name;
+      if (name) counts[name] = (counts[name] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+/** 删除会话 */
+async function handleDeleteSession(session) {
+  try {
+    await ElMessageBox.confirm("确定删除此对话？", "提示", {
+      type: "warning",
+    });
+    await request.delete(`/chat/sessions/${session.id}`);
+    sessions.value = sessions.value.filter((s) => s.id !== session.id);
+    if (agentStore.currentSessionId === session.id) {
+      agentStore.newChat();
+    }
+  } catch {
+    // 取消或失败
+  }
 }
 
 /** 处理用户菜单 */

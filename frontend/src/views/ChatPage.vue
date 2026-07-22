@@ -78,10 +78,33 @@
             src="/head.svg"
           ></el-avatar>
           <div class="message-bubble assistant-bubble">
+            <!-- Agent 执行流程展示 -->
+            <div v-if="msg.agentFlow && msg.agentFlow.length" class="agent-flow-container">
+              <div class="agent-flow-label">Agent 协作流程</div>
+              <div class="agent-flow-badges">
+                <div
+                  v-for="agent in msg.agentFlow"
+                  :key="agent.name"
+                  :class="['agent-badge', `agent-${agent.status}`]"
+                >
+                  <span class="agent-icon">{{ agentIcons[agent.name] || '🤖' }}</span>
+                  <span class="agent-name">{{ agentLabels[agent.name] || agent.name }}</span>
+                  <span v-if="agent.status === 'running'" class="agent-spinner"></span>
+                  <span v-else-if="agent.status === 'success'" class="agent-status-icon">✓</span>
+                  <span v-else-if="agent.status === 'failed'" class="agent-status-icon agent-failed">✗</span>
+                  <span v-else class="agent-status-icon agent-pending">•</span>
+                </div>
+              </div>
+            </div>
+
             <!-- thinking 指示器 -->
             <div v-if="msg.thinking" class="thinking-indicator">
               <span class="thinking-dot"></span>
-              <span class="thinking-text">正在思考...</span>
+              <span class="thinking-text">
+                {{ msg.agentFlow?.some(a => a.status === 'running') ? 'Agent 执行中...' 
+                   : (msg.agentFlow?.length && msg.agentFlow.every(a => a.status === 'success' || a.status === 'failed') ? '正在汇总结果...' 
+                   : '正在思考...') }}
+              </span>
             </div>
 
             <!-- 工具调用状态卡片 -->
@@ -165,7 +188,7 @@
       <input
         ref="fileInputRef"
         type="file"
-        accept="image/*,.zip"
+        accept="image/*,.zip,video/mp4,video/avi,video/quicktime,video/x-msvideo,video/x-matroska"
         style="display: none"
         @change="handleFileSelect"
       />
@@ -173,7 +196,7 @@
       <!-- 文本输入框 -->
       <el-input
         v-model="inputText"
-        placeholder="输入消息，或拖拽图片/ZIP 到这里..."
+        placeholder="输入消息，或拖拽图片/视频/ZIP 到这里..."
         @keyup.enter="sendMessage"
         :disabled="agentStore.isLoading"
       />
@@ -219,10 +242,27 @@ import { Top, Delete, Plus } from "@element-plus/icons-vue";
 import { computed, nextTick, onActivated, onMounted, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 
+// 显式设置组件名称，确保 keep-alive include 生效
+defineOptions({ name: 'ChatPage' });
+
 /** 工具名称中文映射 */
 function getToolName(toolName) {
   return TOOL_NAME_MAP[toolName] || toolName;
 }
+
+/** Agent 图标映射 */
+const agentIcons = {
+  detection: '🔍',
+  analysis: '📊',
+  qa: '💬',
+};
+
+/** Agent 中文名称映射 */
+const agentLabels = {
+  detection: '图像检测',
+  analysis: '数据分析',
+  qa: '知识问答',
+};
 
 // ── Store ──
 const agentStore = useAgentStore();
@@ -235,6 +275,17 @@ const inputText = ref("");
 const selectedFile = ref(null);
 const messageListRef = ref(null);
 const fileInputRef = ref(null);
+
+/** 视频文件扩展名集合 */
+const VIDEO_EXTENSIONS = new Set(["mp4", "avi", "mov", "mkv", "wmv", "flv", "webm"]);
+
+/** 判断文件是否为视频 */
+function isVideoFile(file) {
+  if (!file) return false;
+  if (file.type && file.type.startsWith("video/")) return true;
+  const ext = file.name.split(".").pop().toLowerCase();
+  return VIDEO_EXTENSIONS.has(ext);
+}
 
 // ── 计算属性 ──
 const canSend = computed(() => {
@@ -303,17 +354,21 @@ function buildReportPrompt(days) {
 async function sendMessage() {
   if (!canSend.value) return;
 
+  agentStore.setLoading(true);
   const message = inputText.value.trim();
   // ── 关键：在清空之前保存文件引用 ──
   const fileToSend = selectedFile.value;
-  const imagePreview = fileToSend ? URL.createObjectURL(fileToSend) : null;
+  const isVideo = isVideoFile(fileToSend);
+  const filePreview = fileToSend ? URL.createObjectURL(fileToSend) : null;
 
   // 添加用户消息到列表
   agentStore.addMessage({
     role: "user",
     content: message,
-    image: fileToSend ? fileToSend.name : null,
-    imagePreview,
+    // 视频文件用 videoUrl 展示预览，图片文件用 imagePreview
+    image: fileToSend && !isVideo ? fileToSend.name : null,
+    imagePreview: filePreview && !isVideo ? filePreview : null,
+    videoUrl: isVideo ? filePreview : null,
   });
 
   // 清空输入
@@ -332,19 +387,25 @@ async function sendMessage() {
   // 滚动到底部
   scrollToBottom();
 
-  // ── 如果有附件图片，先上传到服务端获取真实路径 ──
+  // ── 如果有附件文件，先上传到服务端获取真实路径 ──
   let serverImagePath = null;
+  let serverVideoPath = null;
   if (fileToSend) {
     try {
       const formData = new FormData();
       formData.append("file", fileToSend);
       // 不设置 Content-Type，让 axios 自动添加 boundary
       const uploadResult = await request.post("/chat/upload", formData);
-      serverImagePath = uploadResult.image_path;
+      // 根据文件类型决定使用哪个字段
+      if (isVideo) {
+        serverVideoPath = uploadResult.image_path; // 后端统一返回 image_path 字段
+      } else {
+        serverImagePath = uploadResult.image_path;
+      }
     } catch (err) {
-      console.error("[图片上传失败]", err.response?.data || err.message || err);
+      console.error("[文件上传失败]", err.response?.data || err.message || err);
       const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-      lastMsg.content = `图片上传失败：${err.response?.data?.detail || err.message || "未知错误"}，请重试`;
+      lastMsg.content = `文件上传失败：${err.response?.data?.detail || err.message || "未知错误"}，请重试`;
       lastMsg.loading = false;
       lastMsg.error = true;
       return;
@@ -355,6 +416,7 @@ async function sendMessage() {
   const requestBody = {
     message,
     ...(serverImagePath ? { image_path: serverImagePath } : {}),
+    ...(serverVideoPath ? { video_path: serverVideoPath } : {}),
     // 传递当前会话 ID，为空则后端自动创建新会话
     ...(agentStore.currentSessionId ? { session_id: agentStore.currentSessionId } : {}),
   };
@@ -377,19 +439,37 @@ async function sendMessage() {
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
         lastMsg.thinking = true;
         scrollToBottom();
-      } else if (data.type === "text_chunk") {
-        // 收到第一个文本 chunk 时，关闭 thinking 状态
+      } else if (data.type === "agent_plan") {
+        // Supervisor 路由完成，显示 Agent 执行计划
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-        if (lastMsg.thinking) {
-          lastMsg.thinking = false;
-        }
+        lastMsg.agentFlow = (data.agents || []).map(name => ({ name, status: "pending" }));
+        // 保持 thinking=true，让用户知道仍在处理中
+        console.log("[Agent计划]", data.agents);
+        scrollToBottom();
+      } else if (data.type === "agent_start") {
+        // 子 Agent 开始执行
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        const badge = lastMsg.agentFlow?.find(a => a.name === data.agent);
+        if (badge) badge.status = "running";
+        console.log("[Agent启动]", data.agent);
+        scrollToBottom();
+      } else if (data.type === "agent_end") {
+        // 子 Agent 执行完成
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
+        const badge = lastMsg.agentFlow?.find(a => a.name === data.agent);
+        if (badge) badge.status = data.status || "success";
+        console.log("[Agent完成]", data.agent, data.status);
+        scrollToBottom();
+      } else if (data.type === "text_chunk") {
+        // 文本流式追加 — 保持 thinking=true，让指示器显示“正在汇总结果...”
+        // thinking 会在 onDone 时清除
+        const lastMsg = agentStore.messages[agentStore.messages.length - 1];
         fullContent += data.content;
         agentStore.updateLastAssistantMessage(fullContent);
         scrollToBottom();
       } else if (data.type === "tool_call" || data.type === "tool_start") {
         // 工具开始调用 — 添加到 toolCalls 数组
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-        if (lastMsg.thinking) lastMsg.thinking = false;
         if (!lastMsg.toolCalls) lastMsg.toolCalls = [];
         lastMsg.toolCalls.push({
           tool: data.tool,
@@ -419,7 +499,8 @@ async function sendMessage() {
 
         try {
           const result = JSON.parse(resultData);
-          if (result.detections) {
+          // 支持单图/批量检测（result.detections）和视频检测（result.key_frames / result.annotated_video_url）
+          if (result.detections || result.key_frames || result.annotated_video_url) {
             // 有检测结果，设置到消息中
             lastMsg.detectionResult = result;
             lastMsg.loading = false;
@@ -444,17 +525,20 @@ async function sendMessage() {
       }
     },
     onDone: () => {
-      const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-      if (lastMsg.loading) {
-        lastMsg.loading = false;
+      // 使用索引替换方式确保响应式更新
+      const idx = agentStore.messages.length - 1;
+      const lastMsg = agentStore.messages[idx];
+      if (lastMsg && lastMsg.role === 'assistant') {
+        agentStore.messages[idx] = { ...lastMsg, loading: false, thinking: false };
       }
       agentStore.setLoading(false);
     },
     onError: (err) => {
-      const lastMsg = agentStore.messages[agentStore.messages.length - 1];
-      lastMsg.content = `抱歉，处理出错了：${err.message}`;
-      lastMsg.loading = false;
-      lastMsg.error = true;
+      const idx = agentStore.messages.length - 1;
+      const lastMsg = agentStore.messages[idx];
+      if (lastMsg && lastMsg.role === 'assistant') {
+        agentStore.messages[idx] = { ...lastMsg, content: `抱歉，处理出错了：${err.message}`, loading: false, thinking: false, error: true };
+      }
       agentStore.setLoading(false);
       ElMessage.error("对话请求失败，请重试");
     },
@@ -760,7 +844,7 @@ onMounted(async () => {
   }
 });
 
-// 当从其他页面返回对话页时，确保欢迎消息存在
+// 当从其他页面返回对话页时，确保欢迎消息存在并刷新侧栏
 onActivated(() => {
   if (agentStore.messages.length === 0 && !agentStore.currentSessionId) {
     agentStore.addMessage({
@@ -769,6 +853,12 @@ onActivated(() => {
         "🌿 你好！我是杂草识别智能助手。\n\n我可以帮你：\n- 📷 识别图片中的杂草种类和数量\n- 📊 提供杂草分布统计分析\n- 💡 给出专业的除草建议\n\n上传一张农田或草坪的照片，我来帮你分析！",
     });
   }
+  // 返回对话页时刷新侧栏会话列表，确保最新会话可见
+  if (agentStore.currentSessionId) {
+    agentStore.notifySessionsChanged();
+  }
+  // 滚动到底部，以防 SSE 在 deactivated 期间更新了消息
+  scrollToBottom();
 });
 </script>
 
@@ -1211,6 +1301,99 @@ onActivated(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
+}
+
+/* ── Agent 执行流程胶囊标签 ── */
+.agent-flow-container {
+  margin-bottom: 12px;
+}
+
+.agent-flow-label {
+  font-size: 11px;
+  color: #909399;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+
+.agent-flow-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border: 1.5px solid transparent;
+
+  &.agent-pending {
+    background: #f4f4f5;
+    color: #909399;
+    border-color: #e4e7ed;
+  }
+
+  &.agent-running {
+    background: #ecf5ff;
+    color: #409eff;
+    border-color: #b3d8ff;
+    animation: agent-pulse 1.5s ease-in-out infinite;
+  }
+
+  &.agent-success {
+    background: #f0f9eb;
+    color: #67c23a;
+    border-color: #c2e7b0;
+  }
+
+  &.agent-failed {
+    background: #fef0f0;
+    color: #f56c6c;
+    border-color: #fbc4c4;
+  }
+}
+
+.agent-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.agent-name {
+  white-space: nowrap;
+}
+
+.agent-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #b3d8ff;
+  border-top-color: #409eff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.agent-status-icon {
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+
+  &.agent-failed {
+    color: #f56c6c;
+  }
+
+  &.agent-pending {
+    font-size: 16px;
+    color: #c0c4cc;
+  }
+}
+
+@keyframes agent-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 .attach-btn {

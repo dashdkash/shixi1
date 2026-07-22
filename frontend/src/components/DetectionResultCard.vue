@@ -122,9 +122,29 @@ const isBatch = computed(() => {
   return Array.isArray(props.result.annotated_images) && props.result.annotated_images.length > 0;
 });
 
-/** 视频模式：标注视频 URL */
+/**
+ * 将 MinIO 视频 URL 转换为后端代理路径（解决跨域问题）
+ */
+function proxyVideoUrl(minioUrl) {
+  if (!minioUrl) return null;
+  try {
+    const url = new URL(minioUrl);
+    // 路径格式: /rsod-images/detections/14/video.mp4
+    const pathParts = url.pathname.split("/");
+    // 去掉 bucket 名称 (第一段)
+    if (pathParts.length > 2) {
+      const subPath = pathParts.slice(2).join("/");
+      return `/api/detection/video-proxy/${encodeURIComponent(subPath)}`;
+    }
+    return minioUrl;
+  } catch {
+    return minioUrl;
+  }
+}
+
+/** 视频模式：标注视频 URL（通过后端代理解决 MinIO 跨域） */
 const annotatedVideoSrc = computed(() => {
-  return props.result.annotated_video_url || null;
+  return proxyVideoUrl(props.result.annotated_video_url);
 });
 
 /** 单图模式：标注图 URL（优先使用后端代理，其次 MinIO URL，最后 base64） */

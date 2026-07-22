@@ -2,15 +2,15 @@
   <div class="training-page">
     <!-- 页面标题 -->
     <div class="page-header">
-      <h2>模型训练</h2>
+      <h2>{{ $t('training.title') }}</h2>
       <div>
         <el-button type="primary" @click="fetchTasks">
           <el-icon><Refresh /></el-icon>
-          刷新
+          {{ $t('training.refresh') }}
         </el-button>
         <el-button type="success" @click="showCreateDialog = true">
           <el-icon><Plus /></el-icon>
-          新建训练
+          {{ $t('training.createTask') }}
         </el-button>
       </div>
     </div>
@@ -20,7 +20,7 @@
         <!-- 训练任务列表 -->
         <el-card class="task-list-card" shadow="never">
           <template #header>
-            <span>训练任务列表</span>
+            <span>{{ $t('training.taskList') }}</span>
           </template>
           <el-table
             :data="taskList"
@@ -28,10 +28,10 @@
             style="width: 100%"
             stripe
           >
-            <el-table-column prop="id" label="ID" width="60" />
-            <el-table-column prop="model_name" label="模型" width="110" />
-            <el-table-column prop="device" label="设备" width="80" />
-            <el-table-column label="进度" width="180">
+            <el-table-column prop="id" :label="$t('training.colId')" width="60" />
+            <el-table-column prop="model_name" :label="$t('training.colModel')" width="110" />
+            <el-table-column prop="device" :label="$t('training.colDevice')" width="80" />
+            <el-table-column :label="$t('training.colProgress')" width="180">
               <template #default="{ row }">
                 <el-progress
                   :percentage="row.progress"
@@ -46,23 +46,23 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column label="Epoch" width="100">
+            <el-table-column :label="$t('training.colEpoch')" width="100">
               <template #default="{ row }">
                 {{ row.current_epoch || 0 }}/{{ row.epochs }}
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="100">
+            <el-table-column :label="$t('training.colStatus')" width="100">
               <template #default="{ row }">
                 <el-tag :type="statusType(row.status)" size="small">
                   {{ statusText(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="created_at" label="创建时间" width="170" />
-            <el-table-column label="操作" width="420" fixed="right">
+            <el-table-column prop="created_at" :label="$t('training.colCreatedAt')" width="170" />
+            <el-table-column :label="$t('training.colAction')" width="420" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" type="primary" text @click="selectTask(row)">
-                  监控
+                  {{ $t('training.btnMonitor') }}
                 </el-button>
                 <el-button
                   v-if="row.status === 'completed'"
@@ -72,7 +72,7 @@
                   @click="validateModel(row)"
                   :loading="validating && selectedTask?.id === row.id"
                 >
-                  评估模型
+                  {{ $t('training.btnEvaluate') }}
                 </el-button>
                 <el-button
                   v-if="row.status === 'completed'"
@@ -82,7 +82,7 @@
                   @click="exportModel(row)"
                   :loading="exporting && selectedTask?.id === row.id"
                 >
-                  导出
+                  {{ $t('training.btnExport') }}
                 </el-button>
                 <el-button
                   v-if="row.status === 'completed'"
@@ -91,7 +91,7 @@
                   text
                   @click="openPredictDialog(row)"
                 >
-                  验证
+                  {{ $t('training.btnValidate') }}
                 </el-button>
                 <el-button
                   v-if="row.status === 'completed'"
@@ -100,7 +100,7 @@
                   text
                   @click="openResumeDialog(row)"
                 >
-                  续训
+                  {{ $t('training.btnResume') }}
                 </el-button>
                 <el-button
                   v-if="row.status === 'completed'"
@@ -108,7 +108,7 @@
                   text
                   @click="downloadModel(row)"
                 >
-                  下载
+                  {{ $t('training.btnDownload') }}
                 </el-button>
                 <el-button
                   v-if="row.status === 'running'"
@@ -117,7 +117,7 @@
                   text
                   @click="stopTask(row.id)"
                 >
-                  停止
+                  {{ $t('training.btnStop') }}
                 </el-button>
               </template>
             </el-table-column>
@@ -128,10 +128,10 @@
       <el-col :span="12">
         <el-card class="model-list-card" shadow="never">
           <template #header>
-            <span>模型版本列表</span>
+            <span>{{ $t('training.modelList') }}</span>
             <el-button type="primary" size="small" @click="fetchModels">
               <el-icon><Refresh /></el-icon>
-              刷新
+              {{ $t('training.refresh') }}
             </el-button>
           </template>
           <el-table
@@ -140,28 +140,28 @@
             style="width: 100%"
             stripe
           >
-            <el-table-column prop="id" label="ID" width="60" />
-            <el-table-column prop="model_name" label="模型名称" width="150" />
-            <el-table-column prop="version" label="版本" width="100" />
-            <el-table-column prop="model_type" label="类型" width="100" />
+            <el-table-column prop="id" :label="$t('training.colId')" width="60" />
+            <el-table-column prop="model_name" :label="$t('training.colModelName')" width="150" />
+            <el-table-column prop="version" :label="$t('training.colVersion')" width="100" />
+            <el-table-column prop="model_type" :label="$t('training.colType')" width="100" />
             <el-table-column prop="map50" label="mAP@50" width="100">
               <template #default="{ row }">
                 {{ row.map50 !== null ? (row.map50 * 100).toFixed(1) + '%' : '-' }}
               </template>
             </el-table-column>
-            <el-table-column prop="file_size" label="大小" width="100">
+            <el-table-column prop="file_size" :label="$t('training.colSize')" width="100">
               <template #default="{ row }">
                 {{ formatFileSize(row.file_size) }}
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="80">
+            <el-table-column :label="$t('training.colStatus')" width="80">
               <template #default="{ row }">
                 <el-tag :type="row.is_default ? 'success' : 'info'" size="small">
-                  {{ row.is_default ? '默认' : '活跃' }}
+                  {{ row.is_default ? $t('training.modelDefault') : $t('training.modelActive') }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="created_at" label="创建时间" width="170" />
+            <el-table-column prop="created_at" :label="$t('training.colCreatedAt')" width="170" />
           </el-table>
         </el-card>
       </el-col>
@@ -172,7 +172,7 @@
       <template #header>
         <div class="card-header">
           <span>
-            训练监控 - 任务 {{ selectedTask.task_uuid }}
+            {{ $t('training.monitorTitle') }} - {{ $t('training.monitorTask') }} {{ selectedTask.task_uuid }}
             <el-tag
               :type="statusType(selectedTask.status)"
               size="small"
@@ -182,8 +182,8 @@
             </el-tag>
           </span>
           <div class="monitor-info">
-            <span>模型: {{ selectedTask.model_name }}</span>
-            <span>设备: {{ selectedTask.device }}</span>
+            <span>{{ $t('training.monitorModel') }}: {{ selectedTask.model_name }}</span>
+            <span>{{ $t('training.monitorDevice') }}: {{ selectedTask.device }}</span>
             <span>Epoch: {{ selectedTask.current_epoch || 0 }}</span>
           </div>
         </div>
@@ -215,9 +215,9 @@
       <template #header>
         <div class="card-header">
           <span>
-            评估报告
+            {{ $t('training.evalReport') }}
             <el-tag size="small" style="margin-left: 8px">
-              {{ evalReport.split === 'val' ? '验证集' : '测试集' }}
+              {{ evalReport.split === 'val' ? $t('training.evalValSet') : $t('training.evalTestSet') }}
             </el-tag>
             <el-tag
               size="small"
@@ -227,7 +227,7 @@
               mAP@50: {{ ((evalReport.overall?.map50 || 0) * 100).toFixed(1) }}%
             </el-tag>
           </span>
-          <el-button size="small" @click="evalReport = null">关闭</el-button>
+          <el-button size="small" @click="evalReport = null">{{ $t('training.evalClose') }}</el-button>
         </div>
       </template>
 
@@ -250,7 +250,7 @@
         style="width: 100%; margin-top: 16px"
         max-height="300"
       >
-        <el-table-column prop="class_name" label="类别" width="200" />
+        <el-table-column prop="class_name" :label="$t('training.colClass')" width="200" />
         <el-table-column prop="ap50" label="AP@50" width="120">
           <template #default="{ row }">
             <span :style="{ color: row.ap50 < 0.5 ? '#f56c6c' : '#67c23a' }">
@@ -263,13 +263,13 @@
             {{ (row.ap50_95 * 100).toFixed(1) }}%
           </template>
         </el-table-column>
-        <el-table-column label="评价">
+        <el-table-column :label="$t('training.evalRating')">
           <template #default="{ row }">
             <el-tag
               :type="row.ap50 >= 0.7 ? 'success' : row.ap50 >= 0.5 ? 'warning' : 'danger'"
               size="small"
             >
-              {{ row.ap50 >= 0.7 ? '优秀' : row.ap50 >= 0.5 ? '良好' : '需改进' }}
+              {{ row.ap50 >= 0.7 ? $t('training.evalExcellent') : row.ap50 >= 0.5 ? $t('training.evalGood') : $t('training.evalImprove') }}
             </el-tag>
           </template>
         </el-table-column>
@@ -279,13 +279,13 @@
     <!-- 新建训练任务对话框 -->
     <el-dialog
       v-model="showCreateDialog"
-      title="新建训练任务"
+      :title="$t('training.createDialogTitle')"
       width="600px"
       :close-on-click-modal="false"
     >
       <el-form :model="trainForm" label-width="120px">
-        <el-form-item label="检测场景">
-          <el-select v-model="trainForm.scene_id" placeholder="选择场景">
+        <el-form-item :label="$t('training.labelScene')">
+          <el-select v-model="trainForm.scene_id" :placeholder="$t('training.selectScene')">
             <el-option
               v-for="scene in sceneList"
               :key="scene.id"
@@ -295,17 +295,17 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="基础模型">
+        <el-form-item :label="$t('training.labelBaseModel')">
           <el-select v-model="trainForm.model_name">
-            <el-option label="YOLOv11n (Nano, 最快)" value="yolov11n" />
-            <el-option label="YOLOv11s (Small)" value="yolov11s" />
-            <el-option label="YOLOv11m (Medium)" value="yolov11m" />
-            <el-option label="YOLOv11l (Large)" value="yolov11l" />
-            <el-option label="YOLOv11x (XLarge, 最强)" value="yolov11x" />
+            <el-option :label="$t('training.modelNano')" value="yolov11n" />
+            <el-option :label="$t('training.modelSmall')" value="yolov11s" />
+            <el-option :label="$t('training.modelMedium')" value="yolov11m" />
+            <el-option :label="$t('training.modelLarge')" value="yolov11l" />
+            <el-option :label="$t('training.modelXlarge')" value="yolov11x" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="训练轮数">
+        <el-form-item :label="$t('training.labelEpochs')">
           <el-slider
             v-model="trainForm.epochs"
             :min="10"
@@ -315,7 +315,7 @@
           />
         </el-form-item>
 
-        <el-form-item label="批次大小">
+        <el-form-item :label="$t('training.labelBatchSize')">
           <el-input-number
             v-model="trainForm.batch_size"
             :min="1"
@@ -324,32 +324,32 @@
           />
         </el-form-item>
 
-        <el-form-item label="图像尺寸">
+        <el-form-item :label="$t('training.labelImgSize')">
           <el-select v-model="trainForm.img_size">
-            <el-option label="416" :value="416" />
-            <el-option label="512" :value="512" />
-            <el-option label="640 (默认)" :value="640" />
-            <el-option label="768" :value="768" />
+            <el-option :label="$t('training.imgSize416')" :value="416" />
+            <el-option :label="$t('training.imgSize512')" :value="512" />
+            <el-option :label="$t('training.imgSizeDefault')" :value="640" />
+            <el-option :label="$t('training.imgSize768')" :value="768" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="训练设备">
+        <el-form-item :label="$t('training.labelDevice')">
           <el-radio-group v-model="trainForm.device">
-            <el-radio value="cpu">CPU (本地)</el-radio>
+            <el-radio value="cpu">{{ $t('training.deviceCpu') }}</el-radio>
             <el-radio value="0">GPU: 0</el-radio>
             <el-radio value="1">GPU: 1</el-radio>
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="优化器">
+        <el-form-item :label="$t('training.labelOptimizer')">
           <el-select v-model="trainForm.optimizer">
-            <el-option label="SGD (推荐)" value="SGD" />
+            <el-option :label="$t('training.optimizerSgd')" value="SGD" />
             <el-option label="Adam" value="Adam" />
             <el-option label="AdamW" value="AdamW" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="初始学习率">
+        <el-form-item :label="$t('training.labelLr')">
           <el-input-number
             v-model="trainForm.lr0"
             :min="0.0001"
@@ -361,29 +361,29 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
+        <el-button @click="showCreateDialog = false">{{ $t('training.cancel') }}</el-button>
         <el-button type="primary" @click="createTask" :loading="creating">
-          启动训练
+          {{ $t('training.startTraining') }}
         </el-button>
       </template>
     </el-dialog>
     <!-- 续训对话框 -->
     <el-dialog
       v-model="showResumeDialog"
-      title="继续训练"
+      :title="$t('training.resumeDialogTitle')"
       width="600px"
       :close-on-click-modal="false"
     >
       <el-form :model="resumeForm" label-width="120px">
-        <el-form-item label="源任务信息">
+        <el-form-item :label="$t('training.labelSourceTask')">
           <el-card shadow="never" class="source-task-info">
-            <div>任务ID: {{ resumeSourceTask?.id }}</div>
-            <div>模型: {{ resumeSourceTask?.model_name }}</div>
-            <div>已完成: {{ resumeSourceTask?.current_epoch || 0 }}/{{ resumeSourceTask?.epochs || 0 }} 轮</div>
+            <div>{{ $t('training.sourceTaskId') }}: {{ resumeSourceTask?.id }}</div>
+            <div>{{ $t('training.sourceTaskModel') }}: {{ resumeSourceTask?.model_name }}</div>
+            <div>{{ $t('training.sourceTaskDone') }}: {{ resumeSourceTask?.current_epoch || 0 }}/{{ resumeSourceTask?.epochs || 0 }} {{ $t('training.sourceTaskRounds') }}</div>
           </el-card>
         </el-form-item>
 
-        <el-form-item label="新的总轮数">
+        <el-form-item :label="$t('training.labelNewEpochs')">
           <el-slider
             v-model="resumeForm.epochs"
             :min="(resumeSourceTask?.epochs || 100) + 10"
@@ -392,19 +392,19 @@
             show-input
           />
           <div style="color: #909399; font-size: 12px; margin-top: 4px">
-            将继续训练到 {{ resumeForm.epochs }} 轮（追加 {{ resumeForm.epochs - (resumeSourceTask?.current_epoch || 0) }} 轮）
+            {{ $t('training.resumeHint', { total: resumeForm.epochs, extra: resumeForm.epochs - (resumeSourceTask?.current_epoch || 0) }) }}
           </div>
         </el-form-item>
 
-        <el-form-item label="训练设备">
+        <el-form-item :label="$t('training.labelDevice')">
           <el-radio-group v-model="resumeForm.device">
-            <el-radio value="cpu">CPU (本地)</el-radio>
+            <el-radio value="cpu">{{ $t('training.deviceCpu') }}</el-radio>
             <el-radio value="0">GPU: 0</el-radio>
             <el-radio value="1">GPU: 1</el-radio>
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="批次大小">
+        <el-form-item :label="$t('training.labelBatchSize')">
           <el-input-number
             v-model="resumeForm.batch_size"
             :min="1"
@@ -413,7 +413,7 @@
           />
         </el-form-item>
 
-        <el-form-item label="初始学习率">
+        <el-form-item :label="$t('training.labelLr')">
           <el-input-number
             v-model="resumeForm.lr0"
             :min="0.0001"
@@ -425,15 +425,15 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="showResumeDialog = false">取消</el-button>
+        <el-button @click="showResumeDialog = false">{{ $t('training.cancel') }}</el-button>
         <el-button type="primary" @click="resumeTask" :loading="resuming">
-          开始续训
+          {{ $t('training.startResume') }}
         </el-button>
       </template>
     </el-dialog>
 
     <!-- 测试图验证对话框 -->
-    <el-dialog v-model="showPredictDialog" title="测试图验证" width="900px" :close-on-click-modal="false">
+    <el-dialog v-model="showPredictDialog" :title="$t('training.predictDialogTitle')" width="900px" :close-on-click-modal="false">
       <el-row :gutter="16">
         <!-- 左侧：上传 + 配置 -->
         <el-col :span="10">
@@ -448,17 +448,17 @@
             :file-list="predictFileList"
           >
             <el-icon style="font-size: 40px; color: #909399"><UploadFilled /></el-icon>
-            <div>拖拽图片到此处，或 <em>点击上传</em></div>
+            <div>{{ $t('training.uploadHint') }} <em>{{ $t('training.uploadClick') }}</em></div>
             <template #tip>
-              <div class="el-upload__tip">支持 JPG/PNG/BMP 格式</div>
+              <div class="el-upload__tip">{{ $t('training.uploadTip') }}</div>
             </template>
           </el-upload>
 
           <el-form label-width="80px" style="margin-top: 16px">
-            <el-form-item label="置信度">
+            <el-form-item :label="$t('camera.confidence')">
               <el-slider v-model="predictConf" :min="0.05" :max="0.95" :step="0.05" show-input />
             </el-form-item>
-            <el-form-item label="IoU">
+            <el-form-item :label="$t('training.labelIou')">
               <el-slider v-model="predictIou" :min="0.1" :max="0.9" :step="0.05" show-input />
             </el-form-item>
           </el-form>
@@ -470,7 +470,7 @@
             :loading="predicting"
             :disabled="!predictFile"
           >
-            开始检测
+            {{ $t('training.startDetection') }}
           </el-button>
         </el-col>
 
@@ -480,13 +480,13 @@
             <img
               :src="`data:image/jpeg;base64,${predictResult.annotated_image}`"
               style="width: 100%; border-radius: 8px; margin-bottom: 12px"
-              alt="检测结果"
+              :alt="$t('training.predictAlt')"
             />
             <el-descriptions :column="2" border size="small">
-              <el-descriptions-item label="检测目标数">
+              <el-descriptions-item :label="$t('training.detectedObjects')">
                 {{ predictResult.total_objects }}
               </el-descriptions-item>
-              <el-descriptions-item label="推理耗时">
+              <el-descriptions-item :label="$t('training.inferenceTime')">
                 {{ predictResult.inference_time }}ms
               </el-descriptions-item>
             </el-descriptions>
@@ -497,26 +497,26 @@
               size="small"
               style="margin-top: 8px; max-height: 200px"
             >
-              <el-table-column prop="class_name" label="类别" width="120" />
-              <el-table-column label="置信度" width="100">
+              <el-table-column prop="class_name" :label="$t('training.colClass')" width="120" />
+              <el-table-column :label="$t('training.colConfidence')" width="100">
                 <template #default="{ row }">
                   {{ (row.confidence * 100).toFixed(1) }}%
                 </template>
               </el-table-column>
-              <el-table-column label="位置">
+              <el-table-column :label="$t('training.colPosition')">
                 <template #default="{ row }">
                   [{{ row.bbox.map(v => v.toFixed(0)).join(', ') }}]
                 </template>
               </el-table-column>
             </el-table>
           </div>
-          <el-empty v-else description="上传图片并点击检测" />
+          <el-empty v-else :description="$t('training.predictUploadImage')" />
         </el-col>
       </el-row>
 
       <template #footer>
-        <el-button @click="showPredictDialog = false">关闭</el-button>
-        <el-button v-if="predictResult" @click="predictResult = null">清空结果</el-button>
+        <el-button @click="showPredictDialog = false">{{ $t('training.evalClose') }}</el-button>
+        <el-button v-if="predictResult" @click="predictResult = null">{{ $t('training.predictClear') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -528,6 +528,9 @@ import { Plus, Refresh, UploadFilled } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // ========== 状态变量 ==========
 const taskList = ref([])
@@ -674,11 +677,11 @@ function statusType(status) {
 
 function statusText(status) {
   const map = {
-    pending: '等待中',
-    running: '训练中',
-    completed: '已完成',
-    failed: '失败',
-    cancelled: '已取消',
+    pending: t('training.statusPending'),
+    running: t('training.statusRunning'),
+    completed: t('training.statusCompleted'),
+    failed: t('training.statusFailed'),
+    cancelled: t('training.statusCancelled'),
   }
   return map[status] || status
 }
@@ -712,7 +715,7 @@ async function resumeTask() {
   try {
     const taskId = resumeSourceTask.value.id || resumeSourceTask.value.task?.id
     if (!taskId) {
-      ElMessage.error('任务ID无效')
+      ElMessage.error(t('training.msgInvalidId'))
       return
     }
 
@@ -727,7 +730,7 @@ async function resumeTask() {
       lr0: resumeForm.value.lr0,
     })
 
-    ElMessage.success(res.message || '续训任务已创建')
+    ElMessage.success(res.message || t('training.msgResumeDone'))
     showResumeDialog.value = false
     await fetchTasks()
 
@@ -738,7 +741,7 @@ async function resumeTask() {
       }
     }
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '创建续训任务失败')
+    ElMessage.error(e.response?.data?.detail || t('training.msgResumeFail'))
   } finally {
     resuming.value = false
   }
@@ -767,9 +770,9 @@ async function runPredict() {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     predictResult.value = res
-    ElMessage.success(`检测完成: 发现 ${res.total_objects} 个目标`)
+    ElMessage.success(`${t('training.msgDetectDone')}: ${t('training.detectedObjects')} ${res.total_objects}`)
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '检测失败')
+    ElMessage.error(e.response?.data?.detail || t('training.msgDetectFail'))
   } finally {
     predicting.value = false
   }
@@ -899,7 +902,7 @@ function updateCharts(metrics) {
   if (lossChart) {
     lossChart.setOption({
       title: {
-        text: '训练损失曲线',
+        text: t('training.chartLoss'),
         left: 'center',
         textStyle: { fontSize: 14 },
       },
@@ -937,7 +940,7 @@ function updateCharts(metrics) {
   if (mapChart) {
     mapChart.setOption({
       title: {
-        text: '评估指标曲线',
+        text: t('training.chartMetric'),
         left: 'center',
         textStyle: { fontSize: 14 },
       },
@@ -948,7 +951,7 @@ function updateCharts(metrics) {
       },
       grid: { left: '10%', right: '5%', top: '15%', bottom: '18%' },
       xAxis: { type: 'category', data: epochs, name: 'Epoch' },
-      yAxis: { type: 'value', name: '指标值', max: 1 },
+      yAxis: { type: 'value', name: t('training.yAxisMetric'), max: 1 },
       series: [
         {
           name: 'mAP@50',
@@ -1020,7 +1023,7 @@ async function createTask() {
   creating.value = true
   try {
     const res = await request.post('/training/start', trainForm.value)
-    ElMessage.success(`训练任务已创建: ${res?.task_uuid || ''}`)
+    ElMessage.success(`${t('training.msgTaskCreated')}: ${res?.task_uuid || ''}`)
     showCreateDialog.value = false
     await fetchTasks()
     await fetchModels()
@@ -1032,7 +1035,7 @@ async function createTask() {
       }
     }
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '创建训练任务失败')
+    ElMessage.error(e.response?.data?.detail || t('training.msgCreateFail'))
   } finally {
     creating.value = false
   }
@@ -1041,15 +1044,15 @@ async function createTask() {
 // ========== 停止训练任务 ==========
 async function stopTask(taskId) {
   try {
-    await ElMessageBox.confirm('确定要停止当前训练任务吗？训练进度将被保留。', '确认停止', {
+    await ElMessageBox.confirm(t('training.msgStopConfirm'), t('training.msgStopTitle'), {
       type: 'warning',
     })
     await request.post(`/training/stop/${taskId}`)
-    ElMessage.success('训练任务已停止')
+    ElMessage.success(t('training.msgStopped'))
     await fetchTasks()
   } catch (e) {
     if (e !== 'cancel') {
-      ElMessage.error('停止训练失败')
+      ElMessage.error(t('training.msgStopFail'))
     }
   }
 }
@@ -1059,7 +1062,7 @@ async function validateModel(task) {
   if (!task) return
   const taskId = task.id || task.task?.id
   if (!taskId) {
-    ElMessage.error('任务ID无效')
+    ElMessage.error(t('training.msgInvalidId'))
     return
   }
 
@@ -1071,9 +1074,9 @@ async function validateModel(task) {
       iou: 0.6,
     })
     evalReport.value = res
-    ElMessage.success(`评估完成: mAP@50=${((res.overall?.map50 || 0) * 100).toFixed(1)}%`)
+    ElMessage.success(`${t('training.msgEvalDone')}: mAP@50=${((res.overall?.map50 || 0) * 100).toFixed(1)}%`)
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '模型评估失败')
+    ElMessage.error(e.response?.data?.detail || t('training.msgEvalFail'))
   } finally {
     validating.value = false
   }
@@ -1084,7 +1087,7 @@ async function exportModel(task) {
   if (!task) return
   const taskId = task.id || task.task?.id
   if (!taskId) {
-    ElMessage.error('任务ID无效')
+    ElMessage.error(t('training.msgInvalidId'))
     return
   }
 
@@ -1096,11 +1099,11 @@ async function exportModel(task) {
       set_default: true,
       upload_minio: false,
     })
-    ElMessage.success(res.message || '模型导出成功')
+    ElMessage.success(res.message || t('training.msgExportDone'))
     // 刷新模型列表
     await fetchModels()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '模型导出失败')
+    ElMessage.error(e.response?.data?.detail || t('training.msgExportFail'))
   } finally {
     exporting.value = false
   }
@@ -1111,7 +1114,7 @@ async function downloadModel(task) {
   if (!task) return
   const taskId = task.id || task.task?.id
   if (!taskId) {
-    ElMessage.error('任务ID无效')
+    ElMessage.error(t('training.msgInvalidId'))
     return
   }
 
@@ -1131,9 +1134,9 @@ async function downloadModel(task) {
     a.click()
     a.remove()
     window.URL.revokeObjectURL(url)
-    ElMessage.success('模型下载已开始')
+    ElMessage.success(t('training.msgDownloadStart'))
   } catch (e) {
-    ElMessage.error('模型下载失败')
+    ElMessage.error(t('training.msgDownloadFail'))
   }
 }
 

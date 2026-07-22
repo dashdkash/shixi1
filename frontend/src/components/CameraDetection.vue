@@ -109,7 +109,7 @@
           :key="index"
           class="detection-item"
         >
-          <span class="detection-class">{{ det.class_name }}</span>
+          <span class="detection-class">{{ det.class_name_cn || det.class_name }}</span>
           <span class="detection-conf"
             >{{ (det.confidence * 100).toFixed(1) }}%</span
           >

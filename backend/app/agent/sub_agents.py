@@ -68,6 +68,9 @@ def _smart_truncate(text: str, max_len: int = _MAX_TOOL_OUTPUT) -> str:
                 data["detections"] = data["detections"][:5]
             if "annotated_images" in data:
                 data["annotated_images"] = data["annotated_images"][:5]
+            # 精简视频关键帧（保留前 5 帧供 LLM 分析统计，完整视频由 annotated_video_url 提供）
+            if "key_frames" in data and len(data["key_frames"]) > 5:
+                data["key_frames"] = data["key_frames"][:5]
             data["_truncated_note"] = f"已精简，原始 {len(text)} 字符"
             return json.dumps(data, ensure_ascii=False)
     except (json.JSONDecodeError, TypeError, KeyError):
@@ -78,17 +81,17 @@ def _smart_truncate(text: str, max_len: int = _MAX_TOOL_OUTPUT) -> str:
 
 
 def _strip_large_fields(data: dict):
-    """移除检测结果中 LLM 无法使用的大体积字段"""
-    # 单图检测
+    """移除检测结果中 LLM 无法使用的大体积字段（保留视频 URL 供前端展示）"""
+    # 单图检测：移除 base64 大图，保留 URL 字段
     data.pop("annotated_image_base64", None)
-    data.pop("annotated_video_url", None)
+    # 注：annotated_video_url 是短 URL，不在此处移除，由前端展示视频播放器
     # 批量检测
     for img in data.get("annotated_images", []):
         if isinstance(img, dict):
             img.pop("annotated_image_base64", None)
             if "detections" in img:
                 img["detections"] = img["detections"][:3]
-    # 视频检测
+    # 视频检测：移除关键帧中的 base64 大图，保留外层 annotated_video_url
     for frame in data.get("key_frames", []):
         if isinstance(frame, dict):
             frame.pop("annotated_image_base64", None)
