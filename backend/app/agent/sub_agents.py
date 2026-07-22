@@ -207,16 +207,37 @@ def make_analysis_node(llm):
 
 
 def make_qa_node(llm):
-    """问答子 Agent 节点（知识库检索 + 用户查询 2 个工具）"""
+    """问答子 Agent 节点（知识库检索 + 用户查询 2 个工具）
+
+    串行链模式下，如果上游已有检测结果，会自动注入为上下文，
+    使 QA Agent 能根据具体草种检索针对性防治方案。
+    """
     executor = _make_executor(llm, QA_SUB_AGENT_PROMPT, KNOWLEDGE_TOOLS)
     logger.info("QA 子 Agent 初始化完成，工具: %d", len(KNOWLEDGE_TOOLS))
 
     async def qa_agent_node(state: dict) -> dict:
         user_msg = state["messages"][-1]
         chat_history = _load_chat_history(state)[:-1]
+
+        # 串行链模式：注入上游检测结果作为上下文
+        input_text = user_msg.content
+        detection_ctx = ""
+        if state.get("detection_result"):
+            result = state["detection_result"]
+            output = result.get("output", str(result)) if isinstance(result, dict) else str(result)
+            detection_ctx = f"\n\n[已知检测结果]: {output}"
+        if state.get("analysis_result"):
+            result = state["analysis_result"]
+            output = result.get("output", str(result)) if isinstance(result, dict) else str(result)
+            detection_ctx += f"\n\n[已知分析结果]: {output}"
+
+        if detection_ctx:
+            input_text = input_text + detection_ctx
+            logger.info("QA Agent 注入上游结果上下文 (%d 字符)", len(detection_ctx))
+
         try:
             result = await executor.ainvoke(
-                {"input": user_msg.content, "chat_history": chat_history}
+                {"input": input_text, "chat_history": chat_history}
             )
             output = result["output"]
         except Exception as e:

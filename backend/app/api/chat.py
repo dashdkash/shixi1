@@ -438,17 +438,28 @@ async def chat_stream(
                     output = data.get("output")
                     if output and hasattr(output, "content"):
                         raw = output.content.strip().lower()
+                        # 解析新格式: "parallel: detection,qa" 或 "chain: detection,qa"
+                        execution_plan = "parallel"
                         agents = []
-                        for name in raw.split(","):
-                            name = name.strip()
-                            if name in _AGENT_NODES and name not in agents:
-                                agents.append(name)
+                        if ":" in raw:
+                            parts = raw.split(":", 1)
+                            if "chain" in parts[0]:
+                                execution_plan = "chain"
+                            for name in parts[1].split(","):
+                                name = name.strip()
+                                if name in _AGENT_NODES and name not in agents:
+                                    agents.append(name)
+                        else:
+                            for name in raw.split(","):
+                                name = name.strip()
+                                if name in _AGENT_NODES and name not in agents:
+                                    agents.append(name)
                         if not agents:
                             agents = ["qa"]
                         plan_sent = True
-                        logger.info("[Parallel] agent_plan: %s", agents)
+                        logger.info("[Hybrid] agent_plan: %s | mode: %s", agents, execution_plan)
                         yield (
-                            f"data: {json.dumps({'type': 'agent_plan', 'agents': agents}, ensure_ascii=False)}\n\n"
+                            f"data: {json.dumps({'type': 'agent_plan', 'agents': agents, 'mode': execution_plan}, ensure_ascii=False)}\n\n"
                         )
 
                 # ── 2. 子 Agent 节点开始 → 发送 agent_start ──
