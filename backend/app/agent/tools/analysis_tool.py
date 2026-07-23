@@ -4,6 +4,8 @@
 工具列表：
   - query_detection_stats: 查询检测统计数据
   - query_detection_history: 查询检测历史记录
+  - query_latest_detection: 查询最近一次检测的详细结果
+  - query_detection_geo_summary: 查询检测地理分布摘要
 """
 
 import json
@@ -89,6 +91,35 @@ def query_detection_stats(days: int = 30) -> str:
             result["class_distribution"] = [
                 {"name": row.class_name_cn or row.class_name, "count": row.count}
                 for row in class_stats
+            ]
+
+            # 追加有位置信息的任务列表
+            geo_tasks_query = (
+                db.query(
+                    DetectionTask.id,
+                    DetectionTask.location_name,
+                    DetectionTask.latitude,
+                    DetectionTask.longitude,
+                    DetectionTask.total_objects,
+                )
+                .filter(
+                    DetectionTask.created_at >= start_date,
+                    DetectionTask.latitude.isnot(None),
+                    DetectionTask.longitude.isnot(None),
+                )
+            )
+            if user_id:
+                geo_tasks_query = geo_tasks_query.filter(DetectionTask.user_id == user_id)
+            geo_tasks = geo_tasks_query.order_by(DetectionTask.created_at.desc()).limit(50).all()
+            result["geo_tasks"] = [
+                {
+                    "task_id": t.id,
+                    "location_name": t.location_name,
+                    "latitude": t.latitude,
+                    "longitude": t.longitude,
+                    "total_objects": t.total_objects or 0,
+                }
+                for t in geo_tasks
             ]
 
             return json.dumps(result, ensure_ascii=False)
@@ -207,6 +238,9 @@ def query_latest_detection() -> str:
                 "total_objects": task.total_objects or 0,
                 "total_images": task.total_images or 0,
                 "total_inference_time": round(task.total_inference_time, 2) if task.total_inference_time else None,
+                "latitude": task.latitude,
+                "longitude": task.longitude,
+                "location_name": task.location_name,
                 "class_counts": class_counts,
                 "detections": detections[:50],  # 最多返回 50 条
                 "created_at": task.created_at.isoformat() if task.created_at else None,
@@ -224,6 +258,92 @@ ANALYSIS_TOOLS = [
     query_detection_stats,
     query_detection_history,
 ]
+
+
+@tool
+def query_detection_geo_summary(days: int = 30) -> str:
+    """查询检测任务的地理分布摘要。
+
+    当用户询问"哪些地区检测到了杂草"、"不同地块的杂草分布"、"地理分布"、"杂草分布热力图"等问题时使用此工具。
+    返回有位置信息的检测任务摘要，包括每个位置的主要杂草类别。
+
+    Args:
+        days: 统计最近 N 天的数据，默认 30 天
+
+    Returns:
+        JSON 字符串，包含每个有位置信息的检测任务的摘要
+    """
+    try:
+        from datetime import datetime, timedelta
+        from sqlalchemy import func
+
+        user_id = _get_current_user_id()
+        db = SessionLocal()
+        try:
+            start_date = datetime.now() - timedelta(days=days)
+
+            query = (
+                db.query(DetectionTask)
+                .filter(
+                    DetectionTask.created_at >= start_date,
+                    DetectionTask.latitude.isnot(None),
+                    DetectionTask.longitude.isnot(None),
+                )
+            )
+            if user_id:
+                query = query.filter(DetectionTask.user_id == user_id)
+            tasks = query.order_by(DetectionTask.created_at.desc()).limit(100).all()
+
+            if not tasks:
+                return json.dumps({
+                    "message": "没有找到带地理位置信息的检测记录",
+                    "points": [],
+                }, ensure_ascii=False)
+
+            points = []
+            for t in tasks:
+                # 查询该任务的主要杂草类别
+                class_stats = (
+                    db.query(
+                        DetectionResult.class_name_cn,
+                        func.count(DetectionResult.id).label("cnt"),
+                    )
+                    .filter(
+                        DetectionResult.task_id == t.id,
+                        DetectionResult.class_name != "no_detection",
+                    )
+                    .group_by(DetectionResult.class_name_cn)
+                    .order_by(func.count(DetectionResult.id).desc())
+                    .limit(3)
+                    .all()
+                )
+                top_classes = [
+                    {"name": row.class_name_cn or "未知", "count": row.cnt}
+                    for row in class_stats
+                ]
+                points.append({
+                    "task_id": t.id,
+                    "latitude": t.latitude,
+                    "longitude": t.longitude,
+                    "location_name": t.location_name or f"({t.latitude:.4f}, {t.longitude:.4f})",
+                    "total_objects": t.total_objects or 0,
+                    "top_classes": top_classes,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                })
+
+            return json.dumps({
+                "period": f"最近 {days} 天",
+                "total_geo_tasks": len(points),
+                "points": points,
+            }, ensure_ascii=False)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error("查询地理分布失败: %s", str(e))
+        return json.dumps({"error": f"查询失败: {str(e)}"}, ensure_ascii=False)
+
+
+ANALYSIS_TOOLS.append(query_detection_geo_summary)
 
 @tool
 def query_user_list(limit: int = 20) -> str:

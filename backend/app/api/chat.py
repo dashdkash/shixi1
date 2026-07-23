@@ -219,6 +219,7 @@ class SaveMessagesRequest(BaseModel):
     assistant_content: str
     title: Optional[str] = None
     task_id: Optional[int] = None  # 关联的检测任务 ID
+    detection_result: Optional[dict] = None  # 检测结果详情（类别、数量等），写入 Redis 供 Agent 上下文使用
 
 
 @router.post("/save-messages")
@@ -278,6 +279,27 @@ async def save_messages_to_session(
         session.message_count += 2
         session.last_message_at = datetime.now()
         db.commit()
+
+        # ── 同步写入 Redis 对话记忆，确保后续 Agent 能看到快捷检测上下文 ──
+        try:
+            conversation_memory.save_message(user_id, str(session.id), "user", request.user_content)
+            # 构建富上下文 AI 回复：基础内容 + 检测结果详情
+            ai_memory_content = request.assistant_content
+            if request.detection_result:
+                dr = request.detection_result
+                class_counts = dr.get("class_counts", {})
+                total = dr.get("total_objects", 0)
+                inference_time = dr.get("inference_time_ms")
+                detail_parts = [f"\n[快捷检测结果详情]: 共检测 {total} 个目标"]
+                if class_counts:
+                    for cls, cnt in class_counts.items():
+                        detail_parts.append(f"- {cls}: {cnt}")
+                if inference_time:
+                    detail_parts.append(f"推理耗时: {inference_time}ms")
+                ai_memory_content += "\n".join(detail_parts)
+            conversation_memory.save_message(user_id, str(session.id), "ai", ai_memory_content)
+        except Exception as mem_err:
+            logger.warning("快捷检测消息写入 Redis 记忆失败: %s", mem_err)
 
         logger.info(
             "快捷检测消息已保存: session_id=%d, user_id=%d",
@@ -411,6 +433,7 @@ async def chat_stream(
         # ── 通过 LangGraph 并行多 Agent 状态图流式执行 ──
         graph = build_multi_agent_graph()
         full_text = ""
+        detection_task_id = None  # 检测任务 ID，用于历史记录重建检测卡片
 
         # 子 Agent 名称集合
         _AGENT_NODES = {"detection", "analysis", "qa"}
@@ -509,6 +532,14 @@ async def chat_stream(
                         result_str = str(output) if output else ""
                     agent_source = node if node in _AGENT_NODES else ""
                     logger.info("[Multi-Agent] 工具完成: %s (%d 字符)", tool_name, len(result_str))
+                    # 提取检测任务 ID，供历史记录重建检测卡片
+                    if detection_task_id is None and tool_name.startswith("detect"):
+                        try:
+                            _r = json.loads(result_str)
+                            if isinstance(_r, dict) and _r.get("task_id"):
+                                detection_task_id = _r["task_id"]
+                        except (json.JSONDecodeError, TypeError):
+                            pass
                     yield (
                         f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'agent': agent_source, 'summary': result_str[:100], 'result': result_str}, ensure_ascii=False)}\n\n"
                     )
@@ -556,6 +587,7 @@ async def chat_stream(
                 role="assistant",
                 content=full_text or "[无响应]",
                 agent_used="multi_agent_parallel",
+                tool_result=f'{{"task_id": {detection_task_id}}}' if detection_task_id else None,
             )
             db2.add(ai_msg)
             chat_session = db2.query(ChatSession).filter(ChatSession.id == session_id).first()

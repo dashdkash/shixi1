@@ -161,6 +161,14 @@
     "detectionFailed": "Detection failed",
     "fileTab": "File Detection",
     "cameraTab": "Camera Detection",
+    "locationInfo": "Detection Location",
+    "latitude": "Latitude",
+    "latitudeShort": "Lat",
+    "longitude": "Longitude",
+    "longitudeShort": "Lng",
+    "locationName": "Location Name",
+    "locationNamePlaceholder": "e.g. XX Farm Field #3",
+    "gpsAutoExtracted": "Auto-extracted from image",
     "resultCard": {
       "title": "Detection Result",
       "objects": "objects",
@@ -346,12 +354,16 @@
     "totalObjects": "Detected Objects",
     "dailyTrend": "Daily Detection Trend",
     "classDist": "Class Distribution",
-    "generateReport": "📝 Generate Detection Report & Control Suggestions",
+    "generateReport": "Generate Report & Suggestions",
+    "reportHint": "Click to auto-send report request to AI",
     "detectionTasks": "Detection Tasks",
     "detectionObjects": "Detected Objects",
     "taskCount": "Tasks",
     "objectCount": "Objects",
-    "growthFlat": "Flat"
+    "growthFlat": "Flat",
+    "geoHeatmap": "Weed Geographic Distribution Heatmap",
+    "noGeoData": "No location data available. Please provide location info during detection.",
+    "locationName": "Location Name"
   },
   "knowledge": {
     "title": "Knowledge Base",

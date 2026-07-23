@@ -206,6 +206,38 @@ def make_analysis_node(llm):
     return analysis_agent_node
 
 
+# 检测结果关键词，用于从对话历史中识别检测相关内容
+# 注意：Redis 中保存的是 summarize 后的自然语言，不是原始 JSON
+_DETECTION_KEYWORDS = (
+    "检测到", "检测完成", "发现", "个目标", "置信度", "推理耗时",
+    "total_objects", "class_counts", "检测结果", "标注图",
+    "检测了", "识别到", "杂草", "detection",
+    # 位置相关关键词
+    "纬度", "经度", "位置", "地块", "农场", "坐标",
+    "latitude", "longitude", "location",
+)
+
+
+def _extract_detection_from_history(chat_history: list) -> str:
+    """从对话历史中提取最近的检测结果，用于跨轮上下文注入。
+
+    场景：用户第 1 轮发图检测，第 2 轮追问"给出防治建议"。
+    此时 state.detection_result 为空（新一轮图执行），但 chat_history 中
+    上一轮 AI 回复包含检测结果文本。
+    """
+    # 从后往前扫描，找最近一条包含检测关键词的 AI 回复
+    for msg in reversed(chat_history):
+        if not isinstance(msg, AIMessage):
+            continue
+        content = msg.content or ""
+        if any(kw in content for kw in _DETECTION_KEYWORDS):
+            # 截断防止上下文过长
+            truncated = content[:1500] if len(content) > 1500 else content
+            logger.info("从对话历史提取检测结果作为上下文 (%d 字符)", len(truncated))
+            return f"\n\n[已知检测结果（来自上一轮对话）]: {truncated}"
+    return ""
+
+
 def make_qa_node(llm):
     """问答子 Agent 节点（知识库检索 + 用户查询 2 个工具）
 
@@ -230,6 +262,10 @@ def make_qa_node(llm):
             result = state["analysis_result"]
             output = result.get("output", str(result)) if isinstance(result, dict) else str(result)
             detection_ctx += f"\n\n[已知分析结果]: {output}"
+
+        # 跨轮上下文：若当前轮无检测结果，从对话历史中提取最近的检测结果
+        if not detection_ctx and chat_history:
+            detection_ctx = _extract_detection_from_history(chat_history)
 
         if detection_ctx:
             input_text = input_text + detection_ctx

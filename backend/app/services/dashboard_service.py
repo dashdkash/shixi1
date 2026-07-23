@@ -320,5 +320,76 @@ class DashboardService:
         finally:
             db.close()
 
+    @staticmethod
+    def get_geo_distribution(user_id: int, days: int = 30) -> dict:
+        """
+        获取检测结果的地理分布数据（用于热力图）
+
+        Args:
+            user_id: 用户 ID
+            days: 统计最近 N 天
+
+        Returns:
+            包含各位置检测点数、主要杂草类别的列表
+        """
+        db = SessionLocal()
+        try:
+            start_date = datetime.now() - timedelta(days=days)
+
+            # 查询有经纬度的检测任务，并关联检测结果统计
+            geo_tasks = (
+                db.query(DetectionTask)
+                .filter(
+                    DetectionTask.user_id == user_id,
+                    DetectionTask.created_at >= start_date,
+                    DetectionTask.latitude.isnot(None),
+                    DetectionTask.longitude.isnot(None),
+                )
+                .all()
+            )
+
+            if not geo_tasks:
+                return {"points": [], "period_days": days}
+
+            task_ids = [t.id for t in geo_tasks]
+
+            # 查询这些任务下所有检测结果，按任务聚合类别统计
+            results = (
+                db.query(DetectionResult)
+                .filter(
+                    DetectionResult.task_id.in_(task_ids),
+                    DetectionResult.class_name != "no_detection",
+                )
+                .all()
+            )
+
+            # 按 task_id 聚合类别
+            from collections import defaultdict
+            task_class_counts: dict = defaultdict(lambda: defaultdict(int))
+            for r in results:
+                task_class_counts[r.task_id][r.class_name_cn or r.class_name] += 1
+
+            points = []
+            for task in geo_tasks:
+                counts = task_class_counts.get(task.id, {})
+                total = sum(counts.values())
+                # 主要杂草类别（数量最多的）
+                main_class = max(counts, key=counts.get) if counts else None
+                points.append({
+                    "lat": task.latitude,
+                    "lng": task.longitude,
+                    "count": total or (task.total_objects or 0),
+                    "location_name": task.location_name,
+                    "class_name_cn": main_class,
+                    "class_counts": dict(counts),
+                    "task_id": task.id,
+                    "task_type": task.task_type,
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                })
+
+            return {"points": points, "period_days": days}
+        finally:
+            db.close()
+
 
 dashboard_service = DashboardService()

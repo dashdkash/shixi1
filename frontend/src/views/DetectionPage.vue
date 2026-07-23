@@ -50,6 +50,48 @@
         </div>
       </div>
 
+      <!-- ── 地理位置信息输入 ── -->
+      <div class="geo-info-card">
+        <div class="geo-header">
+          <el-icon :size="16" color="#409eff"><Location /></el-icon>
+          <span class="geo-title">{{ $t("detection.locationInfo") }}</span>
+          <el-tag v-if="geoAutoExtracted" type="success" size="small">
+            {{ $t("detection.gpsAutoExtracted") }}
+          </el-tag>
+        </div>
+        <div class="geo-fields">
+          <el-input
+            v-model="geoLatitude"
+            :placeholder="$t('detection.latitude')"
+            size="small"
+            style="width: 140px"
+            clearable
+            @clear="geoAutoExtracted = false"
+          >
+            <template #prepend>{{ $t("detection.latitudeShort") }}</template>
+          </el-input>
+          <el-input
+            v-model="geoLongitude"
+            :placeholder="$t('detection.longitude')"
+            size="small"
+            style="width: 140px"
+            clearable
+            @clear="geoAutoExtracted = false"
+          >
+            <template #prepend>{{ $t("detection.longitudeShort") }}</template>
+          </el-input>
+          <el-input
+            v-model="geoLocationName"
+            :placeholder="$t('detection.locationNamePlaceholder')"
+            size="small"
+            style="flex: 1"
+            clearable
+          >
+            <template #prepend>{{ $t("detection.locationName") }}</template>
+          </el-input>
+        </div>
+      </div>
+
       <div class="action-bar">
         <el-button
           type="primary"
@@ -193,8 +235,9 @@
 <script setup>
 import { detectBatch, detectVideo, detectZip, getVideoStatus } from "@/api/detection";
 import CameraDetection from "@/components/CameraDetection.vue";
+import { extractGPSFromImage } from "@/utils/exif";
 import request from "@/utils/request";
-import { Close, Search, Upload } from "@element-plus/icons-vue";
+import { Close, Location, Search, Upload } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { useI18n } from "vue-i18n";
 import { computed, ref, watch } from "vue";
@@ -223,6 +266,12 @@ const detectionResults = ref([]);
 const videoResult = ref(null);
 const videoProgress = ref(0);
 const videoMessage = ref("");
+
+// ── 地理位置信息 ──
+const geoLatitude = ref(null);
+const geoLongitude = ref(null);
+const geoLocationName = ref("");
+const geoAutoExtracted = ref(false); // 是否自动从 EXIF 提取到
 
 
 const summary = computed(() => {
@@ -308,6 +357,17 @@ const addFiles = (files) => {
   );
 
   imageFiles.forEach((file) => {
+    // 尝试从第一张图片提取 EXIF GPS（仅在未手动设置时）
+    if (!geoAutoExtracted.value && geoLatitude.value === null) {
+      extractGPSFromImage(file).then((gps) => {
+        if (gps) {
+          geoLatitude.value = gps.latitude;
+          geoLongitude.value = gps.longitude;
+          geoAutoExtracted.value = true;
+          ElMessage.info(t("detection.gpsAutoExtracted"));
+        }
+      });
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
       pendingFiles.value.push({
@@ -376,6 +436,19 @@ const startDetection = async () => {
 
   isProcessing.value = true;
 
+  // ── 构建位置参数辅助函数 ──
+  const appendGeoToForm = (formData) => {
+    if (geoLatitude.value !== null && geoLatitude.value !== "") {
+      formData.append("latitude", String(geoLatitude.value));
+    }
+    if (geoLongitude.value !== null && geoLongitude.value !== "") {
+      formData.append("longitude", String(geoLongitude.value));
+    }
+    if (geoLocationName.value) {
+      formData.append("location_name", geoLocationName.value);
+    }
+  };
+
   try {
     // ── 检查是否有视频文件 ──
     const videoFiles = pendingFiles.value.filter((f) => f.isVideo);
@@ -385,6 +458,7 @@ const startDetection = async () => {
     for (const vf of videoFiles) {
       const formData = new FormData();
       formData.append("file", vf.file);
+      appendGeoToForm(formData);
       try {
         const res = await detectVideo(formData);
         if (res.task_id) {
@@ -403,12 +477,14 @@ const startDetection = async () => {
 
       if (hasZip && nonVideoFiles.length === 1) {
         formData.append("file", nonVideoFiles[0].file);
+        appendGeoToForm(formData);
         const response = await detectZip(formData);
         detectionResults.value = buildResultsFromBatch(response);
       } else {
         nonVideoFiles.forEach((item) => {
           formData.append("files", item.file);
         });
+        appendGeoToForm(formData);
         const response = await detectBatch(formData);
         detectionResults.value = buildResultsFromBatch(response);
       }
@@ -685,6 +761,35 @@ const buildResultsFromBatch = (response) => {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.geo-info-card {
+  background: #f0f9eb;
+  border: 1px solid #e1f3d8;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.geo-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.geo-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #303133;
+}
+
+.geo-fields {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .results-section {

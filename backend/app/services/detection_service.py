@@ -185,6 +185,9 @@ class DetectionService:
         inference_time: float,
         conf: float,
         iou: float,
+        latitude: float = None,
+        longitude: float = None,
+        location_name: str = None,
     ) -> dict:
         """
         保存检测任务和结果到数据库 + MinIO
@@ -204,6 +207,9 @@ class DetectionService:
             conf_threshold=conf,
             iou_threshold=iou,
             completed_at=datetime.now(),
+            latitude=latitude,
+            longitude=longitude,
+            location_name=location_name,
         )
         db.add(task)
         db.flush()  # 获取 task.id
@@ -232,6 +238,8 @@ class DetectionService:
                     confidence=det["confidence"],
                     bbox=det["bbox"],
                     inference_time=inference_time,
+                    latitude=latitude,
+                    longitude=longitude,
                 )
                 db.add(result)
         else:
@@ -246,6 +254,8 @@ class DetectionService:
                 confidence=0.0,
                 bbox=[],
                 inference_time=inference_time,
+                latitude=latitude,
+                longitude=longitude,
             )
             db.add(placeholder)
 
@@ -271,6 +281,9 @@ class DetectionService:
         iou: float = 0.45,
         scene_id: int = None,
         user_id: int = None,
+        latitude: float = None,
+        longitude: float = None,
+        location_name: str = None,
     ) -> dict:
         """
         单图检测
@@ -385,6 +398,9 @@ class DetectionService:
                     inference_time=float(result.speed.get("inference", 0)),
                     conf=conf,
                     iou=iou,
+                    latitude=latitude,
+                    longitude=longitude,
+                    location_name=location_name,
                 )
                 task_id = save_result["task_id"]
                 annotated_image_url = save_result.get("annotated_image_url")
@@ -418,6 +434,9 @@ class DetectionService:
         conf: float = 0.25,
         scene_id: int = None,
         user_id: int = None,
+        latitude: float = None,
+        longitude: float = None,
+        location_name: str = None,
     ) -> dict:
         """
         批量检测多张图片
@@ -467,6 +486,9 @@ class DetectionService:
                 status="processing",
                 total_images=len(image_paths),
                 conf_threshold=conf,
+                latitude=latitude,
+                longitude=longitude,
+                location_name=location_name,
             )
             db.add(task)
             db.flush()
@@ -501,6 +523,17 @@ class DetectionService:
                     "annotated_image_base64": base64.b64encode(buffer).decode("utf-8"),
                 })
 
+                # 上传标注图到 MinIO（供历史记录图片代理使用）
+                annotated_url = None
+                try:
+                    minio_client = MinIOClient()
+                    object_name = f"detections/{task.id}/{os.path.basename(image_path)}"
+                    annotated_url = minio_client.upload_bytes(
+                        object_name, buffer.tobytes(), "image/jpeg"
+                    )
+                except Exception as e:
+                    logger.warning("批量检测 MinIO 上传失败（不影响检测结果）: %s", str(e))
+
                 if result.boxes is not None and len(result.boxes) > 0:
                     for box in result.boxes:
                         cls_id = int(box.cls[0])
@@ -534,14 +567,32 @@ class DetectionService:
                             db_result = DetectionResult(
                                 task_id=task.id,
                                 image_path=image_path,
+                                annotated_image_url=annotated_url,
                                 class_name=det["class_name"],
                                 class_name_cn=det.get("class_name_cn"),
                                 class_id=det["class_id"],
                                 confidence=det["confidence"],
                                 bbox=det["bbox"],
                                 inference_time=inference_time,
+                                latitude=latitude,
+                                longitude=longitude,
                             )
                             db.add(db_result)
+                else:
+                    # 该图未检测到目标，创建占位记录以保留标注图 URL
+                    db.add(DetectionResult(
+                        task_id=task.id,
+                        image_path=image_path,
+                        annotated_image_url=annotated_url,
+                        class_name="no_detection",
+                        class_name_cn="未检测到目标",
+                        class_id=-1,
+                        confidence=0.0,
+                        bbox=[],
+                        inference_time=inference_time,
+                        latitude=latitude,
+                        longitude=longitude,
+                    ))
 
             task.status = "completed"
             task.total_objects = total_objects
@@ -578,6 +629,9 @@ class DetectionService:
         conf: float = 0.25,
         scene_id: int = None,
         user_id: int = None,
+        latitude: float = None,
+        longitude: float = None,
+        location_name: str = None,
     ) -> dict:
         """
         解压 ZIP 文件并批量检测其中所有图片
@@ -622,6 +676,9 @@ class DetectionService:
                 conf=conf,
                 scene_id=scene_id,
                 user_id=user_id,
+                latitude=latitude,
+                longitude=longitude,
+                location_name=location_name,
             )
 
             batch_result["source"] = "zip"

@@ -48,3 +48,12 @@ export function getSceneDistribution(days = 30) {
 export function getTypeDistribution(days = 30) {
   return request.get("/dashboard/type-dist", { params: { days } });
 }
+
+/**
+ * 获取地理分布（热力图数据）
+ * @param {number} days - 统计最近 N 天（默认 30）
+ * @returns {Promise} - { points: [{ lat, lng, count, location_name, class_name_cn, class_counts }] }
+ */
+export function getGeoDistribution(days = 30) {
+  return request.get("/dashboard/geo-dist", { params: { days } });
+}

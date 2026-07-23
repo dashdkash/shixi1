@@ -155,8 +155,11 @@ class ConversationMemory:
 
     def _get_list(self, key: str) -> list:
         """
-        获取 Redis List 数据
-
+        获取 Redis List 数据，返回时间正序（最旧在前，最新在后）。
+    
+        注意：save_message 使用 LPUSH（左插入），Redis 中最新消息在头部。
+        此方法统一 reverse 为时间正序，供 load_history 的 [-N:] 取最新 N 条。
+    
         兼容 redis_client 的封装和直接 redis 操作。
         采用三层降级策略：Redis → redis_client 内部客户端 → 内存缓存 → 空列表
         """
@@ -166,19 +169,22 @@ class ConversationMemory:
             if client is not None:
                 result = client.lrange(key, 0, -1)
                 if result is not None:
+                    # lpush 导致最新在前，reverse 为时间正序
+                    result.reverse()
                     return result
         except Exception as e:
             logger.debug("Redis lrange 失败，尝试降级: %s", str(e))
-
+    
         # 策略 2：降级到内存缓存（开发环境 / Redis 不可用时）
         try:
             cache = getattr(self.redis, '_memory_cache', None)
             if cache is not None:
-                return list(cache.get(key, []))
+                # 内存缓存也用 insert(0) 模拟 lpush，同样需要 reverse
+                return list(reversed(cache.get(key, [])))
         except Exception as e:
             logger.debug("内存缓存读取失败: %s", str(e))
-
-        # 策略 3：兜底返回空列表
+    
+        # 策略 3：兖底返回空列表
         return []
 
 

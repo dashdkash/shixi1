@@ -88,6 +88,9 @@ async def upload_and_detect_api(
     files: list[UploadFile] = File(..., description="多张图片"),
     conf: float = Form(0.25),
     scene_id: int = Form(None),
+    latitude: float = Form(None, description="检测位置纬度"),
+    longitude: float = Form(None, description="检测位置经度"),
+    location_name: str = Form(None, description="位置描述"),
     current_user=Depends(get_current_user),
 ):
     """
@@ -109,6 +112,9 @@ async def upload_and_detect_api(
             conf=conf,
             scene_id=scene_id,
             user_id=current_user.id,
+            latitude=latitude,
+            longitude=longitude,
+            location_name=location_name,
         )
         return result
     finally:
@@ -124,6 +130,9 @@ async def detect_single_api(
     file: UploadFile = File(..., description="检测图片"),
     conf: float = Form(0.25, description="置信度阈值"),
     scene_id: int = Form(None, description="场景 ID"),
+    latitude: float = Form(None, description="检测位置纬度"),
+    longitude: float = Form(None, description="检测位置经度"),
+    location_name: str = Form(None, description="位置描述"),
     current_user=Depends(get_current_user),
 ):
     """
@@ -142,6 +151,9 @@ async def detect_single_api(
             conf=conf,
             scene_id=scene_id,
             user_id=current_user.id,
+            latitude=latitude,
+            longitude=longitude,
+            location_name=location_name,
         )
         result["filename"] = file.filename
         return result
@@ -154,6 +166,9 @@ async def detect_batch_api(
     files: list[UploadFile] = File(..., description="多张图片"),
     conf: float = Form(0.25),
     scene_id: int = Form(None),
+    latitude: float = Form(None, description="检测位置纬度"),
+    longitude: float = Form(None, description="检测位置经度"),
+    location_name: str = Form(None, description="位置描述"),
     current_user=Depends(get_current_user),
 ):
     """
@@ -175,6 +190,9 @@ async def detect_batch_api(
             conf=conf,
             scene_id=scene_id,
             user_id=current_user.id,
+            latitude=latitude,
+            longitude=longitude,
+            location_name=location_name,
         )
         return result
     finally:
@@ -190,6 +208,9 @@ async def detect_zip_api(
     file: UploadFile = File(..., description="ZIP 压缩包"),
     conf: float = Form(0.25),
     scene_id: int = Form(None),
+    latitude: float = Form(None, description="检测位置纬度"),
+    longitude: float = Form(None, description="检测位置经度"),
+    location_name: str = Form(None, description="位置描述"),
     current_user=Depends(get_current_user),
 ):
     """
@@ -209,6 +230,9 @@ async def detect_zip_api(
             conf=conf,
             scene_id=scene_id,
             user_id=current_user.id,
+            latitude=latitude,
+            longitude=longitude,
+            location_name=location_name,
         )
         return result
     finally:

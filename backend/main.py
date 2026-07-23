@@ -115,4 +115,4 @@ if __name__ == "__main__":
 
     port = find_free_port()
     print(f"启动服务: http://127.0.0.1:{port}")
-    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True, reload_excludes=["**/__pycache__/*", "**/*.pyc", "**/.venv/*"])

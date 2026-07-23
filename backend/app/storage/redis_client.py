@@ -122,10 +122,16 @@ class RedisClient:
         )
 
     def lpush(self, name: str, *values: Any) -> Any:
-        """列表左侧插入"""
+        """列表左侧插入（与 Redis LPUSH 语义一致：新元素在头部）"""
         return self._retry_on_fail(
-            lambda: self._client.lpush(name, *values) if self._use_redis else self._memory_cache.setdefault(name, []).extend(values)
+            lambda: self._client.lpush(name, *values) if self._use_redis else self._memory_lpush(name, *values)
         )
+
+    def _memory_lpush(self, name: str, *values: Any):
+        """内存降级：模拟 Redis LPUSH（每个值依次插入头部）"""
+        lst = self._memory_cache.setdefault(name, [])
+        for v in values:
+            lst.insert(0, v)
 
     def rpop(self, name: str) -> Optional[Any]:
         """列表右侧弹出"""

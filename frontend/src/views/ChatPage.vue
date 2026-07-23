@@ -204,6 +204,7 @@
  *   - 中断当前对话
  */
 import { detectBatch, detectSingle, detectVideo, getVideoStatus, detectZip } from "@/api/detection";
+import { extractGPSFromImage } from "@/utils/exif";
 import DetectionResultCard from "@/components/DetectionResultCard.vue";
 import { useAgentStore } from "@/stores/agent";
 import { useUserStore } from "@/stores/user";
@@ -270,8 +271,12 @@ const canSend = computed(() => {
 /**
  * 将快捷检测的用户消息和 AI 回复保存到数据库会话中
  * 如果当前没有会话，自动创建新会话
+ * @param {string} userContent - 用户消息内容
+ * @param {string} assistantContent - AI 回复内容
+ * @param {number|null} taskId - 检测任务 ID
+ * @param {object|null} detectionResult - 完整检测结果（类别、数量等），用于写入 Redis 供 Agent 上下文使用
  */
-async function saveQuickDetectToHistory(userContent, assistantContent, taskId) {
+async function saveQuickDetectToHistory(userContent, assistantContent, taskId, detectionResult) {
   try {
     const res = await request.post("/chat/save-messages", {
       session_id: agentStore.currentSessionId || undefined,
@@ -279,6 +284,7 @@ async function saveQuickDetectToHistory(userContent, assistantContent, taskId) {
       assistant_content: assistantContent,
       title: userContent,
       task_id: taskId || undefined,
+      detection_result: detectionResult || undefined,
     });
     if (res && res.session_id) {
       agentStore.currentSessionId = res.session_id;
@@ -317,6 +323,12 @@ function buildReportPrompt(days) {
 - 针对主要杂草种类的化学防治方案
 - 物理/生物防治建议
 - 施药时间与注意事项
+
+### 五、地理分布分析
+调用 query_detection_geo_summary(days=${days}) 获取位置数据，分析：
+- 哪些区域/地块检测到的杂草最多
+- 不同区域的杂草种类是否有差异
+- 高风险区域标记与重点防治建议
 
 请用专业但易懂的语言输出，确保报告具有实际参考价值。`;
 }
@@ -592,6 +604,15 @@ async function handleQuickDetect(type) {
       const formData = new FormData();
       formData.append("file", file);
 
+      // 尝试提取 EXIF GPS 位置信息
+      try {
+        const gps = await extractGPSFromImage(file);
+        if (gps) {
+          formData.append("latitude", String(gps.latitude));
+          formData.append("longitude", String(gps.longitude));
+        }
+      } catch (_) { /* EXIF 提取失败不影响检测 */ }
+
       try {
         const result = await detectSingle(formData);
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
@@ -600,7 +621,7 @@ async function handleQuickDetect(type) {
         lastMsg.loading = false;
         lastMsg.detectionResult = result;
         // 保存到历史记录
-        saveQuickDetectToHistory(`[快捷检测] ${file.name}`, aiContent, result.task_id);
+        saveQuickDetectToHistory(`[快捷检测] ${file.name}`, aiContent, result.task_id, result);
       } catch (err) {
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
         lastMsg.content = "检测失败，请重试";
@@ -620,6 +641,18 @@ async function handleQuickDetect(type) {
 
       const isZip = files.some((f) => f.name.endsWith(".zip"));
       const formData = new FormData();
+
+      // 尝试从第一张图片提取 EXIF GPS 位置信息
+      const firstImage = files.find((f) => f.type.startsWith("image/"));
+      if (firstImage) {
+        try {
+          const gps = await extractGPSFromImage(firstImage);
+          if (gps) {
+            formData.append("latitude", String(gps.latitude));
+            formData.append("longitude", String(gps.longitude));
+          }
+        } catch (_) { /* EXIF 提取失败不影响检测 */ }
+      }
 
       if (isZip && files.length === 1) {
         // 单个 ZIP 文件
@@ -668,7 +701,7 @@ async function handleQuickDetect(type) {
         const userContent = isZip
           ? `[快捷检测] ZIP: ${files[0].name}`
           : `[快捷检测] ${files.length} 张图片`;
-        saveQuickDetectToHistory(userContent, aiContent, result.task_id);
+        saveQuickDetectToHistory(userContent, aiContent, result.task_id, result);
       } catch (err) {
         console.error("[批量检测异常]", err);
         const lastMsg = agentStore.messages[agentStore.messages.length - 1];
@@ -713,12 +746,12 @@ async function handleQuickDetect(type) {
             lastMsg.loading = false;
             lastMsg.detectionResult = result;
             // 保存到历史记录
-            saveQuickDetectToHistory(`[快捷检测] 视频: ${file.name}`, aiContent, res.task_id);
+            saveQuickDetectToHistory(`[快捷检测] 视频: ${file.name}`, aiContent, res.task_id, result);
           } else {
             const aiContent = "视频检测超时，请稍后在历史记录中查看结果。";
             lastMsg.content = aiContent;
             lastMsg.loading = false;
-            saveQuickDetectToHistory(`[快捷检测] 视频: ${file.name}`, aiContent, res.task_id);
+            saveQuickDetectToHistory(`[快捷检测] 视频: ${file.name}`, aiContent, res.task_id, null);
           }
         }
       } catch (err) {
@@ -780,7 +813,18 @@ onMounted(async () => {
 });
 
 // 当从其他页面返回对话页时，确保欢迎消息存在并刷新侧栏
-onActivated(() => {
+onActivated(async () => {
+  // 检查是否从数据看板跳转生成报告（keep-alive 下 onMounted 不会重新触发）
+  if (route.query.report === "1") {
+    const days = Number(route.query.days) || 30;
+    router.replace({ path: "/chat" });
+    agentStore.newChat();
+    await nextTick();
+    inputText.value = buildReportPrompt(days);
+    await nextTick();
+    sendMessage();
+    return;
+  }
   if (agentStore.messages.length === 0 && !agentStore.currentSessionId) {
     agentStore.addMessage({
       role: "assistant",

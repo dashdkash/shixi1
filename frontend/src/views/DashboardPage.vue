@@ -10,7 +10,7 @@
       </el-radio-group>
     </div>
 
-    <!-- ── 数字统计卡片 ── -->
+    <!-- ── 数字统计卡片 + 生成报告 ── -->
     <el-row :gutter="16" class="stat-cards">
       <el-col :span="8">
         <el-card shadow="hover" class="stat-card">
@@ -25,6 +25,17 @@
             <div class="stat-growth" :class="growthClass('objects')">
               {{ formatGrowth(stats.growth?.objects) }}
             </div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="8">
+        <el-card shadow="hover" class="stat-card report-card" @click="generateReport">
+          <div class="stat-icon" style="background: #ecf5ff">
+            <el-icon :size="28" color="#409eff"><Document /></el-icon>
+          </div>
+          <div class="stat-info">
+            <div class="report-title">{{ $t('dashboard.generateReport') }}</div>
+            <div class="stat-label">{{ $t('dashboard.reportHint') }}</div>
           </div>
         </el-card>
       </el-col>
@@ -55,12 +66,20 @@
       </el-col>
     </el-row>
 
-    <!-- ── 生成报告按钮 ── -->
-    <div class="report-action">
-      <el-button type="primary" size="large" @click="generateReport">
-        {{ $t('dashboard.generateReport') }}
-      </el-button>
-    </div>
+    <!-- ── 杂草地理分布热力图 ── -->
+    <el-row :gutter="16" class="chart-row">
+      <el-col :span="24">
+        <el-card shadow="hover">
+          <template #header>
+            <span>{{ $t('dashboard.geoHeatmap') }}</span>
+          </template>
+          <div v-if="geoPoints.length > 0" ref="heatmapRef" class="heatmap-container"></div>
+          <el-empty v-else :description="$t('dashboard.noGeoData')" />
+        </el-card>
+      </el-col>
+    </el-row>
+
+
   </div>
 </template>
 
@@ -75,12 +94,13 @@
  */
 import {
   getClassDistribution,
+  getGeoDistribution,
   getStatistics,
   getTrend,
 } from "@/api/dashboard";
-import { Aim } from "@element-plus/icons-vue";
+import { Aim, Document } from "@element-plus/icons-vue";
 import * as echarts from "echarts";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 
@@ -96,10 +116,15 @@ const stats = ref({
 // ── 图表 DOM 引用 ─
 const trendChartRef = ref(null);
 const classChartRef = ref(null);
+const heatmapRef = ref(null);
+
+// ── 地理分布数据 ──
+const geoPoints = ref([]);
 
 // ── 图表实例（用于销毁） ──
 let trendChart = null;
 let classChart = null;
+let amapInstance = null;
 
 const router = useRouter();
 
@@ -130,15 +155,22 @@ function growthClass(key, inverse = false) {
 async function loadAllData() {
   const days = periodDays.value;
   try {
-    const [statsRes, trendRes, classRes] = await Promise.all([
+    const [statsRes, trendRes, classRes, geoRes] = await Promise.all([
       getStatistics(days),
       getTrend(days),
       getClassDistribution(days),
+      getGeoDistribution(days).catch(() => ({ points: [] })),
     ]);
 
     stats.value = statsRes;
     renderTrendChart(trendRes.trend);
     renderClassChart(classRes.distribution);
+    geoPoints.value = geoRes.points || [];
+    if (geoPoints.value.length > 0) {
+      // 等待 DOM 更新后渲染地图
+      await nextTick();
+      renderHeatmap(geoPoints.value);
+    }
   } catch (err) {
     console.error("[看板数据加载失败]", err);
   }
@@ -264,6 +296,76 @@ function handleResize() {
   classChart?.resize();
 }
 
+// ── 渲染高德地图热力图 ──
+function renderHeatmap(points) {
+  if (!heatmapRef.value || !window.AMap) return;
+
+  if (amapInstance) {
+    amapInstance.destroy();
+    amapInstance = null;
+  }
+
+  const map = new window.AMap.Map(heatmapRef.value, {
+    zoom: 5,
+    center: [104.5, 35.5], // 中国中心
+    mapStyle: "amap://styles/light",
+  });
+  amapInstance = map;
+
+  // 构建热力图数据
+  const heatData = points.map((p) => ({
+    lng: p.lng,
+    lat: p.lat,
+    count: p.count || 1,
+  }));
+
+  // 添加标记点 + 信息窗体
+  points.forEach((p) => {
+    const marker = new window.AMap.Marker({
+      position: [p.lng, p.lat],
+      title: p.location_name || `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`,
+    });
+    const info = new window.AMap.InfoWindow({
+      content: `<div style="padding:4px 8px;font-size:13px">
+        <strong>${p.location_name || '未命名位置'}</strong><br/>
+        检测目标: ${p.count || 0}<br/>
+        主要杂草: ${p.class_name_cn || '-'}
+      </div>`,
+      offset: new window.AMap.Pixel(0, -28),
+    });
+    marker.on("click", () => info.open(map, marker.getPosition()));
+    map.add(marker);
+  });
+
+  // 添加热力图图层（AMap v2.0 使用 AMap.plugin）
+  window.AMap.plugin(["AMap.HeatMap"], () => {
+    const heatmap = new window.AMap.HeatMap(map, {
+      radius: 30,
+      opacity: [0, 0.8],
+      gradient: {
+        0.2: "#0ff",
+        0.4: "#0f0",
+        0.6: "#ff0",
+        0.8: "#f00",
+        1.0: "#f0f",
+      },
+    });
+    heatmap.setDataSet({
+      data: heatData,
+      max: Math.max(...heatData.map((d) => d.count), 5),
+    });
+  });
+
+  // 自动调整视野以包含所有数据点
+  if (points.length > 1) {
+    const bounds = new window.AMap.Bounds(
+      [Math.min(...points.map((p) => p.lng)), Math.min(...points.map((p) => p.lat))],
+      [Math.max(...points.map((p) => p.lng)), Math.max(...points.map((p) => p.lat))]
+    );
+    map.setBounds(bounds, false, [60, 60, 60, 60]);
+  }
+}
+
 onMounted(() => {
   loadAllData();
   window.addEventListener("resize", handleResize);
@@ -273,6 +375,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", handleResize);
   trendChart?.dispose();
   classChart?.dispose();
+  amapInstance?.destroy();
 });
 
 // ── 生成检测报告 ──
@@ -379,10 +482,26 @@ function generateReport() {
   width: 100%;
 }
 
-.report-action {
-  display: flex;
-  justify-content: center;
-  margin-top: 24px;
-  margin-bottom: 16px;
+.heatmap-container {
+  height: 450px;
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.report-card {
+  cursor: pointer;
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: #409eff;
+  }
+}
+
+.report-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  line-height: 1.4;
 }
 </style>

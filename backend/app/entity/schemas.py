@@ -249,6 +249,9 @@ class DetectionTaskResponse(BaseModel):
     total_inference_time: float
     conf_threshold: float
     iou_threshold: float
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_name: Optional[str] = None
     error_message: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
@@ -271,6 +274,8 @@ class DetectionResultResponse(BaseModel):
     inference_time: Optional[float] = None
     image_width: Optional[int] = None
     image_height: Optional[int] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     created_at: datetime
 
 

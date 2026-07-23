@@ -161,6 +161,14 @@
     "detectionFailed": "检测失败",
     "fileTab": "文件检测",
     "cameraTab": "摄像头检测",
+    "locationInfo": "检测位置信息",
+    "latitude": "纬度",
+    "latitudeShort": "纬",
+    "longitude": "经度",
+    "longitudeShort": "经",
+    "locationName": "位置名称",
+    "locationNamePlaceholder": "如：XX农场3号田",
+    "gpsAutoExtracted": "已从图片自动提取",
     "resultCard": {
       "title": "检测结果",
       "objects": "个目标",
@@ -346,12 +354,16 @@
     "totalObjects": "检测目标",
     "dailyTrend": "每日检测趋势",
     "classDist": "类别分布",
-    "generateReport": "📝 生成检测报告与防治建议",
+    "generateReport": "生成检测报告与防治建议",
+    "reportHint": "点击自动向 AI 助手发起报告请求",
     "detectionTasks": "检测任务",
     "detectionObjects": "检测目标",
     "taskCount": "任务数",
     "objectCount": "目标数",
-    "growthFlat": "持平"
+    "growthFlat": "持平",
+    "geoHeatmap": "杂草地理分布热力图",
+    "noGeoData": "暂无地理位置数据，请在检测时提供位置信息",
+    "locationName": "位置名称"
   },
   "knowledge": {
     "title": "知识库",

@@ -229,6 +229,11 @@ class DetectionTask(Base):
         comment="状态: pending/processing/completed/failed",
     )
 
+    # 地理位置信息
+    latitude = Column(Float, nullable=True, comment="检测位置纬度")
+    longitude = Column(Float, nullable=True, comment="检测位置经度")
+    location_name = Column(String(200), nullable=True, comment="位置描述，如XX农场3号田")
+
     # 检测统计
     total_images = Column(Integer, default=0, comment="处理图像总数")
     total_objects = Column(Integer, default=0, comment="检测到目标总数")
@@ -291,6 +296,10 @@ class DetectionResult(Base):
     inference_time = Column(Float, nullable=True, comment="该图推理耗时(ms)")
     image_width = Column(Integer, nullable=True, comment="图像宽度")
     image_height = Column(Integer, nullable=True, comment="图像高度")
+
+    # 地理位置信息（冗余存储，方便按结果级别查询热力图）
+    latitude = Column(Float, nullable=True, comment="检测位置纬度")
+    longitude = Column(Float, nullable=True, comment="检测位置经度")
 
     created_at = Column(DateTime, default=datetime.now)
 

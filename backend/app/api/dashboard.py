@@ -76,3 +76,16 @@ async def get_type_distribution(
 ):
     """获取各任务类型（single/batch/zip/video/camera）的分布（用于环形图）"""
     return dashboard_service.get_type_distribution(user_id=current_user.id, days=days)
+
+
+@router.get("/geo-dist", summary="地理分布统计")
+async def get_geo_distribution(
+    days: int = Query(30, ge=1, le=365),
+    current_user=Depends(get_current_user),
+):
+    """
+    获取检测结果的地理分布数据（用于高德地图热力图）
+
+    返回每个有经纬度的检测任务的坐标、检测目标数、主要杂草类别等信息
+    """
+    return dashboard_service.get_geo_distribution(user_id=current_user.id, days=days)
